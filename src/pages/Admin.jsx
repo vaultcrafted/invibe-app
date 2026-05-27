@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload, Users, BarChart2 } from 'lucide-react'
+import { ArrowLeft, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { parseTurnoExcel, DESTINATIONS, SHIFTS } from '../lib/constants'
@@ -40,25 +40,35 @@ export default function Admin() {
       const wb = XLSX.read(buf)
       const ws = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-
-      const header = rows[0]
       const dataRows = rows.slice(1).filter(r => r.some(c => c))
 
-      let imported = 0, skipped = 0, errors = 0
+      // Detect if new format (with flag columns at 17-20)
+      const header = rows[0] || []
+      const hasFlags = header.length >= 21 &&
+        String(header[17]).toLowerCase().includes('escursioni')
+
+      log(`Trovati ${dataRows.length} righe — formato ${hasFlags ? 'con flag' : 'base'}`)
+
       const groupsMap = {}
 
       for (const row of dataRows) {
         const cognome = row[0] || ''
         const nome = row[1] || ''
         const sesso = row[2] || ''
-        const nascita = row[3] ? new Date(row[3]) : null
+        const nascita = row[3] ? String(row[3]) : null
         const pratica = row[10] || ''
         const stato = row[11] || ''
         const turnoRaw = row[13] || ''
         const capogruppoCod = row[16] || ''
 
+        // Flag columns (only in new format)
+        const escFlag = hasFlags ? String(row[17] || '0').trim() === '1' : null
+        const navFlag = hasFlags ? String(row[18] || '0').trim() === '1' : null
+        const assFlag = hasFlags ? String(row[19] || '0').trim() === '1' : null
+        const iscFlag = hasFlags ? String(row[20] || '0').trim() === '1' : null
+
         const parsed = parseTurnoExcel(turnoRaw)
-        if (!parsed) { skipped++; continue }
+        if (!parsed) continue
 
         const { destination, shift_num } = parsed
         const cgKey = `${capogruppoCod}__${destination}__${shift_num}`
@@ -70,27 +80,41 @@ export default function Admin() {
             destination,
             shift_num,
             pratica,
+            escursioni: escFlag,
+            navetta: navFlag,
+            assicurazione: assFlag,
+            iscrizione: iscFlag,
             participants: []
           }
         }
+
+        // Se più righe dello stesso gruppo, aggiorna flags se non ancora settati
+        if (hasFlags) {
+          if (escFlag !== null) groupsMap[cgKey].escursioni = escFlag
+          if (navFlag !== null) groupsMap[cgKey].navetta = navFlag
+          if (assFlag !== null) groupsMap[cgKey].assicurazione = assFlag
+          if (iscFlag !== null) groupsMap[cgKey].iscrizione = iscFlag
+        }
+
         groupsMap[cgKey].participants.push({
-          cognome: cognome.toUpperCase(),
-          nome: nome.charAt(0).toUpperCase() + nome.slice(1).toLowerCase(),
-          sesso: sesso.toUpperCase(),
-          nascita: nascita ? nascita.toISOString().split('T')[0] : null,
+          cognome: String(cognome).toUpperCase(),
+          nome: String(nome).charAt(0).toUpperCase() + String(nome).slice(1).toLowerCase(),
+          sesso: String(sesso).toUpperCase(),
+          nascita: nascita || null,
           pratica,
-          stato
+          stato: String(stato)
         })
       }
 
       const groups = Object.values(groupsMap)
       log(`Trovati ${groups.length} gruppi da ${dataRows.length} righe`)
 
+      let imported = 0, errors = 0
+
       for (const g of groups) {
-        // Upsert group (don't overwrite flags/alloggio/note)
         const { data: existing } = await supabase
           .from('groups')
-          .select('id, escursioni, navetta, assicurazione, iscrizione, alloggio, note')
+          .select('id')
           .eq('capogruppo_code', g.capogruppo_code)
           .eq('destination', g.destination)
           .eq('shift_num', g.shift_num)
@@ -99,25 +123,33 @@ export default function Admin() {
         let groupId
         if (existing) {
           groupId = existing.id
-          // Only update non-flag fields
-          await supabase.from('groups').update({
+          const updateData = {
             capogruppo_display: g.capogruppo_display,
             pratica: g.pratica
-          }).eq('id', groupId)
+          }
+          // Aggiorna flags solo se presenti nel file
+          if (g.escursioni !== null) updateData.escursioni = g.escursioni
+          if (g.navetta !== null) updateData.navetta = g.navetta
+          if (g.assicurazione !== null) updateData.assicurazione = g.assicurazione
+          if (g.iscrizione !== null) updateData.iscrizione = g.iscrizione
+          await supabase.from('groups').update(updateData).eq('id', groupId)
         } else {
-          const { data: newG, error } = await supabase.from('groups').insert({
+          const insertData = {
             capogruppo_code: g.capogruppo_code,
             capogruppo_display: g.capogruppo_display,
             destination: g.destination,
             shift_num: g.shift_num,
             pratica: g.pratica,
-            escursioni: false, navetta: false, assicurazione: false, iscrizione: false
-          }).select().single()
+            escursioni: g.escursioni ?? false,
+            navetta: g.navetta ?? false,
+            assicurazione: g.assicurazione ?? false,
+            iscrizione: g.iscrizione ?? false
+          }
+          const { data: newG, error } = await supabase.from('groups').insert(insertData).select().single()
           if (error) { errors++; continue }
           groupId = newG.id
         }
 
-        // Delete old participants and reinsert
         await supabase.from('participants').delete().eq('group_id', groupId)
         const parts = g.participants.map(p => ({ ...p, group_id: groupId }))
         await supabase.from('participants').insert(parts)
@@ -125,7 +157,6 @@ export default function Admin() {
       }
 
       log(`✅ Importati: ${imported} gruppi`)
-      if (skipped) log(`⚠️ Righe saltate (turno non riconosciuto): ${skipped}`)
       if (errors) log(`❌ Errori: ${errors}`)
     } catch (err) {
       log(`❌ Errore: ${err.message}`)
@@ -134,16 +165,13 @@ export default function Admin() {
     e.target.value = ''
   }
 
-  function log(msg) {
-    setImportLog(prev => [...prev, msg])
-  }
+  function log(msg) { setImportLog(prev => [...prev, msg]) }
 
   function formatCapogruppo(code) {
-    // "101ROSSI" → "Rossi" or keep code as fallback
     const match = code.match(/^\d+(.+)$/)
     if (match) {
-      const surname = match[1]
-      return surname.charAt(0).toUpperCase() + surname.slice(1).toLowerCase()
+      const s = match[1].trim()
+      return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
     }
     return code
   }
@@ -151,14 +179,10 @@ export default function Admin() {
   async function toggleAssignment(staffId, destination, shiftNum) {
     const staff = staffList.find(s => s.id === staffId)
     const current = staff.assigned_shifts || []
-    const key = `${destination}_${shiftNum}`
     const exists = current.some(s => s.destination === destination && s.shift_num === shiftNum)
-    let updated
-    if (exists) {
-      updated = current.filter(s => !(s.destination === destination && s.shift_num === shiftNum))
-    } else {
-      updated = [...current, { destination, shift_num: shiftNum }]
-    }
+    const updated = exists
+      ? current.filter(s => !(s.destination === destination && s.shift_num === shiftNum))
+      : [...current, { destination, shift_num: shiftNum }]
     await supabase.from('staff_profiles').update({ assigned_shifts: updated }).eq('id', staffId)
     setStaffList(prev => prev.map(s => s.id === staffId ? { ...s, assigned_shifts: updated } : s))
   }
@@ -176,15 +200,9 @@ export default function Admin() {
       </div>
 
       <div className="tabs">
-        <button className={`tab ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>
-          Import Excel
-        </button>
-        <button className={`tab ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>
-          Staff
-        </button>
-        <button className={`tab ${tab === 'stats' ? 'active' : ''}`} onClick={() => setTab('stats')}>
-          Statistiche
-        </button>
+        <button className={`tab ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>Import Excel</button>
+        <button className={`tab ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>Staff</button>
+        <button className={`tab ${tab === 'stats' ? 'active' : ''}`} onClick={() => setTab('stats')}>Statistiche</button>
       </div>
 
       {tab === 'import' && (
@@ -204,14 +222,11 @@ export default function Admin() {
               <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} disabled={importing} />
             </label>
           </div>
-
           {importLog.length > 0 && (
             <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Log importazione</div>
               {importLog.map((line, i) => (
-                <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', padding: '3px 0', borderBottom: i < importLog.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                  {line}
-                </div>
+                <div key={i} style={{ fontSize: 13, padding: '3px 0', borderBottom: i < importLog.length - 1 ? '0.5px solid var(--border)' : 'none' }}>{line}</div>
               ))}
             </div>
           )}
@@ -223,23 +238,15 @@ export default function Admin() {
           {staffList.map(staff => (
             <StaffCard key={staff.id} staff={staff} onToggle={toggleAssignment} />
           ))}
-          {staffList.length === 0 && (
-            <div className="empty-state"><p>Nessuno staff registrato.</p></div>
-          )}
+          {staffList.length === 0 && <div className="empty-state"><p>Nessuno staff registrato.</p></div>}
         </div>
       )}
 
       {tab === 'stats' && stats && (
         <div style={{ padding: 16 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-            <div className="stat-box">
-              <div className="stat-label">Gruppi totali</div>
-              <div className="stat-val">{stats.groups.length}</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-label">Partecipanti</div>
-              <div className="stat-val">{stats.totalParts}</div>
-            </div>
+            <div className="stat-box"><div className="stat-label">Gruppi totali</div><div className="stat-val">{stats.groups.length}</div></div>
+            <div className="stat-box"><div className="stat-label">Partecipanti</div><div className="stat-val">{stats.totalParts}</div></div>
           </div>
           {DESTINATIONS.map(dest => {
             const dGroups = stats.groups.filter(g => g.destination === dest.id)
@@ -264,7 +271,6 @@ export default function Admin() {
 function StaffCard({ staff, onToggle }) {
   const [open, setOpen] = useState(false)
   const assigned = staff.assigned_shifts || []
-
   return (
     <div className="card">
       <button style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10 }} onClick={() => setOpen(o => !o)}>
@@ -279,31 +285,22 @@ function StaffCard({ staff, onToggle }) {
         </div>
         <div style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>{open ? '▲' : '▼'}</div>
       </button>
-
       {open && staff.role !== 'admin' && (
-        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {DESTINATIONS.map(dest => (
             <div key={dest.id}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>
-                {dest.flag} {dest.name}
-              </div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>{dest.flag} {dest.name}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {SHIFTS[dest.id].map(s => {
                   const isOn = assigned.some(a => a.destination === dest.id && a.shift_num === s.num)
                   return (
-                    <button
-                      key={s.num}
-                      onClick={() => onToggle(staff.id, dest.id, s.num)}
-                      style={{
-                        padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                        background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)',
-                        color: isOn ? '#fff' : 'var(--text-secondary)',
-                        border: `0.5px solid ${isOn ? 'var(--iv-blue)' : 'var(--border)'}`,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      T{s.num}
-                    </button>
+                    <button key={s.num} onClick={() => onToggle(staff.id, dest.id, s.num)} style={{
+                      padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                      background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)',
+                      color: isOn ? '#fff' : 'var(--text-secondary)',
+                      border: `0.5px solid ${isOn ? 'var(--iv-blue)' : 'var(--border)'}`,
+                      cursor: 'pointer'
+                    }}>T{s.num}</button>
                   )
                 })}
               </div>
