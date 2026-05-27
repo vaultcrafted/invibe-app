@@ -23,8 +23,12 @@ export function AuthProvider({ children }) {
   }, [])
 
   async function fetchProfile(userId) {
-    const { data } = await supabase.from('staff_profiles').select('*').eq('id', userId).single()
-    setProfile(data)
+    const { data, error } = await supabase
+      .from('staff_profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    if (data) setProfile(data)
     setLoading(false)
   }
 
