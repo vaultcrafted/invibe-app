@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, LogOut, FileText, Shield, Edit2, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -36,13 +37,7 @@ export default function Account() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">Il mio account</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
