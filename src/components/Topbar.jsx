@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
-export default function Topbar({ title, subtitle, showBack = false, showAvatar = true }) {
+export default function Topbar({ showBack = false, showAvatar = true }) {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const initials = ((profile?.nome?.[0] || '') + (profile?.cognome?.[0] || '')).toUpperCase()
@@ -16,17 +16,11 @@ export default function Topbar({ title, subtitle, showBack = false, showAvatar =
       ) : (
         <div style={{ width: 32 }} />
       )}
-
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-        <img
-          src="/Logo.png"
-          alt="Invibe"
-          style={{ height: 26, objectFit: 'contain', filter: 'brightness(0) invert(1)' }}
-        />
+        <img src="/Logo.png" alt="Invibe" style={{ height: 26, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
       </div>
-
       {showAvatar ? (
-        <button className="topbar-avatar" onClick={() => navigate('/account')} title="Il mio account">
+        <button className="topbar-avatar" onClick={() => navigate('/account')} title="Account">
           {initials}
         </button>
       ) : (
