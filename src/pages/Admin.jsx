@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload } from 'lucide-react'
+import { Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { parseTurnoExcel, DESTINATIONS, SHIFTS } from '../lib/constants'
+import Topbar from '../components/Topbar'
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -30,142 +30,6 @@ export default function Admin() {
     setStats({ groups: groups || [], totalParts: participants?.length || 0 })
   }
 
-  async function handleFileUpload(e) {
-    const file = e.target.files[0]
-    if (!file) return
-    setImporting(true)
-    setImportLog([])
-
-    try {
-      const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf)
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-      const dataRows = rows.slice(1).filter(r => r.some(c => c))
-
-      // Detect if new format (with flag columns at 17-20)
-      const header = rows[0] || []
-      const hasFlags = header.length >= 21 &&
-        String(header[17]).toLowerCase().includes('escursioni')
-
-      log(`Trovati ${dataRows.length} righe — formato ${hasFlags ? 'con flag' : 'base'}`)
-
-      const groupsMap = {}
-
-      for (const row of dataRows) {
-        const cognome = row[0] || ''
-        const nome = row[1] || ''
-        const sesso = row[2] || ''
-        const nascita = row[3] ? String(row[3]) : null
-        const pratica = row[10] || ''
-        const stato = row[11] || ''
-        const turnoRaw = row[13] || ''
-        const capogruppoCod = row[16] || ''
-
-        // Flag columns (only in new format)
-        const escFlag = hasFlags ? String(row[17] || '0').trim() === '1' : null
-        const navFlag = hasFlags ? String(row[18] || '0').trim() === '1' : null
-        const assFlag = hasFlags ? String(row[19] || '0').trim() === '1' : null
-        const iscFlag = hasFlags ? String(row[20] || '0').trim() === '1' : null
-
-        const parsed = parseTurnoExcel(turnoRaw)
-        if (!parsed) continue
-
-        const { destination, shift_num } = parsed
-        const cgKey = `${capogruppoCod}__${destination}__${shift_num}`
-
-        if (!groupsMap[cgKey]) {
-          groupsMap[cgKey] = {
-            capogruppo_code: capogruppoCod,
-            capogruppo_display: formatCapogruppo(capogruppoCod),
-            destination,
-            shift_num,
-            pratica,
-            escursioni: escFlag,
-            navetta: navFlag,
-            assicurazione: assFlag,
-            iscrizione: iscFlag,
-            participants: []
-          }
-        }
-
-        // Se più righe dello stesso gruppo, aggiorna flags se non ancora settati
-        if (hasFlags) {
-          if (escFlag !== null) groupsMap[cgKey].escursioni = escFlag
-          if (navFlag !== null) groupsMap[cgKey].navetta = navFlag
-          if (assFlag !== null) groupsMap[cgKey].assicurazione = assFlag
-          if (iscFlag !== null) groupsMap[cgKey].iscrizione = iscFlag
-        }
-
-        groupsMap[cgKey].participants.push({
-          cognome: String(cognome).toUpperCase(),
-          nome: String(nome).charAt(0).toUpperCase() + String(nome).slice(1).toLowerCase(),
-          sesso: String(sesso).toUpperCase(),
-          nascita: nascita || null,
-          pratica,
-          stato: String(stato)
-        })
-      }
-
-      const groups = Object.values(groupsMap)
-      log(`Trovati ${groups.length} gruppi da ${dataRows.length} righe`)
-
-      let imported = 0, errors = 0
-
-      for (const g of groups) {
-        const { data: existing } = await supabase
-          .from('groups')
-          .select('id')
-          .eq('capogruppo_code', g.capogruppo_code)
-          .eq('destination', g.destination)
-          .eq('shift_num', g.shift_num)
-          .maybeSingle()
-
-        let groupId
-        if (existing) {
-          groupId = existing.id
-          const updateData = {
-            capogruppo_display: g.capogruppo_display,
-            pratica: g.pratica
-          }
-          // Aggiorna flags solo se presenti nel file
-          if (g.escursioni !== null) updateData.escursioni = g.escursioni
-          if (g.navetta !== null) updateData.navetta = g.navetta
-          if (g.assicurazione !== null) updateData.assicurazione = g.assicurazione
-          if (g.iscrizione !== null) updateData.iscrizione = g.iscrizione
-          await supabase.from('groups').update(updateData).eq('id', groupId)
-        } else {
-          const insertData = {
-            capogruppo_code: g.capogruppo_code,
-            capogruppo_display: g.capogruppo_display,
-            destination: g.destination,
-            shift_num: g.shift_num,
-            pratica: g.pratica,
-            escursioni: g.escursioni ?? false,
-            navetta: g.navetta ?? false,
-            assicurazione: g.assicurazione ?? false,
-            iscrizione: g.iscrizione ?? false
-          }
-          const { data: newG, error } = await supabase.from('groups').insert(insertData).select().single()
-          if (error) { errors++; continue }
-          groupId = newG.id
-        }
-
-        await supabase.from('participants').delete().eq('group_id', groupId)
-        const parts = g.participants.map(p => ({ ...p, group_id: groupId }))
-        await supabase.from('participants').insert(parts)
-        imported++
-      }
-
-      log(`✅ Importati: ${imported} gruppi`)
-      if (errors) log(`❌ Errori: ${errors}`)
-    } catch (err) {
-      log(`❌ Errore: ${err.message}`)
-    }
-    setImporting(false)
-    e.target.value = ''
-  }
-
   function log(msg) { setImportLog(prev => [...prev, msg]) }
 
   function formatCapogruppo(code) {
@@ -175,6 +39,98 @@ export default function Admin() {
       return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()
     }
     return code
+  }
+
+  async function handleFileUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    setImporting(true)
+    setImportLog([])
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
+      const header = rows[0] || []
+      const dataRows = rows.slice(1).filter(r => r.some(c => c))
+      const hasFlags = header.length >= 21 && String(header[17]).toLowerCase().includes('escursioni')
+      log('Trovati ' + dataRows.length + ' righe — formato ' + (hasFlags ? 'con flag' : 'base'))
+      const groupsMap = {}
+      for (const row of dataRows) {
+        const cognome = row[0] || ''
+        const nome = row[1] || ''
+        const sesso = row[2] || ''
+        const nascita = row[3] ? String(row[3]) : null
+        const pratica = row[10] || ''
+        const stato = row[11] || ''
+        const turnoRaw = row[13] || ''
+        const capogruppoCod = row[16] || ''
+        const escFlag = hasFlags ? String(row[17] || '0').trim() === '1' : null
+        const navFlag = hasFlags ? String(row[18] || '0').trim() === '1' : null
+        const assFlag = hasFlags ? String(row[19] || '0').trim() === '1' : null
+        const iscFlag = hasFlags ? String(row[20] || '0').trim() === '1' : null
+        const parsed = parseTurnoExcel(turnoRaw)
+        if (!parsed) continue
+        const { destination, shift_num } = parsed
+        const cgKey = capogruppoCod + '__' + destination + '__' + shift_num
+        if (!groupsMap[cgKey]) {
+          groupsMap[cgKey] = {
+            capogruppo_code: capogruppoCod,
+            capogruppo_display: formatCapogruppo(capogruppoCod),
+            destination, shift_num, pratica,
+            escursioni: escFlag, navetta: navFlag, assicurazione: assFlag, iscrizione: iscFlag,
+            participants: []
+          }
+        }
+        if (hasFlags) {
+          if (escFlag !== null) groupsMap[cgKey].escursioni = escFlag
+          if (navFlag !== null) groupsMap[cgKey].navetta = navFlag
+          if (assFlag !== null) groupsMap[cgKey].assicurazione = assFlag
+          if (iscFlag !== null) groupsMap[cgKey].iscrizione = iscFlag
+        }
+        groupsMap[cgKey].participants.push({
+          cognome: String(cognome).toUpperCase(),
+          nome: String(nome).charAt(0).toUpperCase() + String(nome).slice(1).toLowerCase(),
+          sesso: String(sesso).toUpperCase(),
+          nascita: nascita || null,
+          pratica, stato: String(stato)
+        })
+      }
+      const groups = Object.values(groupsMap)
+      log('Trovati ' + groups.length + ' gruppi da ' + dataRows.length + ' righe')
+      let imported = 0, errors = 0
+      for (const g of groups) {
+        const { data: existing } = await supabase.from('groups').select('id').eq('capogruppo_code', g.capogruppo_code).eq('destination', g.destination).eq('shift_num', g.shift_num).maybeSingle()
+        let groupId
+        if (existing) {
+          groupId = existing.id
+          const updateData = { capogruppo_display: g.capogruppo_display, pratica: g.pratica }
+          if (g.escursioni !== null) updateData.escursioni = g.escursioni
+          if (g.navetta !== null) updateData.navetta = g.navetta
+          if (g.assicurazione !== null) updateData.assicurazione = g.assicurazione
+          if (g.iscrizione !== null) updateData.iscrizione = g.iscrizione
+          await supabase.from('groups').update(updateData).eq('id', groupId)
+        } else {
+          const { data: newG, error } = await supabase.from('groups').insert({
+            capogruppo_code: g.capogruppo_code, capogruppo_display: g.capogruppo_display,
+            destination: g.destination, shift_num: g.shift_num, pratica: g.pratica,
+            escursioni: g.escursioni ?? false, navetta: g.navetta ?? false,
+            assicurazione: g.assicurazione ?? false, iscrizione: g.iscrizione ?? false
+          }).select().single()
+          if (error) { errors++; continue }
+          groupId = newG.id
+        }
+        await supabase.from('participants').delete().eq('group_id', groupId)
+        await supabase.from('participants').insert(g.participants.map(p => ({ ...p, group_id: groupId })))
+        imported++
+      }
+      log('✅ Importati: ' + imported + ' gruppi')
+      if (errors) log('❌ Errori: ' + errors)
+    } catch (err) {
+      log('❌ Errore: ' + err.message)
+    }
+    setImporting(false)
+    e.target.value = ''
   }
 
   async function toggleAssignment(staffId, destination, shiftNum) {
@@ -190,13 +146,11 @@ export default function Admin() {
 
   return (
     <div className="page">
-      <Topbar showBack={true} />
-      </div>
-
+      <Topbar showBack={true} showAvatar={false} />
       <div className="tabs">
-        <button className={`tab ${tab === 'import' ? 'active' : ''}`} onClick={() => setTab('import')}>Import Excel</button>
-        <button className={`tab ${tab === 'staff' ? 'active' : ''}`} onClick={() => setTab('staff')}>Staff</button>
-        <button className={`tab ${tab === 'stats' ? 'active' : ''}`} onClick={() => setTab('stats')}>Statistiche</button>
+        <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>
+        <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
+        <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
       </div>
 
       {tab === 'import' && (
@@ -204,14 +158,8 @@ export default function Admin() {
           <div className="card" style={{ textAlign: 'center', padding: 24 }}>
             <Upload size={32} color="var(--iv-blue)" style={{ marginBottom: 12 }} />
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Carica file Excel partecipanti</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
-              Formato: FILE_CM_2026.xlsx — stesso formato del 2025
-            </div>
-            <label style={{
-              display: 'inline-block', padding: '10px 20px',
-              background: 'var(--iv-blue)', color: '#fff',
-              borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer'
-            }}>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>Formato: FILE_CM_2026.xlsx</div>
+            <label style={{ display: 'inline-block', padding: '10px 20px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               {importing ? 'Importazione...' : 'Seleziona file'}
               <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} disabled={importing} />
             </label>
@@ -265,17 +213,14 @@ export default function Admin() {
 function StaffCard({ staff, onToggle }) {
   const [open, setOpen] = useState(false)
   const assigned = staff.assigned_shifts || []
+  const initials = ((staff.nome?.[0] || '') + (staff.cognome?.[0] || '')).toUpperCase()
   return (
     <div className="card">
       <button style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10 }} onClick={() => setOpen(o => !o)}>
-        <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>
-          {(staff.nome?.[0] || '') + (staff.cognome?.[0] || '')}
-        </div>
+        <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{staff.nome} {staff.cognome}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
-            {staff.role === 'admin' ? 'Admin' : `${assigned.length} turni assegnati`}
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{staff.role === 'admin' ? 'Admin' : assigned.length + ' turni assegnati'}</div>
         </div>
         <div style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>{open ? '▲' : '▼'}</div>
       </button>
@@ -288,13 +233,9 @@ function StaffCard({ staff, onToggle }) {
                 {SHIFTS[dest.id].map(s => {
                   const isOn = assigned.some(a => a.destination === dest.id && a.shift_num === s.num)
                   return (
-                    <button key={s.num} onClick={() => onToggle(staff.id, dest.id, s.num)} style={{
-                      padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                      background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)',
-                      color: isOn ? '#fff' : 'var(--text-secondary)',
-                      border: `0.5px solid ${isOn ? 'var(--iv-blue)' : 'var(--border)'}`,
-                      cursor: 'pointer'
-                    }}>T{s.num}</button>
+                    <button key={s.num} onClick={() => onToggle(staff.id, dest.id, s.num)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)', color: isOn ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isOn ? 'var(--iv-blue)' : 'var(--border)'), cursor: 'pointer' }}>
+                      T{s.num}
+                    </button>
                   )
                 })}
               </div>
