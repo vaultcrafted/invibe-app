@@ -1,14 +1,10 @@
 import { useEffect, useState } from 'react'
-import Topbar from '../components/Topbar'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS } from '../lib/constants'
+import Topbar from '../components/Topbar'
 
 export default function StaffList() {
-  const { isAdmin } = useAuth()
-  const navigate = useNavigate()
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -20,14 +16,13 @@ export default function StaffList() {
     })
   }, [])
 
-  const filtered = staff.filter(s =>
-    !search || `${s.nome} ${s.cognome}`.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = staff.filter(s => !search || `${s.nome} ${s.cognome}`.toLowerCase().includes(search.toLowerCase()))
 
   return (
     <div className="page">
-      <Topbar showBack={true} />
-      </div>
+      <Topbar showBack={true} showAvatar={false} />
+
+      <div style={{ padding: '12px 16px 4px', fontSize: 13, fontWeight: 600 }}>Staff — {staff.length} membri</div>
 
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
@@ -48,16 +43,11 @@ export default function StaffList() {
                   <div style={{ fontSize: 14, fontWeight: 600 }}>{s.nome} {s.cognome}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
                     {s.role === 'admin' ? '⭐ Admin' : assigned.length === 0 ? 'Nessun turno assegnato' :
-                      assigned.map(a => {
-                        const d = DESTINATIONS.find(d => d.id === a.destination)
-                        return `${d?.name || a.destination} T${a.shift_num}`
-                      }).join(' · ')
+                      assigned.map(a => { const d = DESTINATIONS.find(d => d.id === a.destination); return `${d?.name || a.destination} T${a.shift_num}` }).join(' · ')
                     }
                   </div>
                 </div>
-                {s.role === 'admin' && (
-                  <span className="badge badge-blue">Admin</span>
-                )}
+                {s.role === 'admin' && <span className="badge badge-blue">Admin</span>}
               </div>
             )
           })}
