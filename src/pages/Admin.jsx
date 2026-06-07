@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -189,14 +190,7 @@ export default function Admin() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate('/')}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">Pannello Admin</div>
-          <div className="topbar-sub">Gestione staff e dati</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       <div className="tabs">
