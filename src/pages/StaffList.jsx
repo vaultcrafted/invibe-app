@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -25,14 +26,7 @@ export default function StaffList() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate(-1)}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">Staff</div>
-          <div className="topbar-sub">{staff.length} membri</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       <div className="search-bar">
