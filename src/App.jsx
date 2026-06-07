@@ -1,11 +1,15 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
+import Navigation from './components/Navigation'
 import Login from './pages/Login'
 import Destinations from './pages/Destinations'
 import ShiftSelect from './pages/ShiftSelect'
 import GroupList from './pages/GroupList'
 import GroupDetail from './pages/GroupDetail'
 import Admin from './pages/Admin'
+import Account from './pages/Account'
+import Calendario from './pages/Calendario'
+import StaffList from './pages/StaffList'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -26,18 +30,35 @@ function AdminRoute({ children }) {
   return children
 }
 
+function AppShell() {
+  const location = useLocation()
+  const isLogin = location.pathname === '/login'
+
+  return (
+    <div className="app-shell">
+      {!isLogin && <Navigation />}
+      <div className="main-content">
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/" element={<ProtectedRoute><Destinations /></ProtectedRoute>} />
+          <Route path="/destination/:destId" element={<ProtectedRoute><ShiftSelect /></ProtectedRoute>} />
+          <Route path="/shift/:destId/:shiftNum" element={<ProtectedRoute><GroupList /></ProtectedRoute>} />
+          <Route path="/group/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
+          <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
+          <Route path="/calendario" element={<ProtectedRoute><Calendario /></ProtectedRoute>} />
+          <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
+          <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/" element={<ProtectedRoute><Destinations /></ProtectedRoute>} />
-        <Route path="/destination/:destId" element={<ProtectedRoute><ShiftSelect /></ProtectedRoute>} />
-        <Route path="/shift/:destId/:shiftNum" element={<ProtectedRoute><GroupList /></ProtectedRoute>} />
-        <Route path="/group/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
-        <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AppShell />
     </BrowserRouter>
   )
 }
