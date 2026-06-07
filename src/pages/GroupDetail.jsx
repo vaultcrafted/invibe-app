@@ -46,56 +46,37 @@ export default function GroupDetail() {
   return (
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
-
       <div style={{ padding: '0 16px 20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 0 14px', borderBottom: '0.5px solid var(--border)' }}>
           <div className="initials" style={{ width: 48, height: 48, fontSize: 15 }}>{initials}</div>
           <div>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{group.capogruppo_display}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {dest?.name} · Turno {group.shift_num} · {shift?.label}
-            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{dest?.name} · Turno {group.shift_num} · {shift?.label}</div>
           </div>
         </div>
-
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, margin: '14px 0' }}>
-          <div className="stat-box" style={{ textAlign: 'center' }}>
-            <div className="stat-label">Persone</div>
-            <div className="stat-val">{participants.length}</div>
-          </div>
-          <div className="stat-box" style={{ textAlign: 'center' }}>
-            <div className="stat-label">Maschi</div>
-            <div className="stat-val" style={{ color: 'var(--iv-blue)' }}>{males}</div>
-          </div>
-          <div className="stat-box" style={{ textAlign: 'center' }}>
-            <div className="stat-label">Femmine</div>
-            <div className="stat-val" style={{ color: '#D4537E' }}>{females}</div>
-          </div>
+          <div className="stat-box" style={{ textAlign: 'center' }}><div className="stat-label">Persone</div><div className="stat-val">{participants.length}</div></div>
+          <div className="stat-box" style={{ textAlign: 'center' }}><div className="stat-label">Maschi</div><div className="stat-val" style={{ color: 'var(--iv-blue)' }}>{males}</div></div>
+          <div className="stat-box" style={{ textAlign: 'center' }}><div className="stat-label">Femmine</div><div className="stat-val" style={{ color: '#D4537E' }}>{females}</div></div>
         </div>
-
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>Servizi</div>
         {SERVICES.map(sv => (
           <div key={sv.id} style={{ display: 'flex', alignItems: 'center', padding: '12px 0', borderBottom: '0.5px solid var(--border)', gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{sv.label}</div>
+              <div style={{ fontSize: 14 }}>{sv.label}</div>
               {saving === sv.id && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>Salvataggio...</div>}
             </div>
-            <div className={`toggle ${group[sv.id] ? 'on' : ''}`} onClick={() => toggleService(sv.id)}>
-              <div className="toggle-knob" />
-            </div>
+            <div className={`toggle ${group[sv.id] ? 'on' : ''}`} onClick={() => toggleService(sv.id)}><div className="toggle-knob" /></div>
           </div>
         ))}
-
         <div style={{ marginTop: 16 }}>
           <label className="input-label">🏠 Alloggio</label>
           <input className="input-field" placeholder="Es. App. Via Roma 4 – int. 3" value={group.alloggio || ''} onChange={e => updateField('alloggio', e.target.value)} onBlur={() => saveField('alloggio')} />
         </div>
-
         <div style={{ marginTop: 14 }}>
           <label className="input-label">📝 Note</label>
           <textarea className="input-field" placeholder="Note sul gruppo..." rows={3} style={{ resize: 'none', lineHeight: 1.5 }} value={group.note || ''} onChange={e => updateField('note', e.target.value)} onBlur={() => saveField('note')} />
         </div>
-
         <div style={{ marginTop: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>Partecipanti</div>
           {participants.map(p => (
