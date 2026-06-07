@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Topbar from '../components/Topbar'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -56,14 +57,7 @@ export default function GroupDetail() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate(`/shift/${group.destination}/${group.shift_num}`)}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">{group.capogruppo_display}</div>
-          <div className="topbar-sub">{dest?.name} · Turno {group.shift_num}</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       <div style={{ padding: '0 16px 20px' }}>
