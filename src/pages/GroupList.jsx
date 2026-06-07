@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import Topbar from '../components/Topbar'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ArrowLeft, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials } from '../lib/constants'
-import { SERVICES } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES } from '../lib/constants'
+import Topbar from '../components/Topbar'
 
 export default function GroupList() {
   const { destId, shiftNum } = useParams()
@@ -19,9 +18,7 @@ export default function GroupList() {
 
   useEffect(() => {
     fetchGroups()
-    // Realtime subscription
-    const channel = supabase
-      .channel('groups-changes')
+    const channel = supabase.channel('groups-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'groups' }, fetchGroups)
       .subscribe()
     return () => supabase.removeChannel(channel)
@@ -29,29 +26,22 @@ export default function GroupList() {
 
   async function fetchGroups() {
     setLoading(true)
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('groups')
       .select('*, participants(id, nome, cognome, sesso, nascita)')
       .eq('destination', destId)
       .eq('shift_num', parseInt(shiftNum))
       .order('capogruppo_display')
-    if (!error) setGroups(data || [])
+    setGroups(data || [])
     setLoading(false)
   }
 
   const totalPeople = groups.reduce((s, g) => s + (g.participants?.length || 0), 0)
 
-  function isComplete(g) {
-    return SERVICES.every(sv => g[sv.id])
-  }
-  function hasMissing(g) {
-    return SERVICES.some(sv => !g[sv.id])
-  }
-
   const filtered = groups
     .filter(g => {
-      if (tab === 'completi') return isComplete(g)
-      if (tab === 'mancanti') return hasMissing(g)
+      if (tab === 'completi') return SERVICES.every(sv => g[sv.id])
+      if (tab === 'mancanti') return SERVICES.some(sv => !g[sv.id])
       return true
     })
     .filter(g => !search || g.capogruppo_display?.toLowerCase().includes(search.toLowerCase()))
@@ -60,7 +50,13 @@ export default function GroupList() {
 
   return (
     <div className="page">
-      <Topbar showBack={true} />
+      <Topbar showBack={true} showAvatar={false} />
+
+      <div style={{ padding: '12px 16px 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+        {dest.name} · Turno {shiftNum}
+      </div>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>
+        {shift.label} · {totalPeople} partecipanti
       </div>
 
       <div className="tabs">
@@ -73,19 +69,11 @@ export default function GroupList() {
 
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
-        <input
-          placeholder="Cerca capogruppo..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        {search && (
-          <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>
-        )}
+        <input placeholder="Cerca capogruppo..." value={search} onChange={e => setSearch(e.target.value)} />
+        {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
 
-      <div style={{ padding: '4px 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>
-        {filtered.length} gruppi
-      </div>
+      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi</div>
 
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
@@ -113,32 +101,21 @@ function GroupCard({ group, onClick }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>
-            {group.capogruppo_display}
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{group.capogruppo_display}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
-            {participants.length} {participants.length === 1 ? 'persona' : 'persone'}
-            {' · '}
-            <span className="dot-m">{males}M</span>
-            {' '}
-            <span className="dot-f">{females}F</span>
+            {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
           </div>
         </div>
       </div>
-
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {SERVICES.map(sv => (
           <span key={sv.id} className={`flag-chip ${group[sv.id] ? 'on' : ''}`}>
-            <span className="dot" />
-            {sv.label}
+            <span className="dot" />{sv.label}
           </span>
         ))}
       </div>
-
       {group.alloggio && (
-        <div className="alloggio-tag">
-          🏠 {group.alloggio}
-        </div>
+        <div className="alloggio-tag">🏠 {group.alloggio}</div>
       )}
     </button>
   )
