@@ -29,10 +29,9 @@ export default function Destinations() {
   return (
     <div className="page">
       <div className="topbar">
-        <div className="topbar-logo">IV</div>
-        <div className="topbar-info">
-          <div className="topbar-title">Invibe Staff</div>
-          <div className="topbar-sub">Summer 2026</div>
+        <img src="/Logotipo.png" alt="Invibe" style={{ height: 32, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <img src="/Logo.png" alt="Invibe" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
         </div>
         <button className="topbar-avatar" onClick={() => navigate('/account')} title="Il mio account">
           {initials.toUpperCase()}
