@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import Topbar from '../components/Topbar'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -59,14 +60,7 @@ export default function GroupList() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate(`/destination/${destId}`)}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">{dest.name} · Turno {shiftNum}</div>
-          <div className="topbar-sub">{shift.label} · {totalPeople} partecipanti</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       <div className="tabs">
