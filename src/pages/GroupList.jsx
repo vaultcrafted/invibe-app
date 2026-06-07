@@ -51,14 +51,8 @@ export default function GroupList() {
   return (
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
-
-      <div style={{ padding: '12px 16px 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-        {dest.name} · Turno {shiftNum}
-      </div>
-      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>
-        {shift.label} · {totalPeople} partecipanti
-      </div>
-
+      <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · Turno {shiftNum}</div>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti</div>
       <div className="tabs">
         {['tutti', 'mancanti', 'completi'].map(t => (
           <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
@@ -66,15 +60,12 @@ export default function GroupList() {
           </button>
         ))}
       </div>
-
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo..." value={search} onChange={e => setSearch(e.target.value)} />
         {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
-
       <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi</div>
-
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
@@ -95,13 +86,12 @@ function GroupCard({ group, onClick }) {
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
   const initials = getInitials(group.capogruppo_display)
-
   return (
     <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer' }} onClick={onClick}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{group.capogruppo_display}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{group.capogruppo_display}</div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
             {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
           </div>
@@ -114,9 +104,7 @@ function GroupCard({ group, onClick }) {
           </span>
         ))}
       </div>
-      {group.alloggio && (
-        <div className="alloggio-tag">🏠 {group.alloggio}</div>
-      )}
+      {group.alloggio && <div className="alloggio-tag">🏠 {group.alloggio}</div>}
     </button>
   )
 }
