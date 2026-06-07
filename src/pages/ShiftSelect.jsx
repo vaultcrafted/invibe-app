@@ -1,8 +1,7 @@
-import Topbar from '../components/Topbar'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS } from '../lib/constants'
-import { ArrowLeft } from 'lucide-react'
+import Topbar from '../components/Topbar'
 
 export default function ShiftSelect() {
   const { destId } = useParams()
@@ -22,26 +21,24 @@ export default function ShiftSelect() {
 
   return (
     <div className="page">
-      <Topbar showBack={true} />
+      <Topbar showBack={true} showAvatar={false} />
+
+      <div style={{ padding: '16px 16px 4px', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {dest.flag} {dest.name} — Seleziona turno
       </div>
 
-      {assignedNums.length > 0 && (
+      {assignedNums.length > 0 && !isAdmin && (
         <>
           <div className="section-label">I tuoi turni</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shifts.filter(s => assignedNums.includes(s.num)).map(shift => (
-              <ShiftCard key={shift.num} shift={shift} destId={destId} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
+              <ShiftCard key={shift.num} shift={shift} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
             ))}
           </div>
-        </>
-      )}
-
-      {!isAdmin && shifts.filter(s => !assignedNums.includes(s.num)).length > 0 && (
-        <>
           <div className="section-label">Altri turni</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shifts.filter(s => !assignedNums.includes(s.num)).map(shift => (
-              <ShiftCard key={shift.num} shift={shift} destId={destId} mine={false} onClick={null} />
+              <ShiftCard key={shift.num} shift={shift} mine={false} onClick={null} />
             ))}
           </div>
         </>
@@ -52,7 +49,7 @@ export default function ShiftSelect() {
           <div className="section-label">Tutti i turni</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {shifts.map(shift => (
-              <ShiftCard key={shift.num} shift={shift} destId={destId} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
+              <ShiftCard key={shift.num} shift={shift} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
             ))}
           </div>
         </>
