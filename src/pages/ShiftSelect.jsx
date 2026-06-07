@@ -1,3 +1,4 @@
+import Topbar from '../components/Topbar'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS } from '../lib/constants'
@@ -21,14 +22,7 @@ export default function ShiftSelect() {
 
   return (
     <div className="page">
-      <div className="topbar">
-        <button className="topbar-btn" onClick={() => navigate('/')}>
-          <ArrowLeft size={20} color="#fff" />
-        </button>
-        <div className="topbar-info">
-          <div className="topbar-title">{dest.flag} {dest.name} 2026</div>
-          <div className="topbar-sub">Seleziona turno</div>
-        </div>
+      <Topbar showBack={true} />
       </div>
 
       {assignedNums.length > 0 && (
