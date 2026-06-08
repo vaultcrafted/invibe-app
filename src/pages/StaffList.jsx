@@ -61,6 +61,13 @@ export default function StaffList() {
   return (
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
+      <style>{`
+        .staff-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        @media (min-width: 768px) { .staff-grid { grid-template-columns: repeat(4, 1fr) !important; } }
+        .staff-grid-card { padding: 10px !important; }
+        .staff-grid-card .staff-initials { width: 36px !important; height: 36px !important; font-size: 12px !important; }
+        .staff-grid-card .staff-name { font-size: 12px !important; }
+      `}</style>
 
       <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
@@ -114,7 +121,7 @@ export default function StaffList() {
           {filtered.map(s => <StaffRowCard key={s.id} s={s} />)}
         </div>
       ) : (
-        <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ padding: '0 16px 16px', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }} className='staff-grid'>
           {filtered.map(s => <StaffGridCard key={s.id} s={s} />)}
         </div>
       )}
@@ -165,16 +172,16 @@ function StaffGridCard({ s }) {
   const assigned = s.assigned_shifts || []
 
   return (
-    <div className="card" style={{ textAlign: 'center', padding: 14 }}>
+    <div className="card staff-grid-card" style={{ textAlign: 'center', padding: 10 }}>
       <div style={{
-        width: 48, height: 48, borderRadius: '50%', margin: '0 auto 10px',
+        width: 38, height: 38, borderRadius: '50%', margin: '0 auto 8px',
         background: color + '22', border: '1.5px solid ' + color,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 15, fontWeight: 700, color: color
       }}>
         {getInitials(s.nome, s.cognome)}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>{s.nome} {s.cognome}</div>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>{s.nome} {s.cognome}</div>
       <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
         {s.role === 'admin' && <span style={{ fontSize: 9, fontWeight: 700, color: '#D4AC0D' }}>⭐</span>}
         {s.ruolo && (
