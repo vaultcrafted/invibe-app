@@ -1,12 +1,27 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, FileText, Shield, Edit2, Check } from 'lucide-react'
+import { LogOut, Edit2, Check, X, Mail, Phone, User, FileText, Shield, Lock } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import Topbar from '../components/Topbar'
 
+const RUOLO_COLORS = {
+  CM: '#1E6BF1', ACM: '#2E86C1', CA: '#8E44AD', SUPERVISOR: '#D4AC0D',
+  ARM: '#E67E22', RM: '#16A085', DJ: '#C0392B', FOTO: '#2ECC71',
+  VIDEO: '#E74C3C', VOCALIST: '#9B59B6', BALLERINO: '#1ABC9C',
+  BALLERINA: '#F39C12', ACA: '#27AE60', 'STAFF U': '#5D6D7E',
+  'STAFF D': '#7F8C8D', UFFICIO: '#2C3E50',
+}
+function getRuoloColor(ruolo) {
+  if (!ruolo) return 'var(--iv-blue)'
+  for (const key of Object.keys(RUOLO_COLORS)) {
+    if (ruolo.toUpperCase().includes(key)) return RUOLO_COLORS[key]
+  }
+  return 'var(--iv-blue)'
+}
+
 export default function Account() {
-  const { profile, signOut, fetchProfile, user } = useAuth()
+  const { profile, signOut, fetchProfile, user, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({
@@ -15,14 +30,32 @@ export default function Account() {
     telefono: profile?.telefono || '',
   })
   const [saving, setSaving] = useState(false)
+  const [changingPwd, setChangingPwd] = useState(false)
+  const [pwdForm, setPwdForm] = useState({ newPwd: '', confirmPwd: '' })
+  const [pwdMsg, setPwdMsg] = useState('')
+
   const initials = ((profile?.nome?.[0] || '') + (profile?.cognome?.[0] || '')).toUpperCase()
+  const ruoloColor = getRuoloColor(profile?.ruolo)
+  const lastSignIn = user?.last_sign_in_at
+    ? new Date(user.last_sign_in_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+    : null
 
   async function saveProfile() {
     setSaving(true)
-    await supabase.from('staff_profiles').update({ nome: form.nome, cognome: form.cognome, telefono: form.telefono }).eq('id', user.id)
+    await supabase.from('staff_profiles').update({
+      nome: form.nome, cognome: form.cognome, telefono: form.telefono
+    }).eq('id', user.id)
     await fetchProfile(user.id)
     setSaving(false)
     setEditing(false)
+  }
+
+  async function changePassword() {
+    if (pwdForm.newPwd !== pwdForm.confirmPwd) { setPwdMsg('Le password non coincidono'); return }
+    if (pwdForm.newPwd.length < 6) { setPwdMsg('Password troppo corta (min. 6 caratteri)'); return }
+    const { error } = await supabase.auth.updateUser({ password: pwdForm.newPwd })
+    if (error) { setPwdMsg('Errore: ' + error.message) }
+    else { setPwdMsg('✅ Password aggiornata!'); setPwdForm({ newPwd: '', confirmPwd: '' }); setTimeout(() => { setChangingPwd(false); setPwdMsg('') }, 2000) }
   }
 
   async function handleLogout() { await signOut(); navigate('/login') }
@@ -31,66 +64,131 @@ export default function Account() {
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
 
-      <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '24px 0 8px', gap: 12 }}>
-          <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--iv-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, fontWeight: 700, color: '#fff' }}>{initials}</div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>{profile?.nome} {profile?.cognome}</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 2 }}>{profile?.role === 'admin' ? '⭐ Admin' : 'Staff'}</div>
-          </div>
+      {/* Hero avatar */}
+      <div style={{ background: 'linear-gradient(180deg, var(--iv-blue-light) 0%, var(--bg-primary) 100%)', padding: '28px 16px 20px', textAlign: 'center' }}>
+        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
+          <div style={{
+            width: 80, height: 80, borderRadius: '50%',
+            background: ruoloColor, border: '3px solid #fff',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 auto'
+          }}>{initials}</div>
+          <div style={{ position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: '50%', background: '#22c55e', border: '2px solid #fff' }} />
         </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{profile?.nome} {profile?.cognome}</div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          {profile?.role === 'admin' && (
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 20, background: '#FEF9C3', color: '#854D0E', border: '0.5px solid #FDE047' }}>⭐ Admin</span>
+          )}
+          {profile?.ruolo && (
+            <span style={{ fontSize: 11, fontWeight: 600, padding: '3px 10px', borderRadius: 20, background: ruoloColor + '18', color: ruoloColor, border: '0.5px solid ' + ruoloColor + '44' }}>{profile.ruolo}</span>
+          )}
+        </div>
+        {lastSignIn && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 8 }}>Ultimo accesso: {lastSignIn}</div>}
+      </div>
 
+      <div style={{ padding: '0 16px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+        {/* Informazioni profilo */}
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dati personali</div>
-            <button onClick={() => editing ? saveProfile() : setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--iv-blue)', fontWeight: 600 }}>
-              {editing ? <><Check size={14} /> Salva</> : <><Edit2 size={14} /> Modifica</>}
-            </button>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Informazioni profilo</div>
+            {!editing ? (
+              <button onClick={() => setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--iv-blue)', fontWeight: 600, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--iv-blue)' }}>
+                <Edit2 size={12} /> Modifica dati
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => setEditing(false)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <X size={12} />
+                </button>
+                <button onClick={saveProfile} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#fff', fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: 'var(--iv-blue)', border: 'none' }}>
+                  <Check size={12} /> {saving ? 'Salvo...' : 'Salva'}
+                </button>
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <InfoRow label="Nome" value={form.nome} editing={editing} onChange={v => setForm(f => ({...f, nome: v}))} />
-            <InfoRow label="Cognome" value={form.cognome} editing={editing} onChange={v => setForm(f => ({...f, cognome: v}))} />
-            <InfoRow label="Email" value={user?.email || ''} editing={false} />
-            <InfoRow label="Telefono" value={form.telefono} editing={editing} onChange={v => setForm(f => ({...f, telefono: v}))} placeholder="+39 333 1234567" />
-          </div>
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Nome" value={form.nome} editing={editing} onChange={v => setForm(f => ({...f, nome: v}))} />
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Cognome" value={form.cognome} editing={editing} onChange={v => setForm(f => ({...f, cognome: v}))} />
         </div>
 
+        {/* Contatti */}
         <div className="card">
-          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>Documenti</div>
-          <DocRow icon={<FileText size={18} color="var(--iv-blue)" />} label="Contratto estivo" sublabel="Stagione 2026" />
-          <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Assicurazione" sublabel="Polizza staff" />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Contatti</div>
+          <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={user?.email?.replace('@invibe.it','')} editing={false} />
+          <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={form.telefono} editing={editing} onChange={v => setForm(f => ({...f, telefono: v}))} placeholder="+39 333 1234567" isLast={true} />
         </div>
 
-        <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 'var(--radius-md)', background: 'var(--danger-light)', color: 'var(--danger)', fontSize: 14, fontWeight: 600, width: '100%' }}>
+        {/* Documenti */}
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>I miei documenti</div>
+          <DocRow icon={<FileText size={18} color="var(--iv-blue)" />} label="Contratto estivo 2026" sublabel="Presto disponibile" />
+          <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Polizza assicurazione staff" sublabel="Presto disponibile" isLast={true} />
+        </div>
+
+        {/* Gestione account */}
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Gestione account</div>
+
+          {!changingPwd ? (
+            <button onClick={() => setChangingPwd(true)} style={{ width: '100%', padding: '13px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', cursor: 'pointer', marginBottom: isAdmin ? 10 : 0 }}>
+              <Lock size={16} /> Cambia password
+            </button>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: isAdmin ? 10 : 0 }}>
+              <input className="input-field" type="password" placeholder="Nuova password" value={pwdForm.newPwd} onChange={e => setPwdForm(f => ({...f, newPwd: e.target.value}))} />
+              <input className="input-field" type="password" placeholder="Conferma password" value={pwdForm.confirmPwd} onChange={e => setPwdForm(f => ({...f, confirmPwd: e.target.value}))} />
+              {pwdMsg && <div style={{ fontSize: 13, color: pwdMsg.includes('✅') ? 'var(--success)' : 'var(--danger)', background: pwdMsg.includes('✅') ? 'var(--success-light)' : 'var(--danger-light)', padding: '8px 12px', borderRadius: 8 }}>{pwdMsg}</div>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setChangingPwd(false); setPwdMsg('') }} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, color: 'var(--text-secondary)' }}>Annulla</button>
+                <button onClick={changePassword} style={{ flex: 2, padding: '11px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer' }}>Aggiorna</button>
+              </div>
+            </div>
+          )}
+
+          {isAdmin && (
+            <button onClick={() => navigate('/admin')} style={{ width: '100%', padding: '13px', background: 'var(--iv-blue-dark)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', cursor: 'pointer' }}>
+              <Shield size={16} /> Pannello Admin
+            </button>
+          )}
+        </div>
+
+        {/* Logout */}
+        <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 10, background: 'var(--danger-light)', color: 'var(--danger)', fontSize: 14, fontWeight: 600, width: '100%', border: '0.5px solid #FECACA' }}>
           <LogOut size={16} /> Esci dall'account
         </button>
+
       </div>
     </div>
   )
 }
 
-function InfoRow({ label, value, editing, onChange, placeholder }) {
+function ProfileRow({ icon, label, value, editing, onChange, placeholder, isLast }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0', borderBottom: '0.5px solid var(--border)' }}>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)', width: 72, flexShrink: 0 }}>{label}</div>
-      {editing && onChange ? (
-        <input className="input-field" style={{ flex: 1, padding: '6px 8px', fontSize: 14 }} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder || ''} />
-      ) : (
-        <div style={{ fontSize: 14, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)', flex: 1 }}>{value || '—'}</div>
-      )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+      <div style={{ flex: 1 }}>
+        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{label}</div>
+        {editing && onChange ? (
+          <input className="input-field" style={{ padding: '4px 8px', fontSize: 14 }} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder || ''} />
+        ) : (
+          <div style={{ fontSize: 14, fontWeight: 500, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{value || '—'}</div>
+        )}
+      </div>
     </div>
   )
 }
 
-function DocRow({ icon, label, sublabel }) {
+function DocRow({ icon, label, sublabel, isLast }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: '0.5px solid var(--border)' }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>{sublabel}</div>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Presto disponibile</div>
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '5px 10px', borderRadius: 8, border: '0.5px solid var(--border)' }}>Presto</div>
     </div>
   )
 }
