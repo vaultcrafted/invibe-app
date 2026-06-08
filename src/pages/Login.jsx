@@ -5,8 +5,9 @@ import { useAuth } from '../context/AuthContext'
 export default function Login() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -15,62 +16,112 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
+      // Convert username (nomecognome) to email format for Supabase
+      const email = username.includes('@') ? username : username.toLowerCase() + '@invibe.it'
       await signIn(email, password)
       navigate('/')
     } catch (err) {
-      setError('Email o password errati.')
+      setError('Username o password errati.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '32px 24px' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '32px 24px', background: '#fff' }}>
+
+      {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <div style={{
-          width: 64, height: 64, borderRadius: 18,
-          background: 'var(--iv-blue)', display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 16px', fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: '0.02em'
-        }}>IV</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>Invibe Staff</h1>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>Summer 2026 — Accesso riservato allo staff</p>
+        <img src="/Logotipo.png" alt="Invibe" style={{ height: 36, objectFit: 'contain', marginBottom: 16 }} />
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+          Staff App — Summer 2026
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* Username */}
         <div>
-          <label className="input-label">Email</label>
-          <input
-            className="input-field"
-            type="email"
-            placeholder="nome@invibe.it"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-          />
+          <label className="input-label">Username</label>
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div style={{ position: 'absolute', left: 12, pointerEvents: 'none' }}>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4" stroke="var(--text-tertiary)" strokeWidth="2"/>
+                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/>
+              </svg>
+            </div>
+            <input
+              className="input-field"
+              style={{ paddingLeft: 38 }}
+              type="text"
+              placeholder="nomecognome"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              required
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="username"
+            />
+          </div>
         </div>
+
+        {/* Password */}
         <div>
           <label className="input-label">Password</label>
-          <input
-            className="input-field"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
+          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div style={{ position: 'absolute', left: 12, pointerEvents: 'none' }}>
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" stroke="var(--text-tertiary)" strokeWidth="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/>
+                <circle cx="12" cy="16" r="1.5" fill="var(--text-tertiary)"/>
+              </svg>
+            </div>
+            <input
+              className="input-field"
+              style={{ paddingLeft: 38, paddingRight: 44 }}
+              type={showPassword ? 'text' : 'password'}
+              placeholder="••••••••"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(v => !v)}
+              style={{ position: 'absolute', right: 12, color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center', padding: 4 }}
+            >
+              {showPassword ? (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                </svg>
+              ) : (
+                <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2"/>
+                  <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
+
         {error && (
-          <p style={{ fontSize: 13, color: 'var(--danger)', background: 'var(--danger-light)', padding: '10px 12px', borderRadius: 8 }}>
+          <div style={{ fontSize: 13, color: 'var(--danger)', background: 'var(--danger-light)', padding: '10px 12px', borderRadius: 8 }}>
             {error}
-          </p>
+          </div>
         )}
+
         <button className="btn-primary" type="submit" disabled={loading} style={{ marginTop: 4 }}>
           {loading ? 'Accesso in corso...' : 'Accedi'}
         </button>
+
       </form>
+
+      <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'var(--text-tertiary)' }}>
+        Per assistenza contatta il tuo responsabile
+      </div>
+
     </div>
   )
 }
