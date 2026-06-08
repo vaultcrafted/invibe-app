@@ -32,7 +32,7 @@ export default function Login() {
 
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <img src="/logo_login.png" alt="Invibe" style={{ height: 60, objectFit: 'contain', marginBottom: 16 }} />
+        <img src="/logo_login.png" alt="Invibe" style={{ height: 120, objectFit: 'contain', marginBottom: 20 }} />
         <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
           Staff App — Summer 2026
         </div>
