@@ -55,11 +55,13 @@ export default function Navigation() {
   return (
     <>
       <nav className="sidebar">
-        <div className="sidebar-logo">IV</div>
+        <div style={{ padding: '0 8px', marginBottom: 20 }}>
+          <img src="/Logotipo.png" alt="Invibe" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)', display: 'block' }} />
+        </div>
         {NAV_ITEMS.map(item => {
           const active = isActive(item)
           return (
-            <button key={item.id} className={`sidebar-item ${active ? 'active' : ''}`} onClick={() => navigate(item.path)}>
+            <button key={item.id} className={'sidebar-item ' + (active ? 'active' : '')} onClick={() => navigate(item.path)}>
               {item.icon(active)}
               {item.label}
             </button>
@@ -70,7 +72,7 @@ export default function Navigation() {
         {NAV_ITEMS.map(item => {
           const active = isActive(item)
           return (
-            <button key={item.id} className={`bottom-nav-item ${active ? 'active' : ''}`} onClick={() => navigate(item.path)}>
+            <button key={item.id} className={'bottom-nav-item ' + (active ? 'active' : '')} onClick={() => navigate(item.path)}>
               {item.icon(active)}
               {item.label}
             </button>
