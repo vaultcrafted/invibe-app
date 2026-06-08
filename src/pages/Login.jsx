@@ -32,7 +32,7 @@ export default function Login() {
 
       {/* Logo */}
       <div style={{ textAlign: 'center', marginBottom: 40 }}>
-        <img src="/Logotipo.png" alt="Invibe" style={{ height: 36, objectFit: 'contain', marginBottom: 16 }} />
+        <img src="/logo_login.png" alt="Invibe" style={{ height: 60, objectFit: 'contain', marginBottom: 16 }} />
         <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
           Staff App — Summer 2026
         </div>
@@ -61,6 +61,8 @@ export default function Login() {
               autoCapitalize="none"
               autoCorrect="off"
               autoComplete="username"
+              name="username"
+              name="username"
             />
           </div>
         </div>
@@ -85,6 +87,8 @@ export default function Login() {
               onChange={e => setPassword(e.target.value)}
               required
               autoComplete="current-password"
+              name="password"
+              name="password"
             />
             <button
               type="button"
