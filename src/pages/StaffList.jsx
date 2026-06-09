@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
+import VotePanel from '../components/VotePanel'
 
 const RUOLO_COLORS = {
   CM: '#1E6BF1', ACM: '#2E86C1', CA: '#8E44AD', SUPERVISOR: '#D4AC0D',
@@ -125,6 +126,13 @@ export default function StaffList() {
               ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{members.map(s => <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
               : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>{members.map(s => <StaffGridCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
           }
+          <VotePanel
+            destination={selectedDest}
+            shiftNum={selectedShift}
+            members={members}
+            currentUserId={profile?.id}
+            isAdmin={isAdmin}
+          />
         </div>
       </div>
     )
