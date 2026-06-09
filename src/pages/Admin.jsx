@@ -184,28 +184,7 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === 'stats' && stats && (
-        <div style={{ padding: 16 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-            <div className="stat-box"><div className="stat-label">Gruppi totali</div><div className="stat-val">{stats.groups.length}</div></div>
-            <div className="stat-box"><div className="stat-label">Partecipanti</div><div className="stat-val">{stats.totalParts}</div></div>
-          </div>
-          {DESTINATIONS.map(dest => {
-            const dGroups = stats.groups.filter(g => g.destination === dest.id)
-            if (!dGroups.length) return null
-            const complete = dGroups.filter(g => g.escursioni && g.navetta && g.assicurazione && g.iscrizione).length
-            return (
-              <div key={dest.id} className="card" style={{ marginBottom: 10 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>{dest.flag} {dest.name}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <span>{dGroups.length} gruppi</span>
-                  <span style={{ color: 'var(--success)' }}>{complete} completi</span>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {tab === 'stats' && stats && <StatsTab stats={stats} />}
     </div>
   )
 }
@@ -243,6 +222,195 @@ function StaffCard({ staff, onToggle }) {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+const SERVICES_META = [
+  { key: 'escursioni',   label: 'Escursioni',   color: '#1E6BF1', emoji: '🏄' },
+  { key: 'navetta',      label: 'Navetta',       color: '#059669', emoji: '🚌' },
+  { key: 'assicurazione',label: 'Assicurazione', color: '#D97706', emoji: '🛡️' },
+  { key: 'iscrizione',   label: 'Iscrizione',    color: '#7C3AED', emoji: '📋' },
+]
+
+const DEST_COLORS = {
+  pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
+  gallipoli: '#DC2626', sardegna: '#7C3AED',
+}
+
+function ServiceBar({ label, count, total, color, emoji }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+          {emoji} {label}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <span style={{ fontWeight: 700, color }}>{count}</span> / {total}
+          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>{pct}%</span>
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 4, background: 'var(--bg-tertiary, #f0f0f0)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: pct + '%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
+      </div>
+    </div>
+  )
+}
+
+function StatsTab({ stats }) {
+  const [filterDest, setFilterDest] = useState(null)
+  const [filterShift, setFilterShift] = useState(null)
+
+  const groups = stats.groups
+
+  // Turni disponibili per la destinazione selezionata
+  const availableShifts = filterDest
+    ? [...new Set(groups.filter(g => g.destination === filterDest).map(g => g.shift_num))].sort((a, b) => a - b)
+    : []
+
+  // Gruppi filtrati
+  const filtered = groups.filter(g => {
+    if (filterDest && g.destination !== filterDest) return false
+    if (filterShift && g.shift_num !== filterShift) return false
+    return true
+  })
+
+  const total = filtered.length
+
+  // Totali globali
+  const totalGroups = groups.length
+  const totalParts = stats.totalParts
+
+  // Servizi sul filtered
+  const svcTotals = {}
+  SERVICES_META.forEach(s => {
+    svcTotals[s.key] = filtered.filter(g => g[s.key]).length
+  })
+
+  // Per destinazione (solo se non filtrata)
+  const destRows = DESTINATIONS.map(dest => {
+    const dg = groups.filter(g => g.destination === dest.id)
+    if (!dg.length) return null
+    return {
+      dest,
+      groups: dg.length,
+      services: SERVICES_META.map(s => ({ ...s, count: dg.filter(g => g[s.key]).length }))
+    }
+  }).filter(Boolean)
+
+  // Per turno (quando filtro dest attivo)
+  const shiftRows = filterDest
+    ? availableShifts.map(sNum => {
+        const sg = groups.filter(g => g.destination === filterDest && g.shift_num === sNum)
+        return {
+          sNum,
+          groups: sg.length,
+          services: SERVICES_META.map(s => ({ ...s, count: sg.filter(g => g[s.key]).length }))
+        }
+      })
+    : []
+
+  return (
+    <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* KPI globali */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="card" style={{ textAlign: 'center', padding: '14px 10px' }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--iv-blue)' }}>{totalGroups}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Gruppi totali</div>
+        </div>
+        <div className="card" style={{ textAlign: 'center', padding: '14px 10px' }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--iv-blue)' }}>{totalParts}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Partecipanti</div>
+        </div>
+      </div>
+
+      {/* Filtri */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {DESTINATIONS.map(dest => {
+          const active = filterDest === dest.id
+          const col = DEST_COLORS[dest.id]
+          return (
+            <button key={dest.id} onClick={() => { setFilterDest(active ? null : dest.id); setFilterShift(null) }} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              background: active ? col : 'var(--bg-secondary)',
+              color: active ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (active ? col : 'var(--border)')
+            }}>
+              {dest.flag} {dest.name}
+            </button>
+          )
+        })}
+        {filterDest && (
+          <button onClick={() => { setFilterDest(null); setFilterShift(null) }} style={{ padding: '5px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--danger-light)', color: 'var(--danger)', border: '0.5px solid #FECACA' }}>
+            ✕ Reset
+          </button>
+        )}
+      </div>
+
+      {/* Filtro turni (quando dest selezionata) */}
+      {filterDest && availableShifts.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => setFilterShift(null)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterShift ? DEST_COLORS[filterDest] : 'var(--bg-secondary)', color: !filterShift ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterShift ? DEST_COLORS[filterDest] : 'var(--border)') }}>
+            Tutti
+          </button>
+          {availableShifts.map(sNum => (
+            <button key={sNum} onClick={() => setFilterShift(filterShift === sNum ? null : sNum)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterShift === sNum ? DEST_COLORS[filterDest] : 'var(--bg-secondary)', color: filterShift === sNum ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filterShift === sNum ? DEST_COLORS[filterDest] : 'var(--border)') }}>
+              {shiftLabel(filterDest, sNum)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Servizi venduti — sezione filtrata */}
+      <div className="card">
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+          Servizi venduti
+          {filterDest && <span style={{ color: DEST_COLORS[filterDest], marginLeft: 6 }}>
+            — {DESTINATIONS.find(d => d.id === filterDest)?.name}{filterShift ? ' ' + shiftLabel(filterDest, filterShift) : ''}
+          </span>}
+          <span style={{ float: 'right', fontWeight: 500, color: 'var(--text-tertiary)', fontSize: 10 }}>{total} gruppi</span>
+        </div>
+        {SERVICES_META.map(s => (
+          <ServiceBar key={s.key} label={s.label} emoji={s.emoji} count={svcTotals[s.key]} total={total} color={s.color} />
+        ))}
+      </div>
+
+      {/* Breakdown per destinazione (se no filtro) */}
+      {!filterDest && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {destRows.map(({ dest, groups: dg, services }) => (
+            <div key={dest.id} className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{dest.flag} {dest.name}</div>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{dg} gruppi</span>
+              </div>
+              {services.map(s => (
+                <ServiceBar key={s.key} label={s.label} emoji={s.emoji} count={s.count} total={dg} color={s.color} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Breakdown per turno (se filtro dest attivo, no turno) */}
+      {filterDest && !filterShift && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {shiftRows.map(({ sNum, groups: sg, services }) => (
+            <div key={sNum} className="card">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: DEST_COLORS[filterDest] }}>{shiftLabel(filterDest, sNum)}</div>
+                <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{sg} gruppi</span>
+              </div>
+              {services.map(s => (
+                <ServiceBar key={s.key} label={s.label} emoji={s.emoji} count={s.count} total={sg} color={s.color} />
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
     </div>
   )
 }
