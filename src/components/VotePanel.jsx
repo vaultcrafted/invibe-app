@@ -15,9 +15,7 @@ function getCurrentDayNum(shiftStart) {
 export default function VotePanel({ destination, shiftNum, members, currentUserId, isAdmin }) {
   const shiftInfo = SHIFTS[destination]?.find(s => s.num === shiftNum)
   const dayNum = shiftInfo ? getCurrentDayNum(shiftInfo.start) : 0
-  const isActiveShift = dayNum >= 1 && dayNum <= 8
-  const canVoteDaily = dayNum >= 1 && dayNum <= 7
-  const canVoteWeekly = dayNum === 7
+  const effectiveDayNum = (dayNum >= 1 && dayNum <= 7) ? dayNum : 1
 
   const [dailyVote, setDailyVote] = useState(null)    // voted_for_id o null
   const [weeklyVote, setWeeklyVote] = useState(null)
@@ -28,9 +26,8 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   const [activeTab, setActiveTab] = useState('daily')  // 'daily' | 'weekly'
 
   useEffect(() => {
-    if (!isActiveShift) { setLoading(false); return }
     loadVotes()
-  }, [destination, shiftNum, dayNum])
+  }, [destination, shiftNum, effectiveDayNum])
 
   async function loadVotes() {
     setLoading(true)
@@ -42,7 +39,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
         .eq('voter_id', currentUserId)
         .eq('destination', destination)
         .eq('shift_num', shiftNum)
-        .eq('day_num', dayNum)
+        .eq('day_num', effectiveDayNum)
         .eq('type', 'daily')
         .maybeSingle()
       setDailyVote(myDaily?.voted_for_id || null)
@@ -89,7 +86,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   async function castVote(votedForId, type) {
     if (voting) return
     setVoting(true)
-    const day = type === 'weekly' ? 7 : dayNum
+    const day = type === 'weekly' ? 7 : effectiveDayNum
     const { error } = await supabase.from('votes').insert({
       voter_id: currentUserId,
       voted_for_id: votedForId,
@@ -109,9 +106,12 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   // Filtra: non si vota se stessi
   const votableMembers = members.filter(m => m.id !== currentUserId)
 
-  if (!isActiveShift) return null
   if (loading) return null
 
+  // Forza dayNum a 1 se fuori range (pre-turno), così il pannello è sempre visibile
+  const effectiveDayNum = (dayNum >= 1 && dayNum <= 7) ? dayNum : 1
+  const canVoteDaily = effectiveDayNum >= 1 && effectiveDayNum <= 7
+  const canVoteWeekly = effectiveDayNum === 7
   const currentVote = activeTab === 'daily' ? dailyVote : weeklyVote
   const hasVoted = currentVote !== null
   const canVote = activeTab === 'daily' ? canVoteDaily : canVoteWeekly
@@ -131,7 +131,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
           Vota il migliore
         </span>
         <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: '#FEF9C3', color: '#854D0E' }}>
-          Day {dayNum}
+          Day {effectiveDayNum}
         </span>
       </div>
 
@@ -152,7 +152,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
       </div>
 
       {/* Stato voto */}
-      {!canVote && activeTab === 'weekly' && dayNum < 7 && (
+      {!canVote && activeTab === 'weekly' && effectiveDayNum < 7 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 10, marginBottom: 10 }}>
           <Lock size={14} color="var(--text-tertiary)" />
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
