@@ -36,12 +36,12 @@ export default function Admin() {
     try {
       const { data: groups, error } = await supabase
         .from('groups')
-        .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, participants(id)')
+        .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, num_partecipanti')
         .order('destination').order('shift_num').order('capogruppo_display')
-      if (error) throw error
+      if (error) { console.error('fetchIncassi error:', error); setIncassiData([]); return }
       setIncassiData(groups || [])
     } catch (e) {
-      console.error('fetchIncassi error:', e)
+      console.error('fetchIncassi catch:', e)
       setIncassiData([])
     }
   }
@@ -539,14 +539,14 @@ function IncassiTab({ data, loading }) {
 
   // Calcola totale riga
   function rowTotal(g) {
-    const n = g.participants?.length || 0
+    const n = g.num_partecipanti || 0
     return SV.reduce((t, sv) => t + (g[sv.id] ? sv.prezzo * n : 0), 0)
   }
 
   // Calcola totale colonna per un set di gruppi
   function colTotal(gs, svId, prezzo) {
     return gs.reduce((t, g) => {
-      const n = g.participants?.length || 0
+      const n = g.num_partecipanti || 0
       return t + (g[svId] ? prezzo * n : 0)
     }, 0)
   }
@@ -637,7 +637,7 @@ function IncassiTab({ data, loading }) {
                   )
                   // Righe gruppo
                   sGroups.forEach(g => {
-                    const n = g.participants?.length || 0
+                    const n = g.num_partecipanti || 0
                     const tot = rowTotal(g)
                     rows.push(
                       <tr key={g.id}>
@@ -655,7 +655,7 @@ function IncassiTab({ data, loading }) {
                   rows.push(
                     <tr key={`sub-${destId}-${sNum}`} style={subtotalStyle}>
                       <td style={{ ...tdLeftStyle, ...subtotalStyle }}>Subtotale {shiftLabel(destId, Number(sNum))}</td>
-                      <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                      <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
                       {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>€{colTotal(sGroups, sv.id, sv.prezzo)}</td>)}
                       <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>€{grandTotal(sGroups)}</td>
                     </tr>
@@ -667,7 +667,7 @@ function IncassiTab({ data, loading }) {
                   rows.push(
                     <tr key={`dest-${destId}`} style={{ background: destColor + '20' }}>
                       <td style={{ ...tdLeftStyle, background: 'transparent', color: destColor, fontWeight: 800 }}>TOTALE {dest?.name?.toUpperCase()}</td>
-                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
                       {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>€{colTotal(allDestGroups, sv.id, sv.prezzo)}</td>)}
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>€{grandTotal(allDestGroups)}</td>
                     </tr>
@@ -679,7 +679,7 @@ function IncassiTab({ data, loading }) {
               rows.push(
                 <tr key="grand" style={grandStyle}>
                   <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
-                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
                   {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>€{colTotal(groups, sv.id, sv.prezzo)}</td>)}
                   <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>€{grandTotal(groups)}</td>
                 </tr>
