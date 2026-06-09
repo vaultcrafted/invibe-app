@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { User, Mail, Phone, FileText, Shield, Lock, Check, X, Edit2, MapPin } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, shiftLabel } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 const RUOLO_COLORS = {
@@ -185,6 +185,29 @@ export default function StaffProfile() {
           <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={staff.email} editing={false} />
           <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={form.telefono} editing={editing} onChange={v => setForm(f => ({...f, telefono: v}))} placeholder="+39 333 1234567" isLast={true} />
         </div>
+
+        {/* I miei turni */}
+        {staff.assigned_shifts?.length > 0 && (
+          <div className="card">
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Turni assegnati</div>
+            {staff.assigned_shifts.map((s, i) => {
+              const dest = DESTINATIONS.find(d => d.id === s.destination)
+              const shift = SHIFTS[s.destination]?.find(sh => sh.num === s.shift_num)
+              const isLast = i === staff.assigned_shifts.length - 1
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <MapPin size={16} color="var(--iv-blue)" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{dest?.name || s.destination} · {shiftLabel(s.destination, s.shift_num)}</div>
+                    {shift && <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>{shift.label}</div>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Documenti */}
         <div className="card">
