@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Search, Grid, List, ChevronDown, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
-import { DESTINATIONS } from '../lib/constants'
+import { DESTINATIONS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
 
@@ -254,9 +254,7 @@ function StaffRowCard({ s }) {
   const turniStr = assigned.length > 0
     ? assigned.map(a => {
         const d = DESTINATIONS.find(d => d.id === a.destination)
-        return (d?.name || a.destination)[0].toUpperCase() + a.shift_num
-      }).join(' · ')
-    : s.role === 'admin' ? 'tutti i turni' : 'nessun turno'
+        return shiftLabel(a.destination, a.shift_num)
 
   return (
     <div className="card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: isAdmin ? 'pointer' : 'default' }}>
@@ -313,10 +311,7 @@ function StaffGridCard({ s }) {
       </div>
       {assigned.length > 0 && (
         <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 5 }}>
-          {assigned.map(a => {
-            const d = DESTINATIONS.find(d => d.id === a.destination)
-            return (d?.name || a.destination)[0].toUpperCase() + a.shift_num
-          }).join(' · ')}
+          {assigned.map(a => shiftLabel(a.destination, a.shift_num)).join(' · ')}
         </div>
       )}
     </div>

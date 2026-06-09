@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function GroupList() {
@@ -51,7 +51,7 @@ export default function GroupList() {
   return (
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
-      <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · Turno {shiftNum}</div>
+      <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti</div>
       <div className="tabs">
         {['tutti', 'mancanti', 'completi'].map(t => (

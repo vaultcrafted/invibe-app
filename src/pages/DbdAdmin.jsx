@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 import { Save, ChevronDown, Check } from 'lucide-react'
 
@@ -116,7 +116,7 @@ export default function DbdAdmin() {
         <div style={{ position: 'relative', flex: 1, minWidth: 130 }}>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Turno</div>
           <button onClick={() => { setShowShiftDrop(v => !v); setShowDestDrop(false) }} style={{ width: '100%', padding: '9px 12px', borderRadius: 10, fontSize: 13, fontWeight: 600, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1.5px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-            <span>{shiftNum === 0 ? '🔁 Tutti i turni' : `Turno ${shiftNum}`}</span>
+            <span>{shiftNum === 0 ? '🔁 Tutti i turni' : shiftLabel(destination, shiftNum)}</span>
             <ChevronDown size={13} style={{ transform: showShiftDrop ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
           </button>
           {showShiftDrop && (
@@ -126,7 +126,7 @@ export default function DbdAdmin() {
               </button>
               {shifts.map(s => (
                 <button key={s.num} onClick={() => { setShiftNum(s.num); setShowShiftDrop(false) }} style={{ width: '100%', padding: '10px 14px', textAlign: 'left', fontSize: 13, color: shiftNum === s.num ? 'var(--iv-blue)' : 'var(--text-primary)', fontWeight: shiftNum === s.num ? 700 : 400, background: 'transparent', border: 'none', cursor: 'pointer', borderBottom: '0.5px solid var(--border)' }}>
-                  Turno {s.num} — {s.label}
+                  Turno {shiftLabel(destination, s.num)} — {s.label}
                 </button>
               ))}
             </div>
@@ -177,7 +177,7 @@ export default function DbdAdmin() {
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
           Programma Day {dayNum}
           {shiftNum === 0 && <span style={{ color: 'var(--iv-blue)', marginLeft: 6, fontSize: 10 }}>— vale per tutti i turni</span>}
-          {shiftNum > 0 && <span style={{ color: color, marginLeft: 6, fontSize: 10 }}>— solo Turno {shiftNum}</span>}
+          {shiftNum > 0 && <span style={{ color: color, marginLeft: 6, fontSize: 10 }}>— solo {shiftLabel(destination, shiftNum)}</span>}
         </div>
         <textarea
           value={content}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function Admin() {
@@ -234,7 +234,7 @@ function StaffCard({ staff, onToggle }) {
                   const isOn = assigned.some(a => a.destination === dest.id && a.shift_num === s.num)
                   return (
                     <button key={s.num} onClick={() => onToggle(staff.id, dest.id, s.num)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)', color: isOn ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isOn ? 'var(--iv-blue)' : 'var(--border)'), cursor: 'pointer' }}>
-                      T{s.num}
+                      {shiftLabel(dest.id, s.num)}
                     </button>
                   )
                 })}

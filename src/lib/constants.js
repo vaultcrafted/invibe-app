@@ -83,3 +83,15 @@ export function calcAge(birthDate) {
   if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
   return age
 }
+
+
+// Prefissi per i turni per destinazione
+const DEST_PREFIX = {
+  pag: 'P', corfu: 'C', zante: 'Z', gallipoli: 'G', sardegna: 'S'
+}
+
+export function shiftLabel(destination, num) {
+  if (!destination || !num) return `T${num}`
+  const prefix = DEST_PREFIX[destination] || 'T'
+  return `${prefix}${num}`
+}

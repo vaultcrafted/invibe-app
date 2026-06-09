@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { User, Mail, Phone, FileText, Shield, Lock, Check, X, Edit2, MapPin } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS } from '../lib/constants'
+import { DESTINATIONS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 const RUOLO_COLORS = {
@@ -145,7 +145,7 @@ export default function StaffProfile() {
               const d = DESTINATIONS.find(d => d.id === a.destination)
               return (
                 <span key={i} style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 12, background: 'var(--bg-secondary)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', gap: 3 }}>
-                  <MapPin size={9} />{d?.name || a.destination} T{a.shift_num}
+                  <MapPin size={9} />{d?.name || a.destination} {shiftLabel(a.destination, a.shift_num)}
                 </span>
               )
             })}

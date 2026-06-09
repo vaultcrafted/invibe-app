@@ -1,6 +1,6 @@
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { DESTINATIONS, SHIFTS } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function ShiftSelect() {
@@ -32,7 +32,7 @@ export default function ShiftSelect() {
           <div className="section-label">I tuoi turni</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {myShifts.map(shift => (
-              <ShiftCard key={shift.num} shift={shift} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
+              <ShiftCard key={shift.num} shift={shift} destId={destId} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
             ))}
           </div>
         </>
@@ -43,7 +43,7 @@ export default function ShiftSelect() {
           <div className="section-label">{myShifts.length > 0 ? 'Altri turni' : 'Turni disponibili'}</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {otherShifts.map(shift => (
-              <ShiftCard key={shift.num} shift={shift} mine={false} onClick={null} />
+              <ShiftCard key={shift.num} shift={shift} destId={destId} mine={false} onClick={null} />
             ))}
           </div>
         </>
@@ -58,7 +58,7 @@ export default function ShiftSelect() {
   )
 }
 
-function ShiftCard({ shift, mine, onClick }) {
+function ShiftCard({ shift, destId, mine, onClick }) {
   return (
     <button
       className={`card ${mine ? 'active-blue' : ''}`}
@@ -67,7 +67,7 @@ function ShiftCard({ shift, mine, onClick }) {
       disabled={!mine}
     >
       <div style={{ width: 36, height: 36, borderRadius: 10, background: mine ? 'var(--iv-blue)' : 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: mine ? '#fff' : 'var(--text-tertiary)', flexShrink: 0 }}>
-        {mine ? `T${shift.num}` : '🔒'}
+        {mine ? shiftLabel(destId, shift.num) : '🔒'}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: mine ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>Turno {shift.num}</div>
