@@ -151,6 +151,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>
         <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
         <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
+        <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
       </div>
 
       {tab === 'import' && (
@@ -185,6 +186,7 @@ export default function Admin() {
       )}
 
       {tab === 'stats' && stats && <StatsTab stats={stats} />}
+      {tab === 'premi' && <PremiTab />}
     </div>
   )
 }
@@ -252,6 +254,156 @@ function ServiceBar({ label, count, total, color, emoji }) {
       <div style={{ height: 6, borderRadius: 4, background: 'var(--bg-tertiary, #f0f0f0)', overflow: 'hidden' }}>
         <div style={{ height: '100%', width: pct + '%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
       </div>
+    </div>
+  )
+}
+
+function PremiTab() {
+  const [votes, setVotes] = useState([])
+  const [profiles, setProfiles] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedDest, setSelectedDest] = useState(null)
+  const [selectedShift, setSelectedShift] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: v }, { data: p }] = await Promise.all([
+        supabase.from('votes').select('voted_for_id, type, destination, shift_num'),
+        supabase.from('staff_profiles').select('id, nome, cognome, ruolo'),
+      ])
+      setVotes(v || [])
+      setProfiles(p || [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  function getProfile(id) { return profiles.find(p => p.id === id) }
+
+  function getRanking(destId, sNum, type) {
+    const filtered = votes.filter(v => v.destination === destId && v.shift_num === sNum && v.type === type)
+    const counts = {}
+    filtered.forEach(v => { counts[v.voted_for_id] = (counts[v.voted_for_id] || 0) + 1 })
+    return Object.entries(counts).map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count).slice(0, 5)
+  }
+
+  const availableShifts = selectedDest
+    ? [...new Set(votes.filter(v => v.destination === selectedDest).map(v => v.shift_num))].sort((a, b) => a - b)
+    : []
+
+  if (loading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>Carico...</div>
+
+  return (
+    <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Selettore destinazione */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {DESTINATIONS.map(dest => {
+          const hasVotes = votes.some(v => v.destination === dest.id)
+          if (!hasVotes) return null
+          const col = DEST_COLORS[dest.id]
+          const active = selectedDest === dest.id
+          return (
+            <button key={dest.id} onClick={() => { setSelectedDest(active ? null : dest.id); setSelectedShift(null) }} style={{
+              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+              background: active ? col : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (active ? col : 'var(--border)'),
+            }}>
+              {dest.name}
+            </button>
+          )
+        })}
+        {!votes.length && <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun voto ancora registrato</div>}
+      </div>
+
+      {/* Selettore turno */}
+      {selectedDest && availableShifts.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {availableShifts.map(sNum => {
+            const active = selectedShift === sNum
+            const col = DEST_COLORS[selectedDest]
+            return (
+              <button key={sNum} onClick={() => setSelectedShift(active ? null : sNum)} style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                background: active ? col : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)',
+                border: '0.5px solid ' + (active ? col : 'var(--border)'),
+              }}>
+                {shiftLabel(selectedDest, sNum)}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Classifiche */}
+      {selectedDest && selectedShift && (() => {
+        const dailyRank = getRanking(selectedDest, selectedShift, 'daily')
+        const weeklyRank = getRanking(selectedDest, selectedShift, 'weekly')
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {/* Daily */}
+            <div className="card">
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+                ⭐ Migliori del giorno — {shiftLabel(selectedDest, selectedShift)}
+              </div>
+              {dailyRank.length === 0
+                ? <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun voto ancora</div>
+                : dailyRank.map((v, i) => {
+                    const p = getProfile(v.id)
+                    if (!p) return null
+                    return (
+                      <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < dailyRank.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                        <div style={{ width: 28, textAlign: 'center', fontSize: 16, flexShrink: 0 }}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}°`}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nome} {p.cognome}</div>
+                          {p.ruolo && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.ruolo}</div>}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: '#FEF9C3', color: '#854D0E', border: '1px solid #FDE047' }}>
+                          {v.count} ⭐
+                        </div>
+                      </div>
+                    )
+                  })
+              }
+            </div>
+            {/* Weekly */}
+            <div className="card">
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+                🏆 Migliore della settimana — {shiftLabel(selectedDest, selectedShift)}
+              </div>
+              {weeklyRank.length === 0
+                ? <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun voto ancora</div>
+                : weeklyRank.map((v, i) => {
+                    const p = getProfile(v.id)
+                    if (!p) return null
+                    return (
+                      <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < weeklyRank.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                        <div style={{ width: 28, textAlign: 'center', fontSize: 16, flexShrink: 0 }}>
+                          {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}°`}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nome} {p.cognome}</div>
+                          {p.ruolo && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.ruolo}</div>}
+                        </div>
+                        <div style={{ fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: '#FEF9C3', color: '#854D0E', border: '1px solid #FDE047' }}>
+                          {v.count} 🏆
+                        </div>
+                      </div>
+                    )
+                  })
+              }
+            </div>
+          </div>
+        )
+      })()}
+
+      {selectedDest && !selectedShift && (
+        <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>
+          Seleziona un turno per vedere la classifica
+        </div>
+      )}
     </div>
   )
 }
@@ -349,32 +501,6 @@ function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShif
 function StatsTab({ stats }) {
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
-  const [voteData, setVoteData] = useState([]) // { staffId, nome, cognome, ruolo, dailyCount, weeklyCount, destination, shift_num }
-  const [staffProfiles, setStaffProfiles] = useState([])
-  const [loadingVotes, setLoadingVotes] = useState(true)
-
-  useEffect(() => {
-    async function loadVotes() {
-      const [{ data: votes }, { data: profiles }] = await Promise.all([
-        supabase.from('votes').select('voted_for_id, type, destination, shift_num'),
-        supabase.from('staff_profiles').select('id, nome, cognome, ruolo'),
-      ])
-      setStaffProfiles(profiles || [])
-      if (votes) {
-        // Aggrega per staff + dest + shift + type
-        const map = {}
-        votes.forEach(v => {
-          const key = `${v.voted_for_id}__${v.destination}__${v.shift_num}`
-          if (!map[key]) map[key] = { staffId: v.voted_for_id, destination: v.destination, shift_num: v.shift_num, daily: 0, weekly: 0 }
-          if (v.type === 'daily') map[key].daily++
-          else map[key].weekly++
-        })
-        setVoteData(Object.values(map))
-      }
-      setLoadingVotes(false)
-    }
-    loadVotes()
-  }, [])
 
   const groups = stats.groups
 
@@ -524,9 +650,6 @@ function StatsTab({ stats }) {
           ))}
         </div>
       )}
-
-      {/* Sezione voti */}
-      <VotesSection voteData={voteData} staffProfiles={staffProfiles} loading={loadingVotes} filterDest={filterDest} filterShift={filterShift} />
 
     </div>
   )
