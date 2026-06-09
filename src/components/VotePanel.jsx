@@ -16,6 +16,8 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   const shiftInfo = SHIFTS[destination]?.find(s => s.num === shiftNum)
   const dayNum = shiftInfo ? getCurrentDayNum(shiftInfo.start) : 0
   const effectiveDayNum = (dayNum >= 1 && dayNum <= 7) ? dayNum : 1
+  const canVoteDaily = true // sempre true per ora (pre-turno mostra day 1)
+  const canVoteWeekly = effectiveDayNum === 7
 
   const [dailyVote, setDailyVote] = useState(null)    // voted_for_id o null
   const [weeklyVote, setWeeklyVote] = useState(null)
@@ -109,9 +111,6 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   if (loading) return null
 
   // Forza dayNum a 1 se fuori range (pre-turno), così il pannello è sempre visibile
-  const effectiveDayNum = (dayNum >= 1 && dayNum <= 7) ? dayNum : 1
-  const canVoteDaily = effectiveDayNum >= 1 && effectiveDayNum <= 7
-  const canVoteWeekly = effectiveDayNum === 7
   const currentVote = activeTab === 'daily' ? dailyVote : weeklyVote
   const hasVoted = currentVote !== null
   const canVote = activeTab === 'daily' ? canVoteDaily : canVoteWeekly
