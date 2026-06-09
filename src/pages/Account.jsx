@@ -100,11 +100,12 @@ export default function Account() {
           </div>
         )}
 
-        {/* Documenti */}
+        {/* Attestati */}
         <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>I miei documenti</div>
-          <DocRow icon={<FileText size={18} color="var(--iv-blue)" />} label="Contratto estivo 2026" sublabel="Presto disponibile" />
-          <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Polizza assicurazione staff" sublabel="Presto disponibile" isLast={true} />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>I miei attestati</div>
+          <AttestatoDownload label="Antincendio" url={profile?.att_antincendio} />
+          <AttestatoDownload label="Primo Soccorso" url={profile?.att_primo_soccorso} />
+          <AttestatoDownload label="BLSD" url={profile?.att_blsd} isLast={true} />
         </div>
 
         {/* Logout */}
@@ -129,15 +130,23 @@ function ProfileRow({ icon, label, value, isLast }) {
   )
 }
 
-function DocRow({ icon, label, sublabel, isLast }) {
+function AttestatoDownload({ label, url, isLast }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: url ? 'rgba(5,150,105,0.1)' : 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <FileText size={18} color={url ? '#059669' : 'var(--iv-blue)'} />
+      </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>{sublabel}</div>
+        <div style={{ fontSize: 11, color: url ? '#059669' : 'var(--text-tertiary)', marginTop: 1 }}>{url ? '✓ Disponibile' : 'Non ancora caricato'}</div>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '5px 10px', borderRadius: 8, border: '0.5px solid var(--border)' }}>Presto</div>
+      {url ? (
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--iv-blue)', padding: '7px 14px', borderRadius: 8, textDecoration: 'none' }}>
+          Scarica PDF
+        </a>
+      ) : (
+        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '5px 10px', borderRadius: 8, border: '0.5px solid var(--border)' }}>—</span>
+      )}
     </div>
   )
 }
