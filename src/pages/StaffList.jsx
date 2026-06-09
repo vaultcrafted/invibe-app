@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Grid, List } from 'lucide-react'
+import { Search, Grid, List, ChevronRight, ChevronLeft } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
@@ -13,7 +13,6 @@ const RUOLO_COLORS = {
   BALLERINA: '#F39C12', ACA: '#27AE60', 'STAFF U': '#5D6D7E',
   'STAFF D': '#7F8C8D', UFFICIO: '#2C3E50',
 }
-
 function getRuoloColor(ruolo) {
   if (!ruolo) return '#5D6D7E'
   for (const key of Object.keys(RUOLO_COLORS)) {
@@ -21,14 +20,16 @@ function getRuoloColor(ruolo) {
   }
   return '#5D6D7E'
 }
-
 function getInitials(nome, cognome) {
   return ((nome?.[0] || '') + (cognome?.[0] || '')).toUpperCase()
 }
-
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
   gallipoli: '#DC2626', sardegna: '#7C3AED',
+}
+const DEST_IMAGES = {
+  pag: '/Pag.png', corfu: '/Corfu.png', zante: '/Zante.png',
+  gallipoli: '/Gallipoli.png', sardegna: '/Sardegna.png',
 }
 
 export default function StaffList() {
@@ -38,6 +39,8 @@ export default function StaffList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState('list')
+  const [selectedDest, setSelectedDest] = useState(null) // destination id
+  const [selectedShift, setSelectedShift] = useState(null) // shift_num
 
   useEffect(() => {
     supabase.from('staff_profiles').select('*').order('cognome').then(({ data }) => {
@@ -46,38 +49,42 @@ export default function StaffList() {
     })
   }, [])
 
-  // Turni dello staff loggato (o tutti se admin)
+  // Turni accessibili a questo utente
   const myShifts = isAdmin
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
     : (profile?.assigned_shifts || [])
 
-  // Raggruppa per turno: per ogni turno mio, trova tutti gli staff assegnati a quel turno
-  const groups = myShifts.map(({ destination, shift_num }) => {
-    const dest = DESTINATIONS.find(d => d.id === destination)
-    const members = staff
-      .filter(s =>
-        (s.assigned_shifts || []).some(a => a.destination === destination && a.shift_num === shift_num)
-        || s.role === 'admin'  // gli admin appaiono in ogni turno
-      )
-      .filter(s => {
-        if (!search) return true
-        return `${s.nome} ${s.cognome}`.toLowerCase().includes(search.toLowerCase())
-      })
-      .sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''))
+  // Destinazioni accessibili (con almeno un turno)
+  const myDests = DESTINATIONS.filter(d =>
+    myShifts.some(s => s.destination === d.id)
+  )
 
-    return { destination, shift_num, dest, members }
-  }).filter(g => g.dest) // rimuovi eventuali destinazioni non trovate
+  // Turni per la destinazione selezionata
+  const shiftsForDest = selectedDest
+    ? myShifts.filter(s => s.destination === selectedDest).map(s => s.shift_num).sort((a, b) => a - b)
+    : []
 
-  // Per admin: rimuovi duplicati di turno (stessa dest+shift)
-  const seen = new Set()
-  const dedupedGroups = groups.filter(g => {
-    const key = g.destination + '_' + g.shift_num
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+  // Membri del turno selezionato
+  const members = (selectedDest && selectedShift !== null)
+    ? staff
+        .filter(s =>
+          (s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === selectedShift)
+          || s.role === 'admin'
+        )
+        .filter(s => {
+          if (!search) return true
+          return `${s.nome} ${s.cognome}`.toLowerCase().includes(search.toLowerCase())
+        })
+        .sort((a, b) => (a.cognome || '').localeCompare(b.cognome || ''))
+    : []
 
-  const totalVisible = [...new Set(dedupedGroups.flatMap(g => g.members.map(m => m.id)))].length
+  const color = selectedDest ? DEST_COLORS[selectedDest] : 'var(--iv-blue)'
+  const destObj = DESTINATIONS.find(d => d.id === selectedDest)
+
+  function goBack() {
+    if (selectedShift !== null) { setSelectedShift(null); setSearch('') }
+    else { setSelectedDest(null) }
+  }
 
   if (loading) return (
     <div className="page">
@@ -86,71 +93,114 @@ export default function StaffList() {
     </div>
   )
 
+  // ── LIVELLO 3: lista staff del turno ──
+  if (selectedDest && selectedShift !== null) {
+    return (
+      <div className="page">
+        <Topbar showBack={false} showAvatar={false} />
+        <div style={{ padding: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={goBack} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}>
+            <ChevronLeft size={16} color="var(--text-secondary)" />
+          </button>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{destObj?.name} · <span style={{ color }}>{shiftLabel(selectedDest, selectedShift)}</span></div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{members.length} membri</div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', background: 'var(--bg-secondary)', borderRadius: 8, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+            <button onClick={() => setViewMode('list')} style={{ padding: '6px 10px', background: viewMode === 'list' ? color : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}><List size={14} /></button>
+            <button onClick={() => setViewMode('grid')} style={{ padding: '6px 10px', background: viewMode === 'grid' ? color : 'transparent', color: viewMode === 'grid' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}><Grid size={14} /></button>
+          </div>
+        </div>
+        <div style={{ padding: '10px 16px 0' }}>
+          <div className="search-bar" style={{ margin: 0 }}>
+            <Search size={15} color="var(--text-tertiary)" />
+            <input placeholder="Cerca..." value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>}
+          </div>
+        </div>
+        <div style={{ padding: '10px 16px 32px' }}>
+          {members.length === 0
+            ? <div className="empty-state"><p>Nessun risultato</p></div>
+            : viewMode === 'list'
+              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{members.map(s => <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
+              : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>{members.map(s => <StaffGridCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
+          }
+        </div>
+      </div>
+    )
+  }
+
+  // ── LIVELLO 2: turni della destinazione ──
+  if (selectedDest) {
+    return (
+      <div className="page">
+        <Topbar showBack={false} showAvatar={false} />
+        <div style={{ padding: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button onClick={goBack} style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+            <ChevronLeft size={16} color="var(--text-secondary)" />
+          </button>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{destObj?.name}</div>
+        </div>
+        <div style={{ padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {shiftsForDest.map(sNum => {
+            const count = staff.filter(s =>
+              (s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === sNum)
+              || s.role === 'admin'
+            ).length
+            const shiftInfo = SHIFTS[selectedDest]?.find(s => s.num === sNum)
+            return (
+              <button key={sNum} className="card"
+                onClick={() => setSelectedShift(sNum)}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', width: '100%', cursor: 'pointer' }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                  {shiftLabel(selectedDest, sNum)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{shiftLabel(selectedDest, sNum)}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>{shiftInfo?.label} · {count} membri</div>
+                </div>
+                <ChevronRight size={16} color="var(--text-tertiary)" />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // ── LIVELLO 1: lista destinazioni ──
   return (
     <div className="page">
       <Topbar showBack={false} showAvatar={false} />
-
-      {/* Header */}
-      <div style={{ padding: '16px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>Staff</div>
-          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>{totalVisible} colleghi</div>
-        </div>
-        <div style={{ display: 'flex', background: 'var(--bg-secondary)', borderRadius: 8, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
-          <button onClick={() => setViewMode('list')} style={{ padding: '6px 10px', background: viewMode === 'list' ? 'var(--iv-blue)' : 'transparent', color: viewMode === 'list' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
-            <List size={15} />
-          </button>
-          <button onClick={() => setViewMode('grid')} style={{ padding: '6px 10px', background: viewMode === 'grid' ? 'var(--iv-blue)' : 'transparent', color: viewMode === 'grid' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', border: 'none', cursor: 'pointer' }}>
-            <Grid size={15} />
-          </button>
-        </div>
+      <div style={{ padding: '16px 16px 4px' }}>
+        <div style={{ fontSize: 18, fontWeight: 700 }}>Staff</div>
+        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Seleziona una destinazione</div>
       </div>
-
-      {/* Search */}
-      <div style={{ padding: '12px 16px 0' }}>
-        <div className="search-bar" style={{ margin: 0 }}>
-          <Search size={15} color="var(--text-tertiary)" />
-          <input placeholder="Cerca per nome o cognome..." value={search} onChange={e => setSearch(e.target.value)} />
-          {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}>×</button>}
-        </div>
-      </div>
-
-      {/* Gruppi per turno */}
-      <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {dedupedGroups.length === 0 && (
-          <div className="empty-state"><p>Nessun turno assegnato.</p></div>
-        )}
-        {dedupedGroups.map(({ destination, shift_num, dest, members }) => {
-          const color = DEST_COLORS[destination] || 'var(--iv-blue)'
-          const label = shiftLabel(destination, shift_num)
-          if (members.length === 0 && search) return null
-
+      <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {myDests.map(dest => {
+          const col = DEST_COLORS[dest.id]
+          const destShifts = myShifts.filter(s => s.destination === dest.id)
           return (
-            <div key={destination + '_' + shift_num}>
-              {/* Intestazione turno */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                  {label}
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{dest.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{members.length} membri</div>
+            <button key={dest.id} className="card"
+              onClick={() => setSelectedDest(dest.id)}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', width: '100%', cursor: 'pointer', padding: 0, overflow: 'hidden' }}>
+              {/* Immagine laterale */}
+              <div style={{ width: 72, height: 72, flexShrink: 0, position: 'relative', overflow: 'hidden' }}>
+                <img src={DEST_IMAGES[dest.id]} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <div style={{ position: 'absolute', inset: 0, background: col + '44' }} />
+              </div>
+              <div style={{ flex: 1, padding: '0 4px' }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{dest.name}</div>
+                <div style={{ display: 'flex', gap: 5, marginTop: 5, flexWrap: 'wrap' }}>
+                  {destShifts.map(s => (
+                    <span key={s.shift_num} style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 10, background: col + '18', color: col, border: '0.5px solid ' + col + '44' }}>
+                      {shiftLabel(dest.id, s.shift_num)}
+                    </span>
+                  ))}
                 </div>
               </div>
-
-              {/* Cards */}
-              {members.length === 0 ? (
-                <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '10px 0' }}>Nessun risultato</div>
-              ) : viewMode === 'list' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {members.map(s => <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} color={color} />)}
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                  {members.map(s => <StaffGridCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}
-                </div>
-              )}
-            </div>
+              <ChevronRight size={16} color="var(--text-tertiary)" style={{ marginRight: 12, flexShrink: 0 }} />
+            </button>
           )
         })}
       </div>
@@ -158,12 +208,12 @@ export default function StaffList() {
   )
 }
 
-function StaffRowCard({ s, isAdmin, navigate, color }) {
-  const ruoloColor = getRuoloColor(s.ruolo)
+function StaffRowCard({ s, isAdmin, navigate }) {
+  const color = getRuoloColor(s.ruolo)
   return (
     <div className="card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)}
       style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: isAdmin ? 'pointer' : 'default' }}>
-      <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: ruoloColor + '22', border: '1.5px solid ' + ruoloColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: ruoloColor }}>
+      <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: color + '22', border: '1.5px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color }}>
         {getInitials(s.nome, s.cognome)}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -171,12 +221,13 @@ function StaffRowCard({ s, isAdmin, navigate, color }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
           {s.role === 'admin' && <span style={{ fontSize: 10, fontWeight: 700, color: '#D4AC0D' }}>⭐ Admin</span>}
           {s.ruolo && (
-            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: ruoloColor + '18', color: ruoloColor, border: '0.5px solid ' + ruoloColor + '44' }}>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: color + '18', color, border: '0.5px solid ' + color + '44' }}>
               {s.ruolo}
             </span>
           )}
         </div>
       </div>
+      {isAdmin && <ChevronRight size={14} color="var(--text-tertiary)" />}
     </div>
   )
 }
@@ -190,7 +241,7 @@ function StaffGridCard({ s, isAdmin, navigate }) {
         {getInitials(s.nome, s.cognome)}
       </div>
       <div style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.2 }}>{s.nome} {s.cognome}</div>
-      {s.role === 'admin' && <div style={{ fontSize: 9, fontWeight: 700, color: '#D4AC0D', marginTop: 4 }}>⭐ Admin</div>}
+      {s.role === 'admin' && <div style={{ fontSize: 9, fontWeight: 700, color: '#D4AC0D', marginTop: 4 }}>⭐</div>}
       {s.ruolo && (
         <div style={{ marginTop: 5 }}>
           <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: color + '18', color, border: '0.5px solid ' + color + '44' }}>
