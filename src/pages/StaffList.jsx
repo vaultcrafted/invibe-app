@@ -252,9 +252,8 @@ function StaffRowCard({ s }) {
   const assigned = s.assigned_shifts || []
   const color = getRuoloColor(s.ruolo)
   const turniStr = assigned.length > 0
-    ? assigned.map(a => {
-        const d = DESTINATIONS.find(d => d.id === a.destination)
-        return shiftLabel(a.destination, a.shift_num)
+    ? assigned.map(a => shiftLabel(a.destination, a.shift_num)).join(' · ')
+    : s.role === 'admin' ? 'tutti i turni' : 'nessun turno'
 
   return (
     <div className="card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: isAdmin ? 'pointer' : 'default' }}>
