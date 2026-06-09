@@ -34,14 +34,17 @@ export default function Admin() {
 
   async function fetchIncassi() {
     try {
-      const { data: groups, error } = await supabase
-        .from('groups')
-        .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, num_partecipanti')
-        .order('destination').order('shift_num').order('capogruppo_display')
-      if (error) { console.error('fetchIncassi error:', error); setIncassiData([]); return }
-      setIncassiData(groups || [])
+      const [{ data: groups, error }, { data: counts }] = await Promise.all([
+        supabase.from('groups').select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione').order('destination').order('shift_num').order('capogruppo_display'),
+        supabase.from('participants').select('group_id'),
+      ])
+      if (error) { console.error(error); setIncassiData([]); return }
+      // Conta partecipanti per gruppo
+      const countMap = {}
+      ;(counts || []).forEach(p => { countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
+      setIncassiData((groups || []).map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
     } catch (e) {
-      console.error('fetchIncassi catch:', e)
+      console.error(e)
       setIncassiData([])
     }
   }
