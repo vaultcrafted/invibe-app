@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 import { useNavigate } from 'react-router-dom'
-import VotePanel from '../components/VotePanel'
+import { useVotes } from '../components/VotePanel'
 
 const RUOLO_COLORS = {
   CM: '#1E6BF1', ACM: '#2E86C1', CA: '#8E44AD', SUPERVISOR: '#D4AC0D',
@@ -94,6 +94,14 @@ export default function StaffList() {
     </div>
   )
 
+  const { dailyVote, voteCounts, castVote, canSeeVotes } = useVotes({
+    destination: selectedDest || '',
+    shiftNum: selectedShift || 0,
+    currentUserId: profile?.id,
+    isAdmin,
+    profile,
+  })
+
   // ── LIVELLO 3: lista staff del turno ──
   if (selectedDest && selectedShift !== null) {
     return (
@@ -120,31 +128,23 @@ export default function StaffList() {
           </div>
         </div>
         <div style={{ padding: '10px 16px 32px' }}>
-          <VotePanel
-            destination={selectedDest}
-            shiftNum={selectedShift}
-            members={members}
-            currentUserId={profile?.id}
-            isAdmin={isAdmin}
-            profile={profile}
-            renderList={(votableMembers, hasVoted, currentVote, castVote, voteCounts, isAdminView) => (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {members.length === 0
+            ? <div className="empty-state"><p>Nessun risultato</p></div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {members.map(s => (
                   <StaffRowCard
                     key={s.id}
                     s={s}
                     isAdmin={isAdmin}
                     navigate={navigate}
-                    votable={s.id !== profile?.id && votableMembers.some(m => m.id === s.id)}
-                    isVoted={currentVote === s.id}
-                    hasVoted={hasVoted}
-                    voteCount={isAdminView ? (voteCounts[s.id] || 0) : null}
+                    votable={s.id !== profile?.id}
+                    isVoted={dailyVote === s.id}
+                    voteCount={canSeeVotes ? (voteCounts[s.id] || 0) : null}
                     onVote={() => castVote(s.id)}
                   />
                 ))}
               </div>
-            )}
-          />
+          }
         </div>
       </div>
     )
@@ -228,7 +228,7 @@ export default function StaffList() {
   )
 }
 
-function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, hasVoted, voteCount, onVote }) {
+function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVote }) {
   const color = getRuoloColor(s.ruolo)
   return (
     <div className="card"
