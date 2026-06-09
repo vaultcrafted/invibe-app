@@ -153,14 +153,25 @@ export default function GroupDetail() {
               </div>
             </div>
 
-            {/* Riepilogo totale */}
-            {costoTotale > 0 && (
-              <div style={{ background: 'var(--iv-blue)', borderRadius: 14, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Totale da incassare</div>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 2 }}>{SERVICES.filter(sv => group[sv.id]).map(sv => sv.label).join(' + ')}</div>
+            {/* Riepilogo tabella */}
+            {SERVICES.filter(sv => group[sv.id]).length > 0 && (
+              <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '8px 16px', background: 'var(--bg-secondary)', borderBottom: '0.5px solid var(--border)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Servizio</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', textAlign: 'right', paddingRight: 16 }}>€/pax</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', textAlign: 'right', minWidth: 64 }}>Totale</div>
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: '#fff' }}>€{costoTotale}</div>
+                {SERVICES.filter(sv => group[sv.id]).map((sv, i, arr) => (
+                  <div key={sv.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '11px 16px', borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none', alignItems: 'center' }}>
+                    <div style={{ fontSize: 13 }}>{sv.label}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: 16 }}>€{sv.prezzo}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', minWidth: 64 }}>€{sv.prezzo * nPax}</div>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 16px', background: 'var(--iv-blue)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>TOTALE</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>€{costoTotale}</div>
+                </div>
               </div>
             )}
 
