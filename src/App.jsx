@@ -12,6 +12,7 @@ import Dbd from './pages/Dbd'
 import DbdAdmin from './pages/DbdAdmin'
 import StaffList from './pages/StaffList'
 import StaffProfile from './pages/StaffProfile'
+import WeeklyVote from './pages/WeeklyVote'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -51,6 +52,7 @@ function AppShell() {
           <Route path="/dbd-admin" element={<AdminRoute><DbdAdmin /></AdminRoute>} />
           <Route path="/staff-list" element={<AdminRoute><StaffList /></AdminRoute>} />
           <Route path="/staff/:staffId" element={<AdminRoute><StaffProfile /></AdminRoute>} />
+          <Route path="/weekly-vote/:destId/:shiftNum" element={<ProtectedRoute><WeeklyVote /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           {/* redirect vecchio /calendario */}
           <Route path="/calendario" element={<Navigate to="/dbd" replace />} />

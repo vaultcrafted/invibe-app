@@ -17,7 +17,9 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
   const canSeeVotes = isAdmin || ['CM', 'SUPERVISOR'].some(r => (profile?.ruolo || '').toUpperCase().includes(r))
 
   const [dailyVote, setDailyVote] = useState(null)
+  const [weeklyVote, setWeeklyVote] = useState(null)
   const [voteCounts, setVoteCounts] = useState({})
+  const [weeklyVoteCounts, setWeeklyVoteCounts] = useState({})
   const [loading, setLoading] = useState(true)
   const [voting, setVoting] = useState(false)
 
@@ -25,21 +27,29 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
 
   async function loadVotes() {
     setLoading(true)
-    const { data: myDaily } = await supabase
-      .from('votes').select('voted_for_id')
-      .eq('voter_id', currentUserId).eq('destination', destination)
-      .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily')
-      .maybeSingle()
+    const [{ data: myDaily }, { data: myWeekly }] = await Promise.all([
+      supabase.from('votes').select('voted_for_id')
+        .eq('voter_id', currentUserId).eq('destination', destination)
+        .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily').maybeSingle(),
+      supabase.from('votes').select('voted_for_id')
+        .eq('voter_id', currentUserId).eq('destination', destination)
+        .eq('shift_num', shiftNum).eq('type', 'weekly').maybeSingle(),
+    ])
     setDailyVote(myDaily?.voted_for_id || null)
+    setWeeklyVote(myWeekly?.voted_for_id || null)
 
     if (canSeeVotes) {
       const { data: allVotes } = await supabase
-        .from('votes').select('voted_for_id')
-        .eq('destination', destination).eq('shift_num', shiftNum).eq('type', 'daily')
+        .from('votes').select('voted_for_id, type')
+        .eq('destination', destination).eq('shift_num', shiftNum)
       if (allVotes) {
-        const counts = {}
-        allVotes.forEach(v => { counts[v.voted_for_id] = (counts[v.voted_for_id] || 0) + 1 })
-        setVoteCounts(counts)
+        const daily = {}, weekly = {}
+        allVotes.forEach(v => {
+          if (v.type === 'daily') daily[v.voted_for_id] = (daily[v.voted_for_id] || 0) + 1
+          else weekly[v.voted_for_id] = (weekly[v.voted_for_id] || 0) + 1
+        })
+        setVoteCounts(daily)
+        setWeeklyVoteCounts(weekly)
       }
     }
     setLoading(false)
@@ -48,16 +58,12 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
   async function castVote(votedForId) {
     if (voting) return
     setVoting(true)
-    // Prima cancella sempre il voto esistente
     await supabase.from('votes').delete()
       .eq('voter_id', currentUserId).eq('destination', destination)
       .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily')
-
     if (dailyVote === votedForId) {
-      // Era già selezionato → deseleziona
       setDailyVote(null)
     } else {
-      // Inserisci nuovo voto
       await supabase.from('votes').insert({
         voter_id: currentUserId, voted_for_id: votedForId,
         destination, shift_num: shiftNum, day_num: effectiveDayNum, type: 'daily',
@@ -75,5 +81,31 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
     setVoting(false)
   }
 
-  return { dailyVote, voteCounts, loading, voting, castVote, canSeeVotes }
+  async function castWeeklyVote(votedForId) {
+    if (voting) return
+    setVoting(true)
+    await supabase.from('votes').delete()
+      .eq('voter_id', currentUserId).eq('destination', destination)
+      .eq('shift_num', shiftNum).eq('type', 'weekly')
+    if (weeklyVote === votedForId) {
+      setWeeklyVote(null)
+    } else {
+      await supabase.from('votes').insert({
+        voter_id: currentUserId, voted_for_id: votedForId,
+        destination, shift_num: shiftNum, day_num: 7, type: 'weekly',
+      })
+      setWeeklyVote(votedForId)
+    }
+    if (canSeeVotes) {
+      setWeeklyVoteCounts(prev => {
+        const next = { ...prev }
+        if (weeklyVote) next[weeklyVote] = Math.max(0, (next[weeklyVote] || 1) - 1)
+        if (weeklyVote !== votedForId) next[votedForId] = (next[votedForId] || 0) + 1
+        return next
+      })
+    }
+    setVoting(false)
+  }
+
+  return { dailyVote, weeklyVote, voteCounts, weeklyVoteCounts, loading, voting, castVote, castWeeklyVote, canSeeVotes, effectiveDayNum }
 }

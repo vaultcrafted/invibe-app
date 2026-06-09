@@ -83,6 +83,12 @@ function ShiftMemberView({ selectedDest, selectedShift, members, isAdmin, profil
         </div>
       </div>
       <div style={{ padding: '10px 16px 32px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Bottone migliore della settimana */}
+        <button
+          onClick={() => navigate(`/weekly-vote/${selectedDest}/${selectedShift}`)}
+          style={{ width: '100%', padding: '13px', borderRadius: 12, background: '#D4AC0D', color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
+          🏆 Vota il migliore della settimana
+        </button>
         {members.length === 0
           ? <div className="empty-state"><p>Nessun risultato</p></div>
           : members.map(s => (
