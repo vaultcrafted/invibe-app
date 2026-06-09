@@ -68,8 +68,7 @@ export default function StaffList() {
   const members = (selectedDest && selectedShift !== null)
     ? staff
         .filter(s =>
-          ((s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === selectedShift)
-          || s.role === 'admin')
+          (s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === selectedShift)
           && (!s.ruolo || !s.ruolo.toUpperCase().includes('UFFICIO'))
         )
         .filter(s => {
@@ -145,8 +144,7 @@ export default function StaffList() {
         <div style={{ padding: '16px 16px 32px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {shiftsForDest.map(sNum => {
             const count = staff.filter(s =>
-              ((s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === sNum)
-              || s.role === 'admin')
+              (s.assigned_shifts || []).some(a => a.destination === selectedDest && a.shift_num === sNum)
               && (!s.ruolo || !s.ruolo.toUpperCase().includes('UFFICIO'))
             ).length
             const shiftInfo = SHIFTS[selectedDest]?.find(s => s.num === sNum)
