@@ -82,6 +82,14 @@ export default function StaffList() {
   const color = selectedDest ? DEST_COLORS[selectedDest] : 'var(--iv-blue)'
   const destObj = DESTINATIONS.find(d => d.id === selectedDest)
 
+  const { dailyVote, voteCounts, castVote, canSeeVotes } = useVotes({
+    destination: selectedDest || '',
+    shiftNum: selectedShift || 0,
+    currentUserId: profile?.id,
+    isAdmin,
+    profile,
+  })
+
   function goBack() {
     if (selectedShift !== null) { setSelectedShift(null); setSearch('') }
     else { setSelectedDest(null) }
@@ -93,14 +101,6 @@ export default function StaffList() {
       <div className="loading-screen"><div className="spinner" /></div>
     </div>
   )
-
-  const { dailyVote, voteCounts, castVote, canSeeVotes } = useVotes({
-    destination: selectedDest || '',
-    shiftNum: selectedShift || 0,
-    currentUserId: profile?.id,
-    isAdmin,
-    profile,
-  })
 
   // ── LIVELLO 3: lista staff del turno ──
   if (selectedDest && selectedShift !== null) {
