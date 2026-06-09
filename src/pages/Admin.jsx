@@ -238,7 +238,102 @@ const DEST_COLORS = {
   gallipoli: '#DC2626', sardegna: '#7C3AED',
 }
 
-function ServiceBar({ label, count, total, color, emoji }) {
+      {/* Sezione voti */}
+      <VotesSection voteData={voteData} staffProfiles={staffProfiles} loading={loadingVotes} filterDest={filterDest} filterShift={filterShift} />
+
+    </div>
+  )
+}
+
+function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShift }) {
+  function getProfile(id) { return staffProfiles.find(p => p.id === id) }
+
+  // Filtra per dest/shift se attivi
+  const filtered = voteData.filter(v => {
+    if (filterDest && v.destination !== filterDest) return false
+    if (filterShift && v.shift_num !== filterShift) return false
+    return true
+  })
+
+  // Aggrega per staff (somma tutti i turni se no filtro)
+  const byStaff = {}
+  filtered.forEach(v => {
+    if (!byStaff[v.staffId]) byStaff[v.staffId] = { staffId: v.staffId, daily: 0, weekly: 0 }
+    byStaff[v.staffId].daily += v.daily
+    byStaff[v.staffId].weekly += v.weekly
+  })
+  const dailyRanking = Object.values(byStaff).filter(v => v.daily > 0).sort((a, b) => b.daily - a.daily).slice(0, 10)
+  const weeklyRanking = Object.values(byStaff).filter(v => v.weekly > 0).sort((a, b) => b.weekly - a.weekly).slice(0, 10)
+
+  if (loading) return (
+    <div className="card" style={{ textAlign: 'center', padding: '20px', color: 'var(--text-tertiary)', fontSize: 13 }}>Carico voti...</div>
+  )
+
+  if (dailyRanking.length === 0 && weeklyRanking.length === 0) return (
+    <div className="card" style={{ textAlign: 'center', padding: '20px' }}>
+      <div style={{ fontSize: 24, marginBottom: 8 }}>🏆</div>
+      <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun voto ancora registrato</div>
+    </div>
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Migliori del giorno */}
+      {dailyRanking.length > 0 && (
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            ⭐ Migliori del giorno — classifica
+          </div>
+          {dailyRanking.map((v, i) => {
+            const p = getProfile(v.staffId)
+            if (!p) return null
+            return (
+              <div key={v.staffId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < dailyRanking.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                <div style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 800, color: i === 0 ? '#D4AC0D' : i === 1 ? '#9CA3AF' : i === 2 ? '#CD7F32' : 'var(--text-tertiary)', flexShrink: 0 }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}°`}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nome} {p.cognome}</div>
+                  {p.ruolo && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.ruolo}</div>}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: '#FEF9C3', color: '#854D0E', border: '1px solid #FDE047' }}>
+                  {v.daily} ⭐
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Migliori della settimana */}
+      {weeklyRanking.length > 0 && (
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+            🏆 Migliori della settimana — classifica
+          </div>
+          {weeklyRanking.map((v, i) => {
+            const p = getProfile(v.staffId)
+            if (!p) return null
+            return (
+              <div key={v.staffId} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: i < weeklyRanking.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                <div style={{ width: 28, textAlign: 'center', fontSize: 14, fontWeight: 800, color: i === 0 ? '#D4AC0D' : i === 1 ? '#9CA3AF' : i === 2 ? '#CD7F32' : 'var(--text-tertiary)', flexShrink: 0 }}>
+                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}°`}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{p.nome} {p.cognome}</div>
+                  {p.ruolo && <div style={{ fontSize: 10, color: 'var(--text-tertiary)' }}>{p.ruolo}</div>}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, padding: '3px 10px', borderRadius: 12, background: '#FEF9C3', color: '#854D0E', border: '1px solid #FDE047' }}>
+                  {v.weekly} 🏆
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
   const pct = total > 0 ? Math.round((count / total) * 100) : 0
   return (
     <div style={{ marginBottom: 10 }}>
@@ -261,6 +356,32 @@ function ServiceBar({ label, count, total, color, emoji }) {
 function StatsTab({ stats }) {
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
+  const [voteData, setVoteData] = useState([]) // { staffId, nome, cognome, ruolo, dailyCount, weeklyCount, destination, shift_num }
+  const [staffProfiles, setStaffProfiles] = useState([])
+  const [loadingVotes, setLoadingVotes] = useState(true)
+
+  useEffect(() => {
+    async function loadVotes() {
+      const [{ data: votes }, { data: profiles }] = await Promise.all([
+        supabase.from('votes').select('voted_for_id, type, destination, shift_num'),
+        supabase.from('staff_profiles').select('id, nome, cognome, ruolo'),
+      ])
+      setStaffProfiles(profiles || [])
+      if (votes) {
+        // Aggrega per staff + dest + shift + type
+        const map = {}
+        votes.forEach(v => {
+          const key = `${v.voted_for_id}__${v.destination}__${v.shift_num}`
+          if (!map[key]) map[key] = { staffId: v.voted_for_id, destination: v.destination, shift_num: v.shift_num, daily: 0, weekly: 0 }
+          if (v.type === 'daily') map[key].daily++
+          else map[key].weekly++
+        })
+        setVoteData(Object.values(map))
+      }
+      setLoadingVotes(false)
+    }
+    loadVotes()
+  }, [])
 
   const groups = stats.groups
 
