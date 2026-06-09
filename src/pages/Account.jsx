@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Edit2, Check, X, Mail, Phone, User, FileText, Shield, Lock, MapPin } from 'lucide-react'
+import { LogOut, Mail, Phone, User, FileText, Shield, MapPin } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
@@ -24,40 +23,11 @@ function getRuoloColor(ruolo) {
 export default function Account() {
   const { profile, signOut, fetchProfile, user, isAdmin } = useAuth()
   const navigate = useNavigate()
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({
-    nome: profile?.nome || '',
-    cognome: profile?.cognome || '',
-    telefono: profile?.telefono || '',
-  })
-  const [saving, setSaving] = useState(false)
-  const [changingPwd, setChangingPwd] = useState(false)
-  const [pwdForm, setPwdForm] = useState({ newPwd: '', confirmPwd: '' })
-  const [pwdMsg, setPwdMsg] = useState('')
-
   const initials = ((profile?.nome?.[0] || '') + (profile?.cognome?.[0] || '')).toUpperCase()
   const ruoloColor = getRuoloColor(profile?.ruolo)
   const lastSignIn = user?.last_sign_in_at
     ? new Date(user.last_sign_in_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
     : null
-
-  async function saveProfile() {
-    setSaving(true)
-    await supabase.from('staff_profiles').update({
-      nome: form.nome, cognome: form.cognome, telefono: form.telefono
-    }).eq('id', user.id)
-    await fetchProfile(user.id)
-    setSaving(false)
-    setEditing(false)
-  }
-
-  async function changePassword() {
-    if (pwdForm.newPwd !== pwdForm.confirmPwd) { setPwdMsg('Le password non coincidono'); return }
-    if (pwdForm.newPwd.length < 6) { setPwdMsg('Password troppo corta (min. 6 caratteri)'); return }
-    const { error } = await supabase.auth.updateUser({ password: pwdForm.newPwd })
-    if (error) { setPwdMsg('Errore: ' + error.message) }
-    else { setPwdMsg('✅ Password aggiornata!'); setPwdForm({ newPwd: '', confirmPwd: '' }); setTimeout(() => { setChangingPwd(false); setPwdMsg('') }, 2000) }
-  }
 
   async function handleLogout() { await signOut(); navigate('/login') }
 
@@ -93,32 +63,16 @@ export default function Account() {
 
         {/* Informazioni profilo */}
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Informazioni profilo</div>
-            {!editing ? (
-              <button onClick={() => setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--iv-blue)', fontWeight: 600, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--iv-blue)' }}>
-                <Edit2 size={12} /> Modifica dati
-              </button>
-            ) : (
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => setEditing(false)} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  <X size={12} />
-                </button>
-                <button onClick={saveProfile} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#fff', fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: 'var(--iv-blue)', border: 'none' }}>
-                  <Check size={12} /> {saving ? 'Salvo...' : 'Salva'}
-                </button>
-              </div>
-            )}
-          </div>
-          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Nome" value={form.nome} editing={editing} onChange={v => setForm(f => ({...f, nome: v}))} />
-          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Cognome" value={form.cognome} editing={editing} onChange={v => setForm(f => ({...f, cognome: v}))} />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Informazioni profilo</div>
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Nome" value={profile?.nome} />
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Cognome" value={profile?.cognome} isLast={true} />
         </div>
 
         {/* Contatti */}
         <div className="card">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Contatti</div>
-          <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={user?.email?.replace('@invibe.it','')} editing={false} />
-          <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={form.telefono} editing={editing} onChange={v => setForm(f => ({...f, telefono: v}))} placeholder="+39 333 1234567" isLast={true} />
+          <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={user?.email?.replace('@invibe.it','')} />
+          <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={profile?.telefono} isLast={true} />
         </div>
 
         {/* I miei turni */}
@@ -153,33 +107,6 @@ export default function Account() {
           <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Polizza assicurazione staff" sublabel="Presto disponibile" isLast={true} />
         </div>
 
-        {/* Gestione account */}
-        <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Gestione account</div>
-
-          {!changingPwd ? (
-            <button onClick={() => setChangingPwd(true)} style={{ width: '100%', padding: '13px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', cursor: 'pointer', marginBottom: isAdmin ? 10 : 0 }}>
-              <Lock size={16} /> Cambia password
-            </button>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: isAdmin ? 10 : 0 }}>
-              <input className="input-field" type="password" placeholder="Nuova password" value={pwdForm.newPwd} onChange={e => setPwdForm(f => ({...f, newPwd: e.target.value}))} />
-              <input className="input-field" type="password" placeholder="Conferma password" value={pwdForm.confirmPwd} onChange={e => setPwdForm(f => ({...f, confirmPwd: e.target.value}))} />
-              {pwdMsg && <div style={{ fontSize: 13, color: pwdMsg.includes('✅') ? 'var(--success)' : 'var(--danger)', background: pwdMsg.includes('✅') ? 'var(--success-light)' : 'var(--danger-light)', padding: '8px 12px', borderRadius: 8 }}>{pwdMsg}</div>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => { setChangingPwd(false); setPwdMsg('') }} style={{ flex: 1, padding: '11px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, color: 'var(--text-secondary)' }}>Annulla</button>
-                <button onClick={changePassword} style={{ flex: 2, padding: '11px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, border: 'none', cursor: 'pointer' }}>Aggiorna</button>
-              </div>
-            </div>
-          )}
-
-          {isAdmin && (
-            <button onClick={() => navigate('/admin')} style={{ width: '100%', padding: '13px', background: 'var(--iv-blue-dark)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, border: 'none', cursor: 'pointer' }}>
-              <Shield size={16} /> Pannello Admin
-            </button>
-          )}
-        </div>
-
         {/* Logout */}
         <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 10, background: 'var(--danger-light)', color: 'var(--danger)', fontSize: 14, fontWeight: 600, width: '100%', border: '0.5px solid #FECACA' }}>
           <LogOut size={16} /> Esci dall'account
@@ -190,17 +117,13 @@ export default function Account() {
   )
 }
 
-function ProfileRow({ icon, label, value, editing, onChange, placeholder, isLast }) {
+function ProfileRow({ icon, label, value, isLast }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
       <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{label}</div>
-        {editing && onChange ? (
-          <input className="input-field" style={{ padding: '4px 8px', fontSize: 14 }} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder || ''} />
-        ) : (
-          <div style={{ fontSize: 14, fontWeight: 500, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{value || '—'}</div>
-        )}
+        <div style={{ fontSize: 14, fontWeight: 500, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{value || '—'}</div>
       </div>
     </div>
   )

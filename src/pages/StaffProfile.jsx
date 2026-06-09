@@ -28,14 +28,6 @@ export default function StaffProfile() {
 
   const [staff, setStaff] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(false)
-  const [form, setForm] = useState({ nome: '', cognome: '', telefono: '', ruolo: '' })
-  const [saving, setSaving] = useState(false)
-
-  const [changingPwd, setChangingPwd] = useState(false)
-  const [pwdForm, setPwdForm] = useState({ newPwd: '', confirmPwd: '' })
-  const [pwdMsg, setPwdMsg] = useState('')
-  const [pwdSaving, setPwdSaving] = useState(false)
 
   useEffect(() => {
     fetchStaff()
@@ -55,37 +47,6 @@ export default function StaffProfile() {
     setLoading(false)
   }
 
-  async function saveProfile() {
-    setSaving(true)
-    await supabase.from('staff_profiles').update({
-      nome: form.nome,
-      cognome: form.cognome,
-      telefono: form.telefono,
-      ruolo: form.ruolo,
-    }).eq('id', staffId)
-    await fetchStaff()
-    setSaving(false)
-    setEditing(false)
-  }
-
-  async function changePassword() {
-    if (pwdForm.newPwd !== pwdForm.confirmPwd) { setPwdMsg('Le password non coincidono'); return }
-    if (pwdForm.newPwd.length < 6) { setPwdMsg('Password troppo corta (min. 6 caratteri)'); return }
-    setPwdSaving(true)
-    // Admin uses Supabase Admin API via edge function or direct auth.admin — 
-    // For now use updateUser on behalf (requires service role); fallback: show instructions
-    const { error } = await supabase.functions.invoke('admin-reset-password', {
-      body: { userId: staffId, password: pwdForm.newPwd }
-    })
-    setPwdSaving(false)
-    if (error) {
-      setPwdMsg('⚠️ Funzione non disponibile. Reset dalla dashboard Supabase.')
-    } else {
-      setPwdMsg('✅ Password aggiornata!')
-      setPwdForm({ newPwd: '', confirmPwd: '' })
-      setTimeout(() => { setChangingPwd(false); setPwdMsg('') }, 2000)
-    }
-  }
 
   if (loading) return (
     <div className="page">
@@ -154,33 +115,17 @@ export default function StaffProfile() {
 
         {/* Informazioni profilo */}
         <div className="card">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Informazioni profilo</div>
-            {isAdmin && !editing ? (
-              <button onClick={() => setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--iv-blue)', fontWeight: 600, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--iv-blue)' }}>
-                <Edit2 size={12} /> Modifica dati
-              </button>
-            ) : (
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => { setEditing(false); setForm({ nome: staff.nome||'', cognome: staff.cognome||'', telefono: staff.telefono||'', ruolo: staff.ruolo||'' }) }} style={{ padding: '5px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12, color: 'var(--text-secondary)' }}>
-                  <X size={12} />
-                </button>
-                <button onClick={saveProfile} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#fff', fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: 'var(--iv-blue)', border: 'none', cursor: 'pointer' }}>
-                  <Check size={12} /> {saving ? 'Salvo...' : 'Salva'}
-                </button>
-              </div>
-            )}
-          </div>
-          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Nome" value={form.nome} editing={editing} onChange={v => setForm(f => ({...f, nome: v}))} />
-          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Cognome" value={form.cognome} editing={editing} onChange={v => setForm(f => ({...f, cognome: v}))} />
-          <ProfileRow icon={<Shield size={16} color={ruoloColor} />} label="Ruolo" value={form.ruolo} editing={editing} onChange={v => setForm(f => ({...f, ruolo: v}))} isLast={true} />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Informazioni profilo</div>
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Nome" value={staff.nome} />
+          <ProfileRow icon={<User size={16} color="var(--iv-blue)" />} label="Cognome" value={staff.cognome} />
+          <ProfileRow icon={<Shield size={16} color={ruoloColor} />} label="Ruolo" value={staff.ruolo} isLast={true} />
         </div>
 
         {/* Contatti */}
         <div className="card">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Contatti</div>
-          <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={staff.email} editing={false} />
-          <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={form.telefono} editing={editing} onChange={v => setForm(f => ({...f, telefono: v}))} placeholder="+39 333 1234567" isLast={true} />
+          <ProfileRow icon={<Mail size={16} color="var(--iv-blue)" />} label="Email" value={staff.email} />
+          <ProfileRow icon={<Phone size={16} color="var(--iv-blue)" />} label="Telefono" value={staff.telefono} isLast={true} />
         </div>
 
         {/* I miei turni */}
@@ -249,17 +194,13 @@ export default function StaffProfile() {
   )
 }
 
-function ProfileRow({ icon, label, value, editing, onChange, placeholder, isLast }) {
+function ProfileRow({ icon, label, value, isLast }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
       <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 2 }}>{label}</div>
-        {editing && onChange ? (
-          <input className="input-field" style={{ padding: '4px 8px', fontSize: 14 }} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder || ''} />
-        ) : (
-          <div style={{ fontSize: 14, fontWeight: 500, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{value || '—'}</div>
-        )}
+        <div style={{ fontSize: 14, fontWeight: 500, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{value || '—'}</div>
       </div>
     </div>
   )
