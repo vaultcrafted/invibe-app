@@ -17,7 +17,10 @@ export default function Admin() {
   useEffect(() => {
     if (tab === 'staff') fetchStaff()
     if (tab === 'stats') fetchStats()
+    if (tab === 'incassi') fetchIncassi()
   }, [tab])
+
+  const [incassiData, setIncassiData] = useState(null)
 
   async function fetchStaff() {
     const { data } = await supabase.from('staff_profiles').select('*').order('cognome')
@@ -25,9 +28,17 @@ export default function Admin() {
   }
 
   async function fetchStats() {
-    const { data: groups } = await supabase.from('groups').select('destination, shift_num, escursioni, navetta, assicurazione, iscrizione')
+    const { data: groups } = await supabase.from('groups').select('destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione')
     const { data: participants } = await supabase.from('participants').select('id')
     setStats({ groups: groups || [], totalParts: participants?.length || 0 })
+  }
+
+  async function fetchIncassi() {
+    const { data: groups } = await supabase
+      .from('groups')
+      .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, participants(id)')
+      .order('destination').order('shift_num').order('capogruppo_display')
+    setIncassiData(groups || [])
   }
 
   function log(msg) { setImportLog(prev => [...prev, msg]) }
@@ -152,6 +163,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
         <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
         <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
+        <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
       </div>
 
       {tab === 'import' && (
@@ -187,6 +199,7 @@ export default function Admin() {
 
       {tab === 'stats' && stats && <StatsTab stats={stats} />}
       {tab === 'premi' && <PremiTab />}
+      {tab === 'incassi' && <IncassiTab data={incassiData} />}
     </div>
   )
 }
@@ -494,6 +507,184 @@ function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShif
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function IncassiTab({ data }) {
+  const [filterDest, setFilterDest] = useState(null)
+  const [filterShift, setFilterShift] = useState(null)
+
+  if (!data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>Carico...</div>
+
+  const SV = SERVICES // [{id, label, prezzo}]
+
+  // Filtra gruppi
+  const groups = data.filter(g => {
+    if (filterDest && g.destination !== filterDest) return false
+    if (filterShift && g.shift_num !== filterShift) return false
+    return true
+  })
+
+  // Struttura: per meta → per turno → gruppi
+  const dests = [...new Set(groups.map(g => g.destination))]
+  const availableShifts = filterDest
+    ? [...new Set(data.filter(g => g.destination === filterDest).map(g => g.shift_num))].sort((a, b) => a - b)
+    : []
+
+  // Calcola totale riga
+  function rowTotal(g) {
+    const n = g.participants?.length || 0
+    return SV.reduce((t, sv) => t + (g[sv.id] ? sv.prezzo * n : 0), 0)
+  }
+
+  // Calcola totale colonna per un set di gruppi
+  function colTotal(gs, svId, prezzo) {
+    return gs.reduce((t, g) => {
+      const n = g.participants?.length || 0
+      return t + (g[svId] ? prezzo * n : 0)
+    }, 0)
+  }
+
+  function grandTotal(gs) {
+    return gs.reduce((t, g) => t + rowTotal(g), 0)
+  }
+
+  const thStyle = { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', padding: '8px 10px', textAlign: 'right', whiteSpace: 'nowrap', borderBottom: '1.5px solid var(--border)', background: 'var(--bg-secondary)' }
+  const thLeftStyle = { ...thStyle, textAlign: 'left' }
+  const tdStyle = { fontSize: 12, padding: '9px 10px', textAlign: 'right', borderBottom: '0.5px solid var(--border)', color: 'var(--text-secondary)' }
+  const tdLeftStyle = { ...tdStyle, textAlign: 'left', color: 'var(--text-primary)', fontWeight: 500 }
+  const subtotalStyle = { background: 'var(--bg-secondary)', fontWeight: 700, fontSize: 12 }
+  const grandStyle = { background: 'var(--iv-blue)', color: '#fff', fontWeight: 800 }
+
+  return (
+    <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* Filtri */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Meta:</span>
+        <button onClick={() => { setFilterDest(null); setFilterShift(null) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterDest ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !filterDest ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterDest ? 'var(--iv-blue)' : 'var(--border)') }}>
+          Tutte
+        </button>
+        {DESTINATIONS.map(d => {
+          const hasData = data.some(g => g.destination === d.id)
+          if (!hasData) return null
+          const col = DEST_COLORS[d.id]
+          const active = filterDest === d.id
+          return (
+            <button key={d.id} onClick={() => { setFilterDest(active ? null : d.id); setFilterShift(null) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: active ? col : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? col : 'var(--border)') }}>
+              {d.name}
+            </button>
+          )
+        })}
+      </div>
+
+      {filterDest && availableShifts.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Turno:</span>
+          <button onClick={() => setFilterShift(null)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterShift ? DEST_COLORS[filterDest] : 'var(--bg-secondary)', color: !filterShift ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterShift ? DEST_COLORS[filterDest] : 'var(--border)') }}>Tutti</button>
+          {availableShifts.map(sNum => (
+            <button key={sNum} onClick={() => setFilterShift(filterShift === sNum ? null : sNum)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterShift === sNum ? DEST_COLORS[filterDest] : 'var(--bg-secondary)', color: filterShift === sNum ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filterShift === sNum ? DEST_COLORS[filterDest] : 'var(--border)') }}>
+              {shiftLabel(filterDest, sNum)}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Tabella pivot */}
+      <div style={{ overflowX: 'auto', borderRadius: 12, border: '0.5px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
+          <thead>
+            <tr>
+              <th style={{ ...thLeftStyle, minWidth: 140 }}>Capogruppo</th>
+              <th style={{ ...thStyle, minWidth: 60 }}>Pax</th>
+              {SV.map(sv => <th key={sv.id} style={{ ...thStyle, minWidth: 90 }}>{sv.label}</th>)}
+              <th style={{ ...thStyle, minWidth: 80, color: 'var(--iv-blue)' }}>Totale</th>
+            </tr>
+          </thead>
+          <tbody>
+            {groups.length === 0 ? (
+              <tr><td colSpan={3 + SV.length} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>Nessun dato</td></tr>
+            ) : (() => {
+              const rows = []
+              // Raggruppa per dest → shift
+              const byDest = {}
+              groups.forEach(g => {
+                if (!byDest[g.destination]) byDest[g.destination] = {}
+                if (!byDest[g.destination][g.shift_num]) byDest[g.destination][g.shift_num] = []
+                byDest[g.destination][g.shift_num].push(g)
+              })
+
+              Object.entries(byDest).forEach(([destId, shifts]) => {
+                const dest = DESTINATIONS.find(d => d.id === destId)
+                const destColor = DEST_COLORS[destId]
+                const allDestGroups = Object.values(shifts).flat()
+
+                Object.entries(shifts).sort((a, b) => Number(a[0]) - Number(b[0])).forEach(([sNum, sGroups]) => {
+                  // Header turno
+                  rows.push(
+                    <tr key={`h-${destId}-${sNum}`}>
+                      <td colSpan={3 + SV.length} style={{ padding: '8px 12px', background: destColor + '15', borderBottom: '0.5px solid var(--border)', borderTop: '1px solid ' + destColor + '33' }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: destColor }}>{dest?.name} · {shiftLabel(destId, Number(sNum))}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8 }}>{sGroups.length} gruppi</span>
+                      </td>
+                    </tr>
+                  )
+                  // Righe gruppo
+                  sGroups.forEach(g => {
+                    const n = g.participants?.length || 0
+                    const tot = rowTotal(g)
+                    rows.push(
+                      <tr key={g.id}>
+                        <td style={tdLeftStyle}>{g.capogruppo_display}</td>
+                        <td style={tdStyle}>{n}</td>
+                        {SV.map(sv => {
+                          const val = g[sv.id] ? sv.prezzo * n : 0
+                          return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? `€${val}` : '—'}</td>
+                        })}
+                        <td style={{ ...tdStyle, fontWeight: 700, color: tot > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>{tot > 0 ? `€${tot}` : '—'}</td>
+                      </tr>
+                    )
+                  })
+                  // Subtotale turno
+                  rows.push(
+                    <tr key={`sub-${destId}-${sNum}`} style={subtotalStyle}>
+                      <td style={{ ...tdLeftStyle, ...subtotalStyle }}>Subtotale {shiftLabel(destId, Number(sNum))}</td>
+                      <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>€{colTotal(sGroups, sv.id, sv.prezzo)}</td>)}
+                      <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>€{grandTotal(sGroups)}</td>
+                    </tr>
+                  )
+                })
+
+                // Subtotale meta (solo se >1 turno)
+                if (Object.keys(shifts).length > 1) {
+                  rows.push(
+                    <tr key={`dest-${destId}`} style={{ background: destColor + '20' }}>
+                      <td style={{ ...tdLeftStyle, background: 'transparent', color: destColor, fontWeight: 800 }}>TOTALE {dest?.name?.toUpperCase()}</td>
+                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>€{colTotal(allDestGroups, sv.id, sv.prezzo)}</td>)}
+                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>€{grandTotal(allDestGroups)}</td>
+                    </tr>
+                  )
+                }
+              })
+
+              // Totale generale
+              rows.push(
+                <tr key="grand" style={grandStyle}>
+                  <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
+                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.participants?.length || 0), 0)}</td>
+                  {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>€{colTotal(groups, sv.id, sv.prezzo)}</td>)}
+                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>€{grandTotal(groups)}</td>
+                </tr>
+              )
+
+              return rows
+            })()}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
