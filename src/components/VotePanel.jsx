@@ -49,16 +49,16 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
     if (voting) return
     setVoting(true)
     if (dailyVote === votedForId) {
+      setDailyVote(null)
       await supabase.from('votes').delete()
         .eq('voter_id', currentUserId).eq('destination', destination)
         .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily')
-      setDailyVote(null)
     } else {
+      setDailyVote(votedForId)
       await supabase.from('votes').upsert({
         voter_id: currentUserId, voted_for_id: votedForId,
         destination, shift_num: shiftNum, day_num: effectiveDayNum, type: 'daily',
       }, { onConflict: 'voter_id,destination,shift_num,day_num,type' })
-      setDailyVote(votedForId)
     }
     if (canSeeVotes) await loadVotes()
     setVoting(false)
