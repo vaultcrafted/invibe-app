@@ -98,7 +98,11 @@ export default function GroupDetail() {
       <div style={{ padding: '20px 16px 32px', maxWidth: 900, margin: '0 auto' }}>
 
         {/* Layout desktop: 2 colonne, mobile: 1 colonna */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,340px)', gap: 20, alignItems: 'start' }}>
+        <style>{`
+          .group-detail-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,340px); gap: 20px; align-items: start; }
+          @media (max-width: 700px) { .group-detail-grid { grid-template-columns: 1fr !important; } }
+        `}</style>
+        <div className="group-detail-grid">
 
           {/* COLONNA SINISTRA */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -230,13 +234,6 @@ export default function GroupDetail() {
 
         </div>
       </div>
-
-      {/* Responsive: mobile stack */}
-      <style>{`
-        @media (max-width: 700px) {
-          .group-detail-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
 
     </div>
   )
