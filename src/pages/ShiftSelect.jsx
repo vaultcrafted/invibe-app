@@ -26,20 +26,32 @@ export default function ShiftSelect() {
       <div style={{ padding: '12px 16px 4px', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
         {dest.flag} {dest.name} — Seleziona turno
       </div>
-      <div className="section-label">I tuoi turni</div>
-      <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {myShifts.map(shift => (
-          <ShiftCard key={shift.num} shift={shift} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
-        ))}
-      </div>
-      {!isAdmin && otherShifts.length > 0 && (
-        <div>
-          <div className="section-label">Altri turni</div>
+
+      {myShifts.length > 0 && (
+        <>
+          <div className="section-label">I tuoi turni</div>
+          <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {myShifts.map(shift => (
+              <ShiftCard key={shift.num} shift={shift} mine={true} onClick={() => navigate(`/shift/${destId}/${shift.num}`)} />
+            ))}
+          </div>
+        </>
+      )}
+
+      {otherShifts.length > 0 && (
+        <>
+          <div className="section-label">{myShifts.length > 0 ? 'Altri turni' : 'Turni disponibili'}</div>
           <div style={{ padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
             {otherShifts.map(shift => (
               <ShiftCard key={shift.num} shift={shift} mine={false} onClick={null} />
             ))}
           </div>
+        </>
+      )}
+
+      {myShifts.length === 0 && (
+        <div style={{ padding: '16px', background: 'var(--bg-secondary)', margin: '8px 16px', borderRadius: 12, fontSize: 13, color: 'var(--text-secondary)', textAlign: 'center' }}>
+          Non sei assegnato a nessun turno per questa destinazione
         </div>
       )}
     </div>
@@ -55,7 +67,7 @@ function ShiftCard({ shift, mine, onClick }) {
       disabled={!mine}
     >
       <div style={{ width: 36, height: 36, borderRadius: 10, background: mine ? 'var(--iv-blue)' : 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: mine ? '#fff' : 'var(--text-tertiary)', flexShrink: 0 }}>
-        T{shift.num}
+        {mine ? `T${shift.num}` : '🔒'}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: mine ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>Turno {shift.num}</div>

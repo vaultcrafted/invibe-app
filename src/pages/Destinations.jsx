@@ -19,10 +19,6 @@ export default function Destinations() {
     ? [...new Set(profile.assigned_shifts.map(s => s.destination))]
     : []
 
-  const visibleDests = isAdmin
-    ? DESTINATIONS
-    : DESTINATIONS.filter(d => assignedDests.includes(d.id))
-
   return (
     <div className="page">
       <Topbar showBack={false} showAvatar={true} />
@@ -30,20 +26,28 @@ export default function Destinations() {
         Seleziona meta
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '8px 16px 16px', justifyContent: 'center' }}>
-        {visibleDests.map(dest => (
-          <button
-            key={dest.id}
-            onClick={() => navigate('/destination/' + dest.id)}
-            style={{ width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0 }}
-          >
-            <img src={DEST_IMAGES[dest.id]} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 100%)' }} />
-            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '10px 12px' }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{dest.name}</div>
-              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: 500 }}>{dest.turni} turni</div>
-            </div>
-          </button>
-        ))}
+        {DESTINATIONS.map(dest => {
+          const isAssigned = isAdmin || assignedDests.includes(dest.id)
+          return (
+            <button
+              key={dest.id}
+              onClick={() => navigate('/destination/' + dest.id)}
+              style={{ width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0, opacity: isAssigned ? 1 : 0.6 }}
+            >
+              <img src={DEST_IMAGES[dest.id]} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 100%)' }} />
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '10px 12px' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{dest.name}</div>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: 500 }}>{dest.turni} turni</div>
+              </div>
+              {!isAssigned && (
+                <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.45)', borderRadius: 8, padding: '2px 7px', fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.04em' }}>
+                  SOLO VISTA
+                </div>
+              )}
+            </button>
+          )
+        })}
       </div>
       {isAdmin && (
         <div style={{ padding: '0 16px 16px' }}>
@@ -59,11 +63,6 @@ export default function Destinations() {
               <path d="M9 18l6-6-6-6" stroke="rgba(255,255,255,0.7)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
-        </div>
-      )}
-      {!isAdmin && visibleDests.length === 0 && (
-        <div className="empty-state">
-          <p>Non hai ancora turni assegnati.</p>
         </div>
       )}
     </div>
