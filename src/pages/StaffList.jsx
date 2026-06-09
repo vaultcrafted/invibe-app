@@ -31,7 +31,7 @@ function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVot
   const color = getRuoloColor(s.ruolo)
   return (
     <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: isVoted ? '#FEF9C3' : 'var(--bg-primary)', border: isVoted ? '1px solid #FDE047' : '0.5px solid var(--border)' }}
-      onClick={() => { if (votable && onVote) onVote(); else if (isAdmin) navigate(`/staff/${s.id}`) }}>
+      onClick={() => { if (votable && onVote) onVote(); else navigate(`/staff/${s.id}`) }}>
       <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: color + '22', border: '1.5px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color }}>
         {getInitials(s.nome, s.cognome)}
       </div>

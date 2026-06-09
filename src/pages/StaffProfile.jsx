@@ -38,7 +38,6 @@ export default function StaffProfile() {
   const [pwdSaving, setPwdSaving] = useState(false)
 
   useEffect(() => {
-    if (!isAdmin) { navigate('/'); return }
     fetchStaff()
   }, [staffId])
 
@@ -87,8 +86,6 @@ export default function StaffProfile() {
       setTimeout(() => { setChangingPwd(false); setPwdMsg('') }, 2000)
     }
   }
-
-  if (!isAdmin) return null
 
   if (loading) return (
     <div className="page">
@@ -159,7 +156,7 @@ export default function StaffProfile() {
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Informazioni profilo</div>
-            {!editing ? (
+            {isAdmin && !editing ? (
               <button onClick={() => setEditing(true)} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--iv-blue)', fontWeight: 600, padding: '5px 10px', borderRadius: 8, border: '1px solid var(--iv-blue)' }}>
                 <Edit2 size={12} /> Modifica dati
               </button>
@@ -216,7 +213,8 @@ export default function StaffProfile() {
           <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Polizza assicurazione staff" sublabel="Presto disponibile" isLast={true} />
         </div>
 
-        {/* Gestione account */}
+        {/* Gestione account — solo admin */}
+        {isAdmin && (
         <div className="card">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Gestione account</div>
 
@@ -244,6 +242,7 @@ export default function StaffProfile() {
             </div>
           )}
         </div>
+        )}
 
       </div>
     </div>
