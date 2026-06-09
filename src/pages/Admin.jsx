@@ -229,10 +229,10 @@ function StaffCard({ staff, onToggle }) {
 }
 
 const SERVICES_META = [
-  { key: 'escursioni',   label: 'Escursioni',   color: '#1E6BF1', emoji: '🏄' },
-  { key: 'navetta',      label: 'Navetta',       color: '#059669', emoji: '🚌' },
-  { key: 'assicurazione',label: 'Assicurazione', color: '#D97706', emoji: '🛡️' },
-  { key: 'iscrizione',   label: 'Iscrizione',    color: '#7C3AED', emoji: '📋' },
+  { key: 'navette',       label: 'Navette',              color: '#1E6BF1', emoji: '🚌' },
+  { key: 'pkg_escursioni', label: 'Pacchetto Escursioni', color: '#059669', emoji: '🏄' },
+  { key: 'tassa_soggiorno', label: 'Tassa di soggiorno',  color: '#D97706', emoji: '🏨' },
+  { key: 'pkg_ssp',       label: 'Pacchetto SSP',        color: '#7C3AED', emoji: '📋' },
 ]
 
 const DEST_COLORS = {

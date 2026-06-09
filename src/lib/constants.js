@@ -45,10 +45,10 @@ export const SHIFTS = {
 }
 
 export const SERVICES = [
-  { id: 'escursioni', label: 'Escursioni' },
-  { id: 'navetta', label: 'Navetta / Serate' },
-  { id: 'assicurazione', label: 'Assicurazione' },
-  { id: 'iscrizione', label: 'Iscrizione' },
+  { id: 'navette', label: 'Navette', prezzo: 45 },
+  { id: 'pkg_escursioni', label: 'Pacchetto Escursioni', prezzo: 45 },
+  { id: 'tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'pkg_ssp', label: 'Pacchetto SSP', prezzo: 45 },
 ]
 
 // Maps turno column from Excel to destination + shift number
