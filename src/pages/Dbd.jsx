@@ -179,7 +179,7 @@ export default function Dbd() {
       </div>
 
       {/* Navigazione giorni */}
-      <div className="day-nav" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '12px 16px 4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div className="day-nav" style={{ display: 'flex', gap: 6, overflowX: 'auto', overflowY: 'visible', paddingTop: 12, paddingBottom: 8, paddingLeft: 16, paddingRight: 16, scrollbarWidth: 'none', msOverflowStyle: 'none', minHeight: 64 }}>
         {Array.from({ length: totalDays }, (_, i) => i + 1).map(d => {
           const today = isToday(selectedShift, d)
           const active = d === selectedDay
