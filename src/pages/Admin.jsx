@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function Admin() {
