@@ -95,7 +95,7 @@ export default function GroupDetail() {
         </div>
       </div>
 
-      <div style={{ padding: '20px 16px 32px', maxWidth: 900, margin: '0 auto' }}>
+      <div style={{ padding: '20px 16px 120px', maxWidth: 900, margin: '0 auto' }}>
 
         {/* Layout desktop: 2 colonne, mobile: 1 colonna */}
         <style>{`
