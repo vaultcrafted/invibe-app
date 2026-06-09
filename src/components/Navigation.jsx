@@ -1,8 +1,9 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 const NAV_ITEMS = [
   {
-    id: 'home', label: 'Home', path: '/',
+    id: 'home', label: 'Home', path: '/', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <path d="M5 10v11h14V10M3 12L12 3l9 9" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -11,7 +12,7 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'calendario', label: 'Calendario', path: '/calendario',
+    id: 'calendario', label: 'Calendario', path: '/calendario', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <rect x="3" y="4" width="18" height="18" rx="3" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
@@ -23,7 +24,7 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'staff', label: 'Staff', path: '/staff-list',
+    id: 'staff', label: 'Staff', path: '/staff-list', adminOnly: true,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <circle cx="9" cy="7" r="4" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
@@ -33,7 +34,7 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'account', label: 'Account', path: '/account',
+    id: 'account', label: 'Account', path: '/account', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <circle cx="12" cy="8" r="4" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
@@ -46,6 +47,9 @@ const NAV_ITEMS = [
 export default function Navigation() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { isAdmin } = useAuth()
+
+  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
 
   function isActive(item) {
     if (item.path === '/') return location.pathname === '/'
@@ -58,7 +62,7 @@ export default function Navigation() {
         <div style={{ padding: '0 8px', marginBottom: 20 }}>
           <img src="/Logotipo.png" alt="Invibe" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)', display: 'block' }} />
         </div>
-        {NAV_ITEMS.map(item => {
+        {visibleItems.map(item => {
           const active = isActive(item)
           return (
             <button key={item.id} className={'sidebar-item ' + (active ? 'active' : '')} onClick={() => navigate(item.path)}>
@@ -69,7 +73,7 @@ export default function Navigation() {
         })}
       </nav>
       <nav className="bottom-nav">
-        {NAV_ITEMS.map(item => {
+        {visibleItems.map(item => {
           const active = isActive(item)
           return (
             <button key={item.id} className={'bottom-nav-item ' + (active ? 'active' : '')} onClick={() => navigate(item.path)}>
