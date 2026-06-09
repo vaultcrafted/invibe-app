@@ -120,18 +120,29 @@ export default function StaffList() {
           </div>
         </div>
         <div style={{ padding: '10px 16px 32px' }}>
-          {members.length === 0
-            ? <div className="empty-state"><p>Nessun risultato</p></div>
-            : viewMode === 'list'
-              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{members.map(s => <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
-              : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>{members.map(s => <StaffGridCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate} />)}</div>
-          }
           <VotePanel
             destination={selectedDest}
             shiftNum={selectedShift}
             members={members}
             currentUserId={profile?.id}
             isAdmin={isAdmin}
+            renderList={(votableMembers, hasVoted, currentVote, castVote, voteCounts, isAdminView) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {members.map(s => (
+                  <StaffRowCard
+                    key={s.id}
+                    s={s}
+                    isAdmin={isAdmin}
+                    navigate={navigate}
+                    votable={s.id !== profile?.id && votableMembers.some(m => m.id === s.id)}
+                    isVoted={currentVote === s.id}
+                    hasVoted={hasVoted}
+                    voteCount={isAdminView ? (voteCounts[s.id] || 0) : null}
+                    onVote={() => castVote(s.id)}
+                  />
+                ))}
+              </div>
+            )}
           />
         </div>
       </div>
@@ -216,11 +227,19 @@ export default function StaffList() {
   )
 }
 
-function StaffRowCard({ s, isAdmin, navigate }) {
+function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, hasVoted, voteCount, onVote }) {
   const color = getRuoloColor(s.ruolo)
   return (
-    <div className="card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: isAdmin ? 'pointer' : 'default' }}>
+    <div className="card"
+      style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: (isAdmin || votable) ? 'pointer' : 'default',
+        background: isVoted ? '#FEF9C3' : 'var(--bg-primary)',
+        border: isVoted ? '1px solid #FDE047' : '0.5px solid var(--border)',
+      }}
+      onClick={() => {
+        if (votable && !hasVoted && onVote) onVote()
+        else if (isAdmin && navigate) navigate(`/staff/${s.id}`)
+      }}
+    >
       <div style={{ width: 42, height: 42, borderRadius: '50%', flexShrink: 0, background: color + '22', border: '1.5px solid ' + color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color }}>
         {getInitials(s.nome, s.cognome)}
       </div>
@@ -235,7 +254,31 @@ function StaffRowCard({ s, isAdmin, navigate }) {
           )}
         </div>
       </div>
-      {isAdmin && <ChevronRight size={14} color="var(--text-tertiary)" />}
+
+      {/* Admin: badge voti */}
+      {voteCount > 0 && (
+        <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 12, background: '#D4AC0D', color: '#fff', flexShrink: 0 }}>
+          {voteCount} ⭐
+        </div>
+      )}
+
+      {/* Checkbox voto (solo se votabile) */}
+      {votable && (
+        <div style={{
+          width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+          border: '1.5px solid ' + (isVoted ? '#D4AC0D' : hasVoted ? 'var(--border)' : 'var(--text-tertiary)'),
+          background: isVoted ? '#D4AC0D' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          opacity: hasVoted && !isVoted ? 0.35 : 1,
+        }}>
+          {isVoted && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+        </div>
+      )}
+
+      {/* Freccia admin (solo se non votabile) */}
+      {isAdmin && !votable && (
+        <ChevronRight size={14} color="var(--text-tertiary)" />
+      )}
     </div>
   )
 }
