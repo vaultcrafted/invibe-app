@@ -83,7 +83,7 @@ export default function GroupDetail() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'inherit' }}>
 
       {/* Header blu */}
-      <div style={{ background: 'var(--iv-blue)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 50 }}>
+      <div style={{ background: 'var(--iv-blue)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <button onClick={() => navigate(-1)} style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.15)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <ChevronLeft size={18} color="#fff" />
         </button>
