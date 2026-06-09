@@ -122,10 +122,12 @@ export default function Account() {
         </div>
 
         {/* I miei turni */}
-        {profile?.assigned_shifts?.length > 0 && (
+        {(profile?.assigned_shifts?.length > 0 || true) && (
           <div className="card">
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>I miei turni</div>
-            {profile.assigned_shifts.map((s, i) => {
+            {!profile?.assigned_shifts?.length ? (
+              <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun turno assegnato</div>
+            ) : profile.assigned_shifts.map((s, i) => {
               const dest = DESTINATIONS.find(d => d.id === s.destination)
               const shift = SHIFTS[s.destination]?.find(sh => sh.num === s.shift_num)
               const isLast = i === profile.assigned_shifts.length - 1
