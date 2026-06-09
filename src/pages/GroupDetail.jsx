@@ -99,13 +99,13 @@ export default function GroupDetail() {
 
         {/* Layout desktop: 2 colonne, mobile: 1 colonna */}
         <style>{`
-          .group-detail-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,340px); gap: 20px; align-items: start; }
-          @media (max-width: 700px) { .group-detail-grid { grid-template-columns: 1fr !important; } }
+          .group-detail-grid { display: flex; flex-direction: column; gap: 20px; }
+          @media (min-width: 701px) { .group-detail-grid { flex-direction: row; } }
+          @media (min-width: 701px) { .group-detail-left { flex: 1; min-width: 0; } }
+          @media (min-width: 701px) { .group-detail-right { width: 340px; flex-shrink: 0; } }
         `}</style>
         <div className="group-detail-grid">
-
-          {/* COLONNA SINISTRA */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="group-detail-left" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             {/* Stat cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
@@ -203,7 +203,7 @@ export default function GroupDetail() {
           </div>
 
           {/* COLONNA DESTRA — Partecipanti */}
-          <div>
+          <div className="group-detail-right">
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
               Partecipanti ({nPax})
             </div>
