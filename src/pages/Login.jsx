@@ -8,6 +8,7 @@ export default function Login() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -16,9 +17,8 @@ export default function Login() {
     setError('')
     setLoading(true)
     try {
-      // Convert username (nomecognome) to email format for Supabase
       const email = username.includes('@') ? username : username.toLowerCase() + '@invibe.it'
-      await signIn(email, password)
+      await signIn(email, password, rememberMe)
       navigate('/')
     } catch (err) {
       setError('Username o password errati.')
@@ -62,7 +62,6 @@ export default function Login() {
               autoCorrect="off"
               autoComplete="username"
               name="username"
-              name="username"
             />
           </div>
         </div>
@@ -88,7 +87,6 @@ export default function Login() {
               required
               autoComplete="current-password"
               name="password"
-              name="password"
             />
             <button
               type="button"
@@ -108,6 +106,29 @@ export default function Login() {
               )}
             </button>
           </div>
+        </div>
+
+        {/* Ricordami */}
+        <div
+          onClick={() => setRememberMe(v => !v)}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}
+        >
+          <div style={{
+            width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+            border: '1.5px solid ' + (rememberMe ? 'var(--iv-blue)' : 'var(--border)'),
+            background: rememberMe ? 'var(--iv-blue)' : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.15s'
+          }}>
+            {rememberMe && (
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+            Ricordami su questo dispositivo
+          </span>
         </div>
 
         {error && (
