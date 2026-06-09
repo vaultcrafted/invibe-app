@@ -12,14 +12,12 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'calendario', label: 'Calendario', path: '/calendario', adminOnly: false,
+    id: 'dbd', label: 'DBD', path: '/dbd', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <rect x="3" y="4" width="18" height="18" rx="3" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
         <path d="M16 2v4M8 2v4M3 10h18" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2" strokeLinecap="round"/>
-        <circle cx="8" cy="15" r="1.2" fill={active ? '#1E6BF1' : 'currentColor'}/>
-        <circle cx="12" cy="15" r="1.2" fill={active ? '#1E6BF1' : 'currentColor'}/>
-        <circle cx="16" cy="15" r="1.2" fill={active ? '#1E6BF1' : 'currentColor'}/>
+        <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2" strokeLinecap="round"/>
       </svg>
     )
   },

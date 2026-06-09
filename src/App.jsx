@@ -8,7 +8,8 @@ import GroupList from './pages/GroupList'
 import GroupDetail from './pages/GroupDetail'
 import Admin from './pages/Admin'
 import Account from './pages/Account'
-import Calendario from './pages/Calendario'
+import Dbd from './pages/Dbd'
+import DbdAdmin from './pages/DbdAdmin'
 import StaffList from './pages/StaffList'
 import StaffProfile from './pages/StaffProfile'
 
@@ -46,10 +47,13 @@ function AppShell() {
           <Route path="/shift/:destId/:shiftNum" element={<ProtectedRoute><GroupList /></ProtectedRoute>} />
           <Route path="/group/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
-          <Route path="/calendario" element={<ProtectedRoute><Calendario /></ProtectedRoute>} />
-          <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
+          <Route path="/dbd" element={<ProtectedRoute><Dbd /></ProtectedRoute>} />
+          <Route path="/dbd-admin" element={<AdminRoute><DbdAdmin /></AdminRoute>} />
+          <Route path="/staff-list" element={<AdminRoute><StaffList /></AdminRoute>} />
           <Route path="/staff/:staffId" element={<AdminRoute><StaffProfile /></AdminRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          {/* redirect vecchio /calendario */}
+          <Route path="/calendario" element={<Navigate to="/dbd" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
