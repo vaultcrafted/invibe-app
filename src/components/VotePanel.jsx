@@ -68,6 +68,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
   }
 
   const canSeeVotes = isAdmin || ['CM', 'SUPERVISOR'].some(r => (profile?.ruolo || '').toUpperCase().includes(r))
+  const votableMembers = members.filter(m => m.id !== currentUserId)
   const hasVoted = dailyVote !== null
 
   if (loading) return null
