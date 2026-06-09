@@ -34,15 +34,37 @@ export default function Admin() {
 
   async function fetchIncassi() {
     try {
-      const [{ data: groups, error }, { data: counts }] = await Promise.all([
-        supabase.from('groups').select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione').order('destination').order('shift_num').order('capogruppo_display'),
-        supabase.from('participants').select('group_id'),
-      ])
-      if (error) { console.error(error); setIncassiData([]); return }
-      // Conta partecipanti per gruppo
+      // Carica tutti i gruppi con paginazione
+      let groups = []
+      let gFrom = 0
+      const pageSize = 1000
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('groups')
+          .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione')
+          .order('destination').order('shift_num').order('capogruppo_display')
+          .range(gFrom, gFrom + pageSize - 1)
+        if (error) { console.error(error); setIncassiData([]); return }
+        if (!page || page.length === 0) break
+        groups = groups.concat(page)
+        if (page.length < pageSize) break
+        gFrom += pageSize
+      }
+
+      // Conta partecipanti con paginazione
       const countMap = {}
-      ;(counts || []).forEach(p => { countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
-      setIncassiData((groups || []).map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
+      let from = 0
+      while (true) {
+        const { data: page } = await supabase
+          .from('participants')
+          .select('group_id')
+          .range(from, from + pageSize - 1)
+        if (!page || page.length === 0) break
+        page.forEach(p => { countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
+        if (page.length < pageSize) break
+        from += pageSize
+      }
+      setIncassiData(groups.map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
     } catch (e) {
       console.error(e)
       setIncassiData([])
