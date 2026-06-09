@@ -10,6 +10,7 @@ import Admin from './pages/Admin'
 import Account from './pages/Account'
 import Calendario from './pages/Calendario'
 import StaffList from './pages/StaffList'
+import StaffProfile from './pages/StaffProfile'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -47,6 +48,7 @@ function AppShell() {
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/calendario" element={<ProtectedRoute><Calendario /></ProtectedRoute>} />
           <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
+          <Route path="/staff/:staffId" element={<AdminRoute><StaffProfile /></AdminRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

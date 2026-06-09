@@ -130,6 +130,8 @@ export default function StaffList() {
 }
 
 function StaffRowCard({ s }) {
+  const { isAdmin } = useAuth()
+  const navigate = useNavigate()
   const assigned = s.assigned_shifts || []
   const color = getRuoloColor(s.ruolo)
   const turniStr = assigned.length > 0
@@ -140,7 +142,7 @@ function StaffRowCard({ s }) {
     : s.role === 'admin' ? 'tutti i turni' : 'nessun turno'
 
   return (
-    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: isAdmin ? 'pointer' : 'default' }}>
       <div style={{
         width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
         background: color + '22', border: '1.5px solid ' + color,
@@ -168,11 +170,13 @@ function StaffRowCard({ s }) {
 }
 
 function StaffGridCard({ s }) {
+  const { isAdmin } = useAuth()
+  const navigate = useNavigate()
   const color = getRuoloColor(s.ruolo)
   const assigned = s.assigned_shifts || []
 
   return (
-    <div className="card staff-grid-card" style={{ textAlign: 'center', padding: 10 }}>
+    <div className="card staff-grid-card" onClick={() => isAdmin && navigate(`/staff/${s.id}`)} style={{ textAlign: 'center', padding: 10, cursor: isAdmin ? 'pointer' : 'default' }}>
       <div style={{
         width: 38, height: 38, borderRadius: '50%', margin: '0 auto 8px',
         background: color + '22', border: '1.5px solid ' + color,
