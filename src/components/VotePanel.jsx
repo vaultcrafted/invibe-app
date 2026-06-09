@@ -48,19 +48,30 @@ export function useVotes({ destination, shiftNum, currentUserId, isAdmin, profil
   async function castVote(votedForId) {
     if (voting) return
     setVoting(true)
+    // Prima cancella sempre il voto esistente
+    await supabase.from('votes').delete()
+      .eq('voter_id', currentUserId).eq('destination', destination)
+      .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily')
+
     if (dailyVote === votedForId) {
+      // Era già selezionato → deseleziona
       setDailyVote(null)
-      await supabase.from('votes').delete()
-        .eq('voter_id', currentUserId).eq('destination', destination)
-        .eq('shift_num', shiftNum).eq('day_num', effectiveDayNum).eq('type', 'daily')
     } else {
-      setDailyVote(votedForId)
-      await supabase.from('votes').upsert({
+      // Inserisci nuovo voto
+      await supabase.from('votes').insert({
         voter_id: currentUserId, voted_for_id: votedForId,
         destination, shift_num: shiftNum, day_num: effectiveDayNum, type: 'daily',
-      }, { onConflict: 'voter_id,destination,shift_num,day_num,type' })
+      })
+      setDailyVote(votedForId)
     }
-    if (canSeeVotes) await loadVotes()
+    if (canSeeVotes) {
+      setVoteCounts(prev => {
+        const next = { ...prev }
+        if (dailyVote) next[dailyVote] = Math.max(0, (next[dailyVote] || 1) - 1)
+        if (dailyVote !== votedForId) next[votedForId] = (next[votedForId] || 0) + 1
+        return next
+      })
+    }
     setVoting(false)
   }
 
