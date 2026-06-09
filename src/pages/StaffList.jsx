@@ -237,7 +237,7 @@ function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, hasVoted, voteCo
         border: isVoted ? '1px solid #FDE047' : '0.5px solid var(--border)',
       }}
       onClick={() => {
-        if (votable && !hasVoted && onVote) onVote()
+        if (votable && onVote) onVote()
         else if (isAdmin && navigate) navigate(`/staff/${s.id}`)
       }}
     >
@@ -270,7 +270,7 @@ function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, hasVoted, voteCo
           border: '1.5px solid ' + (isVoted ? '#D4AC0D' : hasVoted ? 'var(--border)' : 'var(--text-tertiary)'),
           background: isVoted ? '#D4AC0D' : 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          opacity: hasVoted && !isVoted ? 0.35 : 1,
+          opacity: 1,
         }}>
           {isVoted && <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>}
         </div>
