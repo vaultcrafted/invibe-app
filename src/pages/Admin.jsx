@@ -13,14 +13,13 @@ export default function Admin() {
   const [importLog, setImportLog] = useState([])
   const [staffList, setStaffList] = useState([])
   const [stats, setStats] = useState(null)
+  const [incassiData, setIncassiData] = useState(null)
 
   useEffect(() => {
     if (tab === 'staff') fetchStaff()
     if (tab === 'stats') fetchStats()
     if (tab === 'incassi') fetchIncassi()
   }, [tab])
-
-  const [incassiData, setIncassiData] = useState(null)
 
   async function fetchStaff() {
     const { data } = await supabase.from('staff_profiles').select('*').order('cognome')
@@ -34,11 +33,17 @@ export default function Admin() {
   }
 
   async function fetchIncassi() {
-    const { data: groups } = await supabase
-      .from('groups')
-      .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, participants(id)')
-      .order('destination').order('shift_num').order('capogruppo_display')
-    setIncassiData(groups || [])
+    try {
+      const { data: groups, error } = await supabase
+        .from('groups')
+        .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, participants(id)')
+        .order('destination').order('shift_num').order('capogruppo_display')
+      if (error) throw error
+      setIncassiData(groups || [])
+    } catch (e) {
+      console.error('fetchIncassi error:', e)
+      setIncassiData([])
+    }
   }
 
   function log(msg) { setImportLog(prev => [...prev, msg]) }
@@ -199,7 +204,7 @@ export default function Admin() {
 
       {tab === 'stats' && stats && <StatsTab stats={stats} />}
       {tab === 'premi' && <PremiTab />}
-      {tab === 'incassi' && <IncassiTab data={incassiData} />}
+      {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
     </div>
   )
 }
@@ -511,11 +516,11 @@ function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShif
   )
 }
 
-function IncassiTab({ data }) {
+function IncassiTab({ data, loading }) {
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
 
-  if (!data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}>Carico...</div>
+  if (loading || !data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico incassi...</div>
 
   const SV = SERVICES // [{id, label, prezzo}]
 
