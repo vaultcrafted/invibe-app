@@ -80,7 +80,7 @@ export default function GroupDetail() {
   const costoTotale = SERVICES.reduce((tot, sv) => group[sv.id] ? tot + sv.prezzo * nPax : tot, 0)
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', fontFamily: 'inherit' }}>
+    <div className="page" style={{ paddingBottom: 0 }}>
 
       {/* Header blu */}
       <div style={{ background: 'var(--iv-blue)', padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
