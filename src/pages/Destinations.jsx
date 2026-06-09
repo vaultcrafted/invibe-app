@@ -32,7 +32,7 @@ export default function Destinations() {
             <button
               key={dest.id}
               onClick={() => navigate('/destination/' + dest.id)}
-              style={{ width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0, opacity: isAssigned ? 1 : 0.6 }}
+              style={{ width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0 }}
             >
               <img src={DEST_IMAGES[dest.id]} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 100%)' }} />
