@@ -180,17 +180,12 @@ export default function GroupDetail() {
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>🏠</span> Alloggio
               </div>
-              {editingAlloggio ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input className="input-field" style={{ flex: 1 }} placeholder="Es. App. Via Roma 4 – int. 3" value={group.alloggio || ''} onChange={e => updateField('alloggio', e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveField('alloggio')} />
-                  <button onClick={() => saveField('alloggio')} style={{ padding: '0 16px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Salva</button>
-                </div>
-              ) : (
-                <div onClick={() => setEditingAlloggio(true)} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 }}>
-                  <span style={{ fontSize: 14, color: group.alloggio ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{group.alloggio || 'Nessun alloggio inserito'}</span>
-                  <Edit2 size={14} color="var(--text-tertiary)" />
-                </div>
-              )}
+              <div style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)' }}>
+                {group.alloggio
+                  ? <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>{group.alloggio}</span>
+                  : <span style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Presto in arrivo</span>
+                }
+              </div>
             </div>
 
             {/* Note */}
