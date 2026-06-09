@@ -22,7 +22,7 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'staff', label: 'Staff', path: '/staff-list', adminOnly: true,
+    id: 'staff', label: 'Staff', path: '/staff-list', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <circle cx="9" cy="7" r="4" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>

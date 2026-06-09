@@ -50,7 +50,7 @@ function AppShell() {
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/dbd" element={<ProtectedRoute><Dbd /></ProtectedRoute>} />
           <Route path="/dbd-admin" element={<AdminRoute><DbdAdmin /></AdminRoute>} />
-          <Route path="/staff-list" element={<AdminRoute><StaffList /></AdminRoute>} />
+          <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
           <Route path="/staff/:staffId" element={<ProtectedRoute><StaffProfile /></ProtectedRoute>} />
           <Route path="/weekly-vote/:destId/:shiftNum" element={<ProtectedRoute><WeeklyVote /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
