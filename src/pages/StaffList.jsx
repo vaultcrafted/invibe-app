@@ -126,6 +126,7 @@ export default function StaffList() {
             members={members}
             currentUserId={profile?.id}
             isAdmin={isAdmin}
+            profile={profile}
             renderList={(votableMembers, hasVoted, currentVote, castVote, voteCounts, isAdminView) => (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {members.map(s => (

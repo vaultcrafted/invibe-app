@@ -10,7 +10,7 @@ function getCurrentDayNum(shiftStart) {
   return Math.floor((today - start) / (1000 * 60 * 60 * 24)) + 1
 }
 
-export default function VotePanel({ destination, shiftNum, members, currentUserId, isAdmin, renderList }) {
+export default function VotePanel({ destination, shiftNum, members, currentUserId, isAdmin, profile, renderList }) {
   const shiftInfo = SHIFTS[destination]?.find(s => s.num === shiftNum)
   const dayNum = shiftInfo ? getCurrentDayNum(shiftInfo.start) : 0
   const effectiveDayNum = (dayNum >= 1 && dayNum <= 7) ? dayNum : 1
@@ -35,7 +35,7 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
       .maybeSingle()
     setDailyVote(myDaily?.voted_for_id || null)
 
-    if (isAdmin) {
+    if (isAdmin || ['CM', 'SUPERVISOR'].some(r => (profile?.ruolo || '').toUpperCase().includes(r))) {
       const { data: allVotes } = await supabase
         .from('votes')
         .select('voted_for_id')
@@ -62,15 +62,15 @@ export default function VotePanel({ destination, shiftNum, members, currentUserI
     })
     if (!error) {
       setDailyVote(votedForId)
-      if (isAdmin) await loadVotes()
+      if (canSeeVotes) await loadVotes()
     }
     setVoting(false)
   }
 
-  const votableMembers = members.filter(m => m.id !== currentUserId)
+  const canSeeVotes = isAdmin || ['CM', 'SUPERVISOR'].some(r => (profile?.ruolo || '').toUpperCase().includes(r))
   const hasVoted = dailyVote !== null
 
   if (loading) return null
 
-  return renderList(votableMembers, hasVoted, dailyVote, castVote, voteCounts, isAdmin)
+  return renderList(votableMembers, hasVoted, dailyVote, castVote, voteCounts, canSeeVotes)
 }
