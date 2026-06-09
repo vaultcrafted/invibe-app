@@ -40,11 +40,7 @@ export default function Destinations() {
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{dest.name}</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: 500 }}>{dest.turni} turni</div>
               </div>
-              {!isAssigned && (
-                <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.45)', borderRadius: 8, padding: '2px 7px', fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.8)', letterSpacing: '0.04em' }}>
-                  SOLO VISTA
-                </div>
-              )}
+
             </button>
           )
         })}
