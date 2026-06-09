@@ -151,11 +151,12 @@ export default function StaffProfile() {
           </div>
         )}
 
-        {/* Documenti */}
+        {/* Attestati */}
         <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Documenti</div>
-          <DocRow icon={<FileText size={18} color="var(--iv-blue)" />} label="Contratto estivo 2026" sublabel="Presto disponibile" />
-          <DocRow icon={<Shield size={18} color="var(--iv-blue)" />} label="Polizza assicurazione staff" sublabel="Presto disponibile" isLast={true} />
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Attestati</div>
+          <AttestatoRow staffId={staffId} field="att_antincendio" label="Antincendio" current={staff.att_antincendio} isAdmin={isAdmin} onUpdate={fetchStaff} />
+          <AttestatoRow staffId={staffId} field="att_primo_soccorso" label="Primo Soccorso" current={staff.att_primo_soccorso} isAdmin={isAdmin} onUpdate={fetchStaff} />
+          <AttestatoRow staffId={staffId} field="att_blsd" label="BLSD" current={staff.att_blsd} isAdmin={isAdmin} onUpdate={fetchStaff} isLast={true} />
         </div>
 
         {/* Gestione account — solo admin */}
@@ -206,15 +207,72 @@ function ProfileRow({ icon, label, value, isLast }) {
   )
 }
 
-function DocRow({ icon, label, sublabel, isLast }) {
+function AttestatoRow({ staffId, field, label, current, isAdmin, onUpdate, isLast }) {
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleUpload(e) {
+    const file = e.target.files[0]
+    if (!file) return
+    if (file.type !== 'application/pdf') { setError('Solo file PDF'); return }
+    setError('')
+    setUploading(true)
+    try {
+      const path = `${staffId}/${field}.pdf`
+      const { error: upErr } = await supabase.storage.from('attestati').upload(path, file, { upsert: true, contentType: 'application/pdf' })
+      if (upErr) throw upErr
+      const { data: { publicUrl } } = supabase.storage.from('attestati').getPublicUrl(path)
+      // Aggiungi timestamp per evitare cache
+      const urlWithVersion = `${publicUrl}?v=${Date.now()}`
+      await supabase.from('staff_profiles').update({ [field]: urlWithVersion }).eq('id', staffId)
+      await onUpdate()
+    } catch (err) {
+      setError('Errore caricamento')
+      console.error(err)
+    }
+    setUploading(false)
+  }
+
+  async function handleDelete() {
+    setUploading(true)
+    const path = `${staffId}/${field}.pdf`
+    await supabase.storage.from('attestati').remove([path])
+    await supabase.from('staff_profiles').update({ [field]: null }).eq('id', staffId)
+    await onUpdate()
+    setUploading(false)
+  }
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: isLast ? 'none' : '0.5px solid var(--border)' }}>
-      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 1 }}>{sublabel}</div>
+      <div style={{ width: 40, height: 40, borderRadius: 10, background: current ? 'rgba(5,150,105,0.1)' : 'var(--iv-blue-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <FileText size={18} color={current ? '#059669' : 'var(--iv-blue)'} />
       </div>
-      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', padding: '5px 10px', borderRadius: 8, border: '0.5px solid var(--border)' }}>Presto</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 500 }}>{label}</div>
+        <div style={{ fontSize: 11, color: current ? '#059669' : 'var(--text-tertiary)', marginTop: 1 }}>
+          {error ? <span style={{ color: 'var(--danger)' }}>{error}</span> : current ? '✓ Caricato' : 'Non caricato'}
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        {current && (
+          <a href={current} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, fontWeight: 600, color: '#fff', background: 'var(--iv-blue)', padding: '6px 12px', borderRadius: 8, textDecoration: 'none' }}>
+            Scarica
+          </a>
+        )}
+        {isAdmin && (
+          <>
+            <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--iv-blue)', border: '1px solid var(--iv-blue)', padding: '6px 12px', borderRadius: 8, cursor: 'pointer' }}>
+              {uploading ? '...' : current ? 'Sostituisci' : 'Carica'}
+              <input type="file" accept="application/pdf" onChange={handleUpload} style={{ display: 'none' }} disabled={uploading} />
+            </label>
+            {current && (
+              <button onClick={handleDelete} disabled={uploading} style={{ fontSize: 12, color: 'var(--danger)', border: '1px solid #FECACA', background: 'var(--danger-light)', padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}>
+                ✕
+              </button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
