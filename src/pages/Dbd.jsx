@@ -135,6 +135,7 @@ export default function Dbd() {
   return (
     <div className="page">
       <Topbar showBack={false} showAvatar={false} />
+      <style>{`.day-nav::-webkit-scrollbar { display: none; }`}</style>
 
       {/* Selettore turno (se più di uno) */}
       {shiftObjects.length > 1 && (
@@ -178,7 +179,7 @@ export default function Dbd() {
       </div>
 
       {/* Navigazione giorni */}
-      <div style={{ padding: '12px 16px 0', display: 'flex', gap: 6, overflowX: 'auto' }}>
+      <div className="day-nav" style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '12px 16px 4px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {Array.from({ length: totalDays }, (_, i) => i + 1).map(d => {
           const today = isToday(selectedShift, d)
           const active = d === selectedDay
