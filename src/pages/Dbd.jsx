@@ -147,7 +147,7 @@ export default function Dbd() {
                 color: selectedShift?.destination === s.destination && selectedShift?.shift_num === s.shift_num ? '#fff' : 'var(--text-secondary)',
                 border: '0.5px solid ' + (selectedShift?.destination === s.destination && selectedShift?.shift_num === s.shift_num ? s.color : 'var(--border)'),
               }}>
-              {s.flag} {s.destName} {shiftLabel(s.destination, s.shift_num)}
+              {s.destName} {shiftLabel(s.destination, s.shift_num)}
             </button>
           ))}
         </div>
@@ -157,7 +157,7 @@ export default function Dbd() {
       <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            {selectedShift ? `${selectedShift.flag} ${selectedShift.destName} · ${shiftLabel(selectedShift.destination, selectedShift.shift_num)}` : 'DBD'}
+            {selectedShift ? `${selectedShift.destName} · ${shiftLabel(selectedShift.destination, selectedShift.shift_num)}` : 'DBD'}
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
             {content?.day_label ? `Day ${selectedDay} — ${content.day_label}` : `Day ${selectedDay}`}
