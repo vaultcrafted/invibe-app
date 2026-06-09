@@ -139,7 +139,7 @@ export default function Dbd() {
 
       {/* Selettore turno (se più di uno) */}
       {shiftObjects.length > 1 && (
-        <div style={{ padding: '10px 16px 0', overflowX: 'auto', display: 'flex', gap: 8 }}>
+        <div style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16, overflowX: 'auto', overflowY: 'visible', display: 'flex', gap: 8, scrollbarWidth: 'none', msOverflowStyle: 'none', minHeight: 36 }}>
           {shiftObjects.map((s, i) => (
             <button key={i} onClick={() => { setSelectedShift(s); setSelectedDay(Math.max(1, Math.min(getCurrentDayNum(s.start), 8))) }}
               style={{
