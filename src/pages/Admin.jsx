@@ -238,9 +238,20 @@ const DEST_COLORS = {
   gallipoli: '#DC2626', sardegna: '#7C3AED',
 }
 
-      {/* Sezione voti */}
-      <VotesSection voteData={voteData} staffProfiles={staffProfiles} loading={loadingVotes} filterDest={filterDest} filterShift={filterShift} />
-
+function ServiceBar({ label, count, total, color, emoji }) {
+  const pct = total > 0 ? Math.round((count / total) * 100) : 0
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>{emoji} {label}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+          <span style={{ fontWeight: 700, color }}>{count}</span> / {total}
+          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>{pct}%</span>
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 4, background: 'var(--bg-tertiary, #f0f0f0)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: pct + '%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
+      </div>
     </div>
   )
 }
@@ -331,24 +342,6 @@ function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShif
           })}
         </div>
       )}
-    </div>
-  )
-}
-  const pct = total > 0 ? Math.round((count / total) * 100) : 0
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 5 }}>
-          {emoji} {label}
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-          <span style={{ fontWeight: 700, color }}>{count}</span> / {total}
-          <span style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-tertiary)' }}>{pct}%</span>
-        </span>
-      </div>
-      <div style={{ height: 6, borderRadius: 4, background: 'var(--bg-tertiary, #f0f0f0)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: pct + '%', background: color, borderRadius: 4, transition: 'width 0.4s' }} />
-      </div>
     </div>
   )
 }
@@ -531,6 +524,9 @@ function StatsTab({ stats }) {
           ))}
         </div>
       )}
+
+      {/* Sezione voti */}
+      <VotesSection voteData={voteData} staffProfiles={staffProfiles} loading={loadingVotes} filterDest={filterDest} filterShift={filterShift} />
 
     </div>
   )
