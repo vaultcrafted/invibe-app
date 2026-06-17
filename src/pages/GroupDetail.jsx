@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
+import { SERVICES, EXTRA_SERVICES_CORFU, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
+import { syncToSheet } from '../lib/sheetsSync'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
 // Icone servizi custom
@@ -58,6 +59,19 @@ export default function GroupDetail() {
     setGroup(prev => ({ ...prev, [serviceId]: newVal }))
     setSaving(serviceId)
     await supabase.from('groups').update({ [serviceId]: newVal }).eq('id', groupId)
+    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: newVal ? participants.length : 0 })
+    setSaving(null)
+  }
+
+  function updateExtraQty(serviceId, value) {
+    const qty = Math.max(0, parseInt(value, 10) || 0)
+    setGroup(prev => ({ ...prev, [serviceId]: qty }))
+  }
+
+  async function saveExtraQty(serviceId) {
+    setSaving(serviceId)
+    await supabase.from('groups').update({ [serviceId]: group[serviceId] || 0 }).eq('id', groupId)
+    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: group[serviceId] || 0 })
     setSaving(null)
   }
 
@@ -77,7 +91,13 @@ export default function GroupDetail() {
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
 
-  const costoTotale = SERVICES.reduce((tot, sv) => group[sv.id] ? tot + sv.prezzo * nPax : tot, 0)
+  const isCorfu = group.destination === 'corfu'
+  const riepilogoBase = SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
+  const riepilogoExtra = isCorfu
+    ? EXTRA_SERVICES_CORFU.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
+    : []
+  const riepilogoRows = [...riepilogoBase, ...riepilogoExtra]
+  const costoTotale = riepilogoRows.reduce((tot, r) => tot + r.totale, 0)
 
   return (
     <div className="page" style={{ paddingBottom: 0 }}>
@@ -153,19 +173,51 @@ export default function GroupDetail() {
               </div>
             </div>
 
+            {/* Servizi extra Corfù — quantità libera inserita dall'admin */}
+            {isCorfu && (
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Servizi extra Corfù</div>
+                <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                  {EXTRA_SERVICES_CORFU.map((sv, i) => {
+                    const qty = group[sv.id] || 0
+                    const isSaving = saving === sv.id
+                    return (
+                      <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < EXTRA_SERVICES_CORFU.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: qty > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                            €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: qty > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
+                            {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
+                          </div>
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          value={qty}
+                          onChange={e => updateExtraQty(sv.id, e.target.value)}
+                          onBlur={() => saveExtraQty(sv.id)}
+                          style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Riepilogo tabella */}
-            {SERVICES.filter(sv => group[sv.id]).length > 0 && (
+            {riepilogoRows.length > 0 && (
               <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '8px 16px', background: 'var(--bg-secondary)', borderBottom: '0.5px solid var(--border)' }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>Servizio</div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', textAlign: 'right', paddingRight: 16 }}>€/pax</div>
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', textAlign: 'right', minWidth: 64 }}>Totale</div>
                 </div>
-                {SERVICES.filter(sv => group[sv.id]).map((sv, i, arr) => (
-                  <div key={sv.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '11px 16px', borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none', alignItems: 'center' }}>
-                    <div style={{ fontSize: 13 }}>{sv.label}</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: 16 }}>€{sv.prezzo}</div>
-                    <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', minWidth: 64 }}>€{sv.prezzo * nPax}</div>
+                {riepilogoRows.map((r, i, arr) => (
+                  <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', padding: '11px 16px', borderBottom: i < arr.length - 1 ? '0.5px solid var(--border)' : 'none', alignItems: 'center' }}>
+                    <div style={{ fontSize: 13 }}>{r.label}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', textAlign: 'right', paddingRight: 16 }}>€{r.prezzoUnit}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, textAlign: 'right', minWidth: 64 }}>€{r.totale}</div>
                   </div>
                 ))}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', padding: '12px 16px', background: 'var(--iv-blue)' }}>
