@@ -52,14 +52,12 @@ export const SERVICES = [
 ]
 
 // Servizi extra specifici di Corfù — quantità libera inserita dall'admin (non legata ai pax)
-// NB: prezzo Motorino da confermare (mancante nel foglio rendicontazione)
 export const EXTRA_SERVICES_CORFU = [
   { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 40 },
   { id: 'qta_barche_paleo', label: 'Barche Paleo', prezzo: 20 },
   { id: 'qta_montecristo', label: 'Montecristo', prezzo: 20 },
   { id: 'qta_mojito2', label: 'Mojito 2', prezzo: 10 },
   { id: 'qta_pranzo_laviron', label: 'Pranzo Laviron', prezzo: 10 },
-  { id: 'qta_motorino', label: 'Motorino', prezzo: 0 },
 ]
 
 // Nome esatto della colonna nel foglio Google Sheets di rendicontazione, per ogni servizio
@@ -68,13 +66,12 @@ export const SHEET_SERVIZIO_MAP = {
   pkg_escursioni: 'Escursioni in meta',
   tassa_soggiorno: 'Tassa di Soggiorno',
   pkg_ssp: 'SSP',
+  cauzione: 'Cauzione',
   qta_pazuzu: 'Solo Pazuzu',
   qta_barche_paleo: 'Barche Paleo',
   qta_montecristo: 'Montecristo',
   qta_mojito2: 'Mojito 2',
   qta_pranzo_laviron: 'Pranzo Laviron',
-  qta_motorino: 'Motorino',
-  // cauzione: non presente nel foglio Corfù, non viene sincronizzata
 }
 
 // Nome del tab del foglio Google Sheets corrispondente a destinazione + turno
