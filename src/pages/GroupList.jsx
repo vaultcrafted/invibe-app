@@ -2,8 +2,15 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, shiftLabel } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
+
+function isServiceOn(g, sv) {
+  return g.destination === 'corfu' ? (g[sv.id] || 0) > 0 : !!g[sv.id]
+}
+function groupServices(g) {
+  return g.destination === 'corfu' ? SERVICES_CORFU : SERVICES
+}
 
 export default function GroupList() {
   const { destId, shiftNum } = useParams()
@@ -40,8 +47,8 @@ export default function GroupList() {
 
   const filtered = groups
     .filter(g => {
-      if (tab === 'completi') return SERVICES.every(sv => g[sv.id])
-      if (tab === 'mancanti') return SERVICES.some(sv => !g[sv.id])
+      if (tab === 'completi') return groupServices(g).every(sv => isServiceOn(g, sv))
+      if (tab === 'mancanti') return groupServices(g).some(sv => !isServiceOn(g, sv))
       return true
     })
     .filter(g => !search || g.capogruppo_display?.toLowerCase().includes(search.toLowerCase()))
@@ -98,8 +105,8 @@ function GroupCard({ group, onClick }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {SERVICES.map(sv => (
-          <span key={sv.id} className={`flag-chip ${group[sv.id] ? 'on' : ''}`}>
+        {groupServices(group).map(sv => (
+          <span key={sv.id} className={`flag-chip ${isServiceOn(group, sv) ? 'on' : ''}`}>
             <span className="dot" />{sv.label}
           </span>
         ))}
