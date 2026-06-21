@@ -51,8 +51,12 @@ export const SERVICES = [
   { id: 'cauzione', label: 'Cauzione', prezzo: 50 },
 ]
 
-// Servizi extra specifici di Corfù — quantità libera inserita dall'admin (non legata ai pax)
-export const EXTRA_SERVICES_CORFU = [
+// Tutti i servizi di Corfù, stessa modalità: toggle (tutto il gruppo) + numero modificabile (quantità libera)
+export const SERVICES_CORFU = [
+  { id: 'qta_escursioni', label: 'Escursioni', prezzo: 45 },
+  { id: 'qta_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'qta_ssp', label: 'SSP', prezzo: 45 },
+  { id: 'qta_cauzione', label: 'Cauzione', prezzo: 50 },
   { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 40 },
   { id: 'qta_barche_paleo', label: 'Barche Paleo', prezzo: 20 },
   { id: 'qta_montecristo', label: 'Montecristo', prezzo: 20 },
@@ -67,6 +71,10 @@ export const SHEET_SERVIZIO_MAP = {
   tassa_soggiorno: 'Tassa di Soggiorno',
   pkg_ssp: 'SSP',
   cauzione: 'Cauzione',
+  qta_escursioni: 'Escursioni in meta',
+  qta_tassa_soggiorno: 'Tassa di Soggiorno',
+  qta_ssp: 'SSP',
+  qta_cauzione: 'Cauzione',
   qta_pazuzu: 'Solo Pazuzu',
   qta_barche_paleo: 'Barche Paleo',
   qta_montecristo: 'Montecristo',

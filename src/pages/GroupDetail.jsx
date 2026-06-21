@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, EXTRA_SERVICES_CORFU, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
+import { SERVICES, SERVICES_CORFU, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
 import { syncToSheet } from '../lib/sheetsSync'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
@@ -63,32 +63,57 @@ export default function GroupDetail() {
     setSaving(null)
   }
 
-  function updateExtraQty(serviceId, value) {
+  function updateQtaService(serviceId, value) {
     const qty = Math.max(0, parseInt(value, 10) || 0)
     setGroup(prev => ({ ...prev, [serviceId]: qty }))
   }
 
-  async function saveExtraQty(serviceId) {
+  async function saveQtaService(serviceId) {
     setSaving(serviceId)
     await supabase.from('groups').update({ [serviceId]: group[serviceId] || 0 }).eq('id', groupId)
     syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: group[serviceId] || 0 })
     setSaving(null)
   }
 
+  async function toggleQtaService(serviceId) {
+    const current = group[serviceId] || 0
+    const newQty = current > 0 ? 0 : participants.filter(p => p.attivo !== false).length
+    setGroup(prev => ({ ...prev, [serviceId]: newQty }))
+    setSaving(serviceId)
+    await supabase.from('groups').update({ [serviceId]: newQty }).eq('id', groupId)
+    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: newQty })
+    setSaving(null)
+  }
+
   async function toggleParticipantActive(participantId) {
+    const oldNPax = participants.filter(p => p.attivo !== false).length
     const updated = participants.map(p => p.id === participantId ? { ...p, attivo: p.attivo === false } : p)
     setParticipants(updated)
     const target = updated.find(p => p.id === participantId)
     await supabase.from('participants').update({ attivo: target.attivo }).eq('id', participantId)
 
-    // I servizi a pacchetto (Escursioni, Tassa, SSP, Cauzione) sono legati al numero di pax attivi:
-    // se cambia chi partecipa, rilancio la sync per riportare la quantità giusta sul foglio
     const newNPax = updated.filter(p => p.attivo !== false).length
-    SERVICES.forEach(sv => {
-      if (group[sv.id]) {
-        syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
+    if (group.destination === 'corfu') {
+      // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
+      const newGroupValues = {}
+      SERVICES_CORFU.forEach(sv => {
+        const current = group[sv.id] || 0
+        if (oldNPax > 0 && current === oldNPax) {
+          newGroupValues[sv.id] = newNPax
+          syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
+        }
+      })
+      if (Object.keys(newGroupValues).length > 0) {
+        setGroup(prev => ({ ...prev, ...newGroupValues }))
+        await supabase.from('groups').update(newGroupValues).eq('id', groupId)
       }
-    })
+    } else {
+      SERVICES.forEach(sv => {
+        if (group[sv.id]) {
+          syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
+        }
+      })
+    }
   }
 
   async function updateField(field, value) { setGroup(prev => ({ ...prev, [field]: value })) }
@@ -109,11 +134,9 @@ export default function GroupDetail() {
   const females = activeParticipants.filter(p => p.sesso === 'F').length
 
   const isCorfu = group.destination === 'corfu'
-  const riepilogoBase = SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
-  const riepilogoExtra = isCorfu
-    ? EXTRA_SERVICES_CORFU.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
-    : []
-  const riepilogoRows = [...riepilogoBase, ...riepilogoExtra]
+  const riepilogoRows = isCorfu
+    ? SERVICES_CORFU.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
+    : SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
   const costoTotale = riepilogoRows.reduce((tot, r) => tot + r.totale, 0)
 
   return (
@@ -161,7 +184,36 @@ export default function GroupDetail() {
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Servizi acquistati</div>
               <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                {SERVICES.map((sv, i) => {
+                {isCorfu ? SERVICES_CORFU.map((sv, i) => {
+                  const qty = group[sv.id] || 0
+                  const active = qty > 0
+                  const isSaving = saving === sv.id
+                  return (
+                    <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < SERVICES_CORFU.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                      {/* Label */}
+                      <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => toggleQtaService(sv.id)}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                          €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
+                          {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
+                        </div>
+                      </div>
+                      {/* Numero modificabile */}
+                      <input
+                        type="number"
+                        min="0"
+                        value={qty}
+                        onChange={e => updateQtaService(sv.id, e.target.value)}
+                        onBlur={() => saveQtaService(sv.id)}
+                        style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                      />
+                      {/* Toggle */}
+                      <div onClick={() => toggleQtaService(sv.id)} style={{ width: 46, height: 26, borderRadius: 13, background: active ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: active ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
+                      </div>
+                    </div>
+                  )
+                }) : SERVICES.map((sv, i) => {
                   const Icon = ServiceIcons[sv.id] || ServiceIcons.pkg_escursioni
                   const active = !!group[sv.id]
                   const isSaving = saving === sv.id
@@ -189,38 +241,6 @@ export default function GroupDetail() {
                 })}
               </div>
             </div>
-
-            {/* Servizi extra Corfù — quantità libera inserita dall'admin */}
-            {isCorfu && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Servizi extra Corfù</div>
-                <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                  {EXTRA_SERVICES_CORFU.map((sv, i) => {
-                    const qty = group[sv.id] || 0
-                    const isSaving = saving === sv.id
-                    return (
-                      <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < EXTRA_SERVICES_CORFU.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: qty > 0 ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                            €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: qty > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
-                            {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
-                          </div>
-                        </div>
-                        <input
-                          type="number"
-                          min="0"
-                          value={qty}
-                          onChange={e => updateExtraQty(sv.id, e.target.value)}
-                          onBlur={() => saveExtraQty(sv.id)}
-                          style={{ width: 64, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
-                        />
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Riepilogo tabella */}
             {riepilogoRows.length > 0 && (
