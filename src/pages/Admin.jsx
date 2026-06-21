@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Upload } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function Admin() {
@@ -41,7 +41,7 @@ export default function Admin() {
       while (true) {
         const { data: page, error } = await supabase
           .from('groups')
-          .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione')
+          .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, qta_escursioni, qta_tassa_soggiorno, qta_ssp, qta_cauzione, qta_pazuzu, qta_barche_paleo, qta_montecristo, qta_mojito2, qta_pranzo_laviron')
           .order('destination').order('shift_num').order('capogruppo_display')
           .range(gFrom, gFrom + pageSize - 1)
         if (error) { console.error(error); setIncassiData([]); return }
@@ -57,10 +57,10 @@ export default function Admin() {
       while (true) {
         const { data: page } = await supabase
           .from('participants')
-          .select('group_id')
+          .select('group_id, attivo')
           .range(from, from + pageSize - 1)
         if (!page || page.length === 0) break
-        page.forEach(p => { countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
+        page.forEach(p => { if (p.attivo !== false) countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
         if (page.length < pageSize) break
         from += pageSize
       }
@@ -547,7 +547,15 @@ function IncassiTab({ data, loading }) {
 
   if (loading || !data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico incassi...</div>
 
-  const SV = SERVICES // [{id, label, prezzo}]
+  const isCorfuView = filterDest === 'corfu'
+  const SV = isCorfuView ? SERVICES_CORFU : SERVICES // [{id, label, prezzo}]
+
+  // Valore di un servizio per un gruppo: per Corfù è quantità diretta, per le altre mete è booleano × pax
+  function svValue(g, sv) {
+    if (isCorfuView) return sv.prezzo * (g[sv.id] || 0)
+    const n = g.num_partecipanti || 0
+    return g[sv.id] ? sv.prezzo * n : 0
+  }
 
   // Filtra gruppi
   const groups = data.filter(g => {
@@ -564,16 +572,12 @@ function IncassiTab({ data, loading }) {
 
   // Calcola totale riga
   function rowTotal(g) {
-    const n = g.num_partecipanti || 0
-    return SV.reduce((t, sv) => t + (g[sv.id] ? sv.prezzo * n : 0), 0)
+    return SV.reduce((t, sv) => t + svValue(g, sv), 0)
   }
 
   // Calcola totale colonna per un set di gruppi
-  function colTotal(gs, svId, prezzo) {
-    return gs.reduce((t, g) => {
-      const n = g.num_partecipanti || 0
-      return t + (g[svId] ? prezzo * n : 0)
-    }, 0)
+  function colTotal(gs, sv) {
+    return gs.reduce((t, g) => t + svValue(g, sv), 0)
   }
 
   function grandTotal(gs) {
@@ -669,7 +673,7 @@ function IncassiTab({ data, loading }) {
                         <td style={tdLeftStyle}>{g.capogruppo_display}</td>
                         <td style={tdStyle}>{n}</td>
                         {SV.map(sv => {
-                          const val = g[sv.id] ? sv.prezzo * n : 0
+                          const val = svValue(g, sv)
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? `€${val}` : '—'}</td>
                         })}
                         <td style={{ ...tdStyle, fontWeight: 700, color: tot > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>{tot > 0 ? `€${tot}` : '—'}</td>
@@ -681,7 +685,7 @@ function IncassiTab({ data, loading }) {
                     <tr key={`sub-${destId}-${sNum}`} style={subtotalStyle}>
                       <td style={{ ...tdLeftStyle, ...subtotalStyle }}>Subtotale {shiftLabel(destId, Number(sNum))}</td>
                       <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>€{colTotal(sGroups, sv.id, sv.prezzo)}</td>)}
+                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>€{colTotal(sGroups, sv)}</td>)}
                       <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>€{grandTotal(sGroups)}</td>
                     </tr>
                   )
@@ -693,7 +697,7 @@ function IncassiTab({ data, loading }) {
                     <tr key={`dest-${destId}`} style={{ background: destColor + '20' }}>
                       <td style={{ ...tdLeftStyle, background: 'transparent', color: destColor, fontWeight: 800 }}>TOTALE {dest?.name?.toUpperCase()}</td>
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>€{colTotal(allDestGroups, sv.id, sv.prezzo)}</td>)}
+                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>€{colTotal(allDestGroups, sv)}</td>)}
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>€{grandTotal(allDestGroups)}</td>
                     </tr>
                   )
@@ -705,7 +709,7 @@ function IncassiTab({ data, loading }) {
                 <tr key="grand" style={grandStyle}>
                   <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
                   <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                  {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>€{colTotal(groups, sv.id, sv.prezzo)}</td>)}
+                  {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>€{colTotal(groups, sv)}</td>)}
                   <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>€{grandTotal(groups)}</td>
                 </tr>
               )
