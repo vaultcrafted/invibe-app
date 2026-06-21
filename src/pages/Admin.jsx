@@ -102,9 +102,17 @@ export default function Admin() {
         const nome = row[1] || ''
         const sesso = row[2] || ''
         const nascita = row[3] ? String(row[3]) : null
+        const nazionalita = row[4] || ''
+        const tipoDocumento = row[5] || ''
+        const numeroDocumento = row[6] || ''
+        const dataEmissione = row[7] ? String(row[7]) : null
+        const dataScadenza = row[8] ? String(row[8]) : null
+        const cittaPartenza = row[9] || ''
         const pratica = row[10] || ''
         const stato = row[11] || ''
         const turnoRaw = row[13] || ''
+        const dataRaw = row[14] ? String(row[14]) : ''
+        const destinazioneRaw = row[15] || ''
         const capogruppoCod = row[16] || ''
         const escFlag = hasFlags ? String(row[17] || '0').trim() === '1' : null
         const navFlag = hasFlags ? String(row[18] || '0').trim() === '1' : null
@@ -134,7 +142,20 @@ export default function Admin() {
           nome: String(nome).charAt(0).toUpperCase() + String(nome).slice(1).toLowerCase(),
           sesso: String(sesso).toUpperCase(),
           nascita: nascita || null,
-          pratica, stato: String(stato)
+          pratica, stato: String(stato),
+          nazionalita: String(nazionalita),
+          tipo_documento: String(tipoDocumento),
+          numero_documento: String(numeroDocumento),
+          data_emissione: dataEmissione || null,
+          data_scadenza: dataScadenza || null,
+          citta_partenza: String(cittaPartenza),
+          turno_raw: String(turnoRaw),
+          data_raw: dataRaw,
+          destinazione_raw: String(destinazioneRaw),
+          escursioni: escFlag ?? false,
+          navetta: navFlag ?? false,
+          assicurazione: assFlag ?? false,
+          iscrizione: iscFlag ?? false,
         })
       }
       const groups = Object.values(groupsMap)
