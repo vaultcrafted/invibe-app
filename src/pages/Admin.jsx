@@ -229,11 +229,31 @@ export default function Admin() {
             </label>
           </div>
           {importLog.length > 0 && (
-            <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>Log importazione</div>
-              {importLog.map((line, i) => (
-                <div key={i} style={{ fontSize: 13, padding: '3px 0', borderBottom: i < importLog.length - 1 ? '0.5px solid var(--border)' : 'none' }}>{line}</div>
-              ))}
+            <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 8, background: 'rgba(30,107,241,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke="var(--iv-blue)" strokeWidth="2" strokeLinecap="round"/></svg>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Log importazione</div>
+              </div>
+              {importLog.map((line, i) => {
+                const isSuccess = line.trim().startsWith('✅')
+                const isError = line.trim().startsWith('❌')
+                const clean = line.replace(/^[✅❌]\s*/, '')
+                const isLast = i === importLog.length - 1
+                const dotColor = isSuccess ? '#16A34A' : isError ? '#DC2626' : 'var(--iv-blue)'
+                const dotBg = isSuccess ? 'rgba(22,163,74,0.12)' : isError ? 'rgba(220,38,38,0.12)' : 'rgba(30,107,241,0.08)'
+                const textColor = isSuccess ? '#16A34A' : isError ? '#DC2626' : 'var(--text-secondary)'
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 12, position: 'relative', paddingBottom: isLast ? 0 : 16 }}>
+                    {!isLast && <div style={{ position: 'absolute', left: 11, top: 24, bottom: -2, width: 2, background: 'var(--border)' }} />}
+                    <div style={{ width: 24, height: 24, borderRadius: '50%', background: dotBg, color: dotColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, flexShrink: 0, zIndex: 1 }}>
+                      {isSuccess ? '✓' : isError ? '✕' : i + 1}
+                    </div>
+                    <div style={{ fontSize: 13, fontWeight: (isSuccess || isError) ? 700 : 500, color: textColor, paddingTop: 2 }}>{clean}</div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
