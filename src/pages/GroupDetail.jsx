@@ -41,13 +41,14 @@ export default function GroupDetail() {
   const [saving, setSaving] = useState(null)
   const [editingAlloggio, setEditingAlloggio] = useState(false)
   const [editingNote, setEditingNote] = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   useEffect(() => { fetchGroup() }, [groupId])
 
   async function fetchGroup() {
     const { data } = await supabase
       .from('groups')
-      .select('*, participants(id, nome, cognome, sesso, nascita, attivo)')
+      .select('*, participants(id, nome, cognome, sesso, nascita, attivo, nazionalita, tipo_documento, numero_documento, data_emissione, data_scadenza, citta_partenza, pratica, stato, escursioni, navetta, assicurazione, iscrizione)')
       .eq('id', groupId)
       .single()
     if (data) { setGroup(data); setParticipants(data.participants || []) }
@@ -310,27 +311,65 @@ export default function GroupDetail() {
                 const isActive = p.attivo !== false
                 const color = isMale ? '#1E6BF1' : '#D4537E'
                 const age = calcAge(p.nascita)
+                const isExpanded = expandedId === p.id
+                const fmtDate = d => {
+                  if (!d) return null
+                  const dt = new Date(d)
+                  return isNaN(dt) ? d : dt.toLocaleDateString('it-IT')
+                }
+                const legacyFlags = [
+                  { label: 'Escursioni', on: !!p.escursioni },
+                  { label: 'Navetta', on: !!p.navetta },
+                  { label: 'Assicurazione', on: !!p.assicurazione },
+                  { label: 'Iscrizione', on: !!p.iscrizione },
+                ]
                 return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < participants.length - 1 ? '0.5px solid var(--border)' : 'none', opacity: isActive ? 1 : 0.45 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: '50%', background: color + '15', border: '1.5px solid ' + color + '44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
-                      {getInitials(p.nome + ' ' + p.cognome)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', textDecoration: isActive ? 'none' : 'line-through' }}>{p.cognome} {p.nome}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                        {isActive ? (age !== null ? `${age} anni` : '') : 'Non partecipa'}
+                  <div key={p.id} style={{ borderBottom: i < participants.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', opacity: isActive ? 1 : 0.45 }}>
+                      <div onClick={() => setExpandedId(isExpanded ? null : p.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', background: color + '15', border: '1.5px solid ' + color + '44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
+                          {getInitials(p.nome + ' ' + p.cognome)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', textDecoration: isActive ? 'none' : 'line-through' }}>{p.cognome} {p.nome}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                            {isActive ? (age !== null ? `${age} anni` : '') : 'Non partecipa'}
+                          </div>
+                        </div>
+                        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0, color: 'var(--text-tertiary)' }}>
+                          <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div style={{ width: 24, height: 24, borderRadius: 8, background: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
+                        {p.sesso}
+                      </div>
+                      <div
+                        onClick={() => toggleParticipantActive(p.id)}
+                        style={{ width: 40, height: 22, borderRadius: 11, background: isActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}
+                        title={isActive ? 'Segna come non partecipante' : 'Riattiva partecipante'}
+                      >
+                        <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isActive ? 21 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                     </div>
-                    <div style={{ width: 24, height: 24, borderRadius: 8, background: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
-                      {p.sesso}
-                    </div>
-                    <div
-                      onClick={() => toggleParticipantActive(p.id)}
-                      style={{ width: 40, height: 22, borderRadius: 11, background: isActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}
-                      title={isActive ? 'Segna come non partecipante' : 'Riattiva partecipante'}
-                    >
-                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isActive ? 21 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
-                    </div>
+                    {isExpanded && (
+                      <div style={{ padding: '4px 16px 16px 16px', background: 'var(--bg-secondary)' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
+                          <InfoField label="Nazionalità" value={p.nazionalita} />
+                          <InfoField label="Città di partenza" value={p.citta_partenza} />
+                          <InfoField label="Tipo documento" value={p.tipo_documento} />
+                          <InfoField label="Numero documento" value={p.numero_documento} />
+                          <InfoField label="Data emissione" value={fmtDate(p.data_emissione)} />
+                          <InfoField label="Data scadenza" value={fmtDate(p.data_scadenza)} />
+                          <InfoField label="Pratica" value={p.pratica} />
+                          <InfoField label="Stato" value={p.stato} />
+                        </div>
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 12 }}>
+                          {legacyFlags.map(f => (
+                            <span key={f.label} className={`flag-chip ${f.on ? 'on' : ''}`}><span className="dot" />{f.label}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -340,6 +379,15 @@ export default function GroupDetail() {
         </div>
       </div>
 
+    </div>
+  )
+}
+
+function InfoField({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ fontSize: 12, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)', marginTop: 2 }}>{value || '—'}</div>
     </div>
   )
 }
