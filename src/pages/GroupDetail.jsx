@@ -47,7 +47,7 @@ export default function GroupDetail() {
   async function fetchGroup() {
     const { data } = await supabase
       .from('groups')
-      .select('*, participants(id, nome, cognome, sesso, nascita)')
+      .select('*, participants(id, nome, cognome, sesso, nascita, attivo)')
       .eq('id', groupId)
       .single()
     if (data) { setGroup(data); setParticipants(data.participants || []) }
@@ -75,6 +75,22 @@ export default function GroupDetail() {
     setSaving(null)
   }
 
+  async function toggleParticipantActive(participantId) {
+    const updated = participants.map(p => p.id === participantId ? { ...p, attivo: p.attivo === false } : p)
+    setParticipants(updated)
+    const target = updated.find(p => p.id === participantId)
+    await supabase.from('participants').update({ attivo: target.attivo }).eq('id', participantId)
+
+    // I servizi a pacchetto (Escursioni, Tassa, SSP, Cauzione) sono legati al numero di pax attivi:
+    // se cambia chi partecipa, rilancio la sync per riportare la quantità giusta sul foglio
+    const newNPax = updated.filter(p => p.attivo !== false).length
+    SERVICES.forEach(sv => {
+      if (group[sv.id]) {
+        syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
+      }
+    })
+  }
+
   async function updateField(field, value) { setGroup(prev => ({ ...prev, [field]: value })) }
   async function saveField(field) {
     await supabase.from('groups').update({ [field]: group[field] }).eq('id', groupId)
@@ -87,9 +103,10 @@ export default function GroupDetail() {
 
   const dest = DESTINATIONS.find(d => d.id === group.destination)
   const shift = SHIFTS[group.destination]?.find(s => s.num === group.shift_num)
-  const nPax = participants.length
-  const males = participants.filter(p => p.sesso === 'M').length
-  const females = participants.filter(p => p.sesso === 'F').length
+  const activeParticipants = participants.filter(p => p.attivo !== false)
+  const nPax = activeParticipants.length
+  const males = activeParticipants.filter(p => p.sesso === 'M').length
+  const females = activeParticipants.filter(p => p.sesso === 'F').length
 
   const isCorfu = group.destination === 'corfu'
   const riepilogoBase = SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
@@ -263,26 +280,36 @@ export default function GroupDetail() {
           {/* COLONNA DESTRA — Partecipanti */}
           <div className="group-detail-right">
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>
-              Partecipanti ({nPax})
+              Partecipanti ({nPax}{participants.length !== nPax ? ` di ${participants.length}` : ''})
             </div>
             <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               {participants.length === 0 ? (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun partecipante</div>
               ) : participants.map((p, i) => {
                 const isMale = p.sesso === 'M'
+                const isActive = p.attivo !== false
                 const color = isMale ? '#1E6BF1' : '#D4537E'
                 const age = calcAge(p.nascita)
                 return (
-                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < participants.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < participants.length - 1 ? '0.5px solid var(--border)' : 'none', opacity: isActive ? 1 : 0.45 }}>
                     <div style={{ width: 38, height: 38, borderRadius: '50%', background: color + '15', border: '1.5px solid ' + color + '44', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color, flexShrink: 0 }}>
                       {getInitials(p.nome + ' ' + p.cognome)}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase' }}>{p.cognome} {p.nome}</div>
-                      {age !== null && <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>{age} anni</div>}
+                      <div style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', textDecoration: isActive ? 'none' : 'line-through' }}>{p.cognome} {p.nome}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                        {isActive ? (age !== null ? `${age} anni` : '') : 'Non partecipa'}
+                      </div>
                     </div>
                     <div style={{ width: 24, height: 24, borderRadius: 8, background: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color, flexShrink: 0 }}>
                       {p.sesso}
+                    </div>
+                    <div
+                      onClick={() => toggleParticipantActive(p.id)}
+                      style={{ width: 40, height: 22, borderRadius: 11, background: isActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}
+                      title={isActive ? 'Segna come non partecipante' : 'Riattiva partecipante'}
+                    >
+                      <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isActive ? 21 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                     </div>
                   </div>
                 )
