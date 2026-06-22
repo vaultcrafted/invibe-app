@@ -264,60 +264,88 @@ function ContentLine({ line, color }) {
 
 // Renderizza il testo del DBD raggruppando in blocchi per ruolo / sezione
 function DbdContent({ text, color }) {
-  const paragraphs = text.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean)
+  const rawLines = text.split('\n')
+  const blocks = []
+  let current = null
+
+  function closeCurrent() {
+    if (current && current.lines.length > 0) blocks.push(current)
+    current = null
+  }
+
+  for (const raw of rawLines) {
+    const line = raw.trim()
+    if (!line) continue // le righe vuote sono solo separatori, non creano blocchi vuoti
+
+    const isDayLine = WEEKDAY_RE.test(line) && isShoutLine(line)
+    const roleHit = ROLE_TAGS.find(r => r.match.test(line))
+
+    if (isDayLine) {
+      closeCurrent()
+      blocks.push({ type: 'day', lines: [line] })
+      continue
+    }
+
+    if (roleHit) {
+      closeCurrent()
+      const remainder = line.replace(roleHit.match, '').trim()
+      current = { type: 'role', role: roleHit, lines: remainder ? [remainder] : [] }
+      continue
+    }
+
+    // Riga corta tutta maiuscola "a livello top" (nessun blocco di ruolo aperto) → intestazione di sezione
+    if ((!current || current.type !== 'role') && isShoutLine(line)) {
+      closeCurrent()
+      blocks.push({ type: 'header', lines: [line] })
+      continue
+    }
+
+    // Altrimenti continua il blocco aperto (ruolo o testo libero), oppure ne apre uno nuovo
+    if (current && (current.type === 'role' || current.type === 'text')) {
+      current.lines.push(line)
+    } else {
+      current = { type: 'text', lines: [line] }
+    }
+  }
+  closeCurrent()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {paragraphs.map((para, pi) => {
-        const lines = para.split('\n').map(l => l.trim()).filter(Boolean)
-        const firstLine = lines[0] || ''
-
-        // Sezione/giorno: paragrafo di una sola riga, breve, tutto maiuscolo, nessun tag di ruolo
-        const roleHit = ROLE_TAGS.find(r => r.match.test(firstLine))
-        if (lines.length === 1 && !roleHit && isShoutLine(firstLine) && !/^\d/.test(firstLine)) {
-          const isDay = WEEKDAY_RE.test(firstLine)
+      {blocks.map((b, i) => {
+        if (b.type === 'day') {
           return (
-            <div key={pi} style={{
-              marginTop: pi === 0 ? 0 : 6, marginBottom: 2,
-              padding: isDay ? '10px 14px' : '6px 0',
-              background: isDay ? color : 'transparent',
-              borderRadius: isDay ? 10 : 0,
-              borderBottom: isDay ? 'none' : `2px solid ${color}33`,
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}>
-              {isDay && <Calendar size={13} color="#fff" />}
-              <span style={{
-                fontSize: isDay ? 13 : 11, fontWeight: 800, letterSpacing: '0.04em',
-                color: isDay ? '#fff' : color, textTransform: 'uppercase',
-              }}>
-                {firstLine}
-              </span>
+            <div key={i} style={{ padding: '10px 14px', background: color, borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Calendar size={13} color="#fff" />
+              <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', color: '#fff', textTransform: 'uppercase' }}>{b.lines[0]}</span>
             </div>
           )
         }
-
-        // Blocco con tag di ruolo riconosciuto
-        if (roleHit) {
-          const { label, color: roleColor, Icon } = roleHit
-          const remainder = firstLine.replace(roleHit.match, '').trim()
-          const bodyLines = remainder ? [remainder, ...lines.slice(1)] : lines.slice(1)
+        if (b.type === 'header') {
           return (
-            <div key={pi} style={{ borderRadius: 12, border: `1px solid ${roleColor}33`, background: `${roleColor}0A`, overflow: 'hidden' }}>
+            <div key={i} style={{ padding: '6px 0 8px', borderBottom: `2px solid ${color}33`, marginTop: 2 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.04em', color, textTransform: 'uppercase' }}>{b.lines[0]}</span>
+            </div>
+          )
+        }
+        if (b.type === 'role') {
+          const { label, color: roleColor, Icon } = b.role
+          return (
+            <div key={i} style={{ borderRadius: 12, border: `1px solid ${roleColor}33`, background: `${roleColor}0A`, overflow: 'hidden' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: `${roleColor}18` }}>
                 <Icon size={13} color={roleColor} />
                 <span style={{ fontSize: 11, fontWeight: 800, color: roleColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
               </div>
-              <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {bodyLines.map((l, li) => <ContentLine key={li} line={l} color={roleColor} />)}
-              </div>
+              {b.lines.length > 0 && (
+                <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {b.lines.map((l, li) => <ContentLine key={li} line={l} color={roleColor} />)}
+                </div>
+              )}
             </div>
           )
         }
-
-        // Paragrafo libero (nessun tag, multi-riga o riga non "shout")
         return (
-          <div key={pi} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {lines.map((l, li) => <ContentLine key={li} line={l} color={color} />)}
+          <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {b.lines.map((l, li) => <ContentLine key={li} line={l} color={color} />)}
           </div>
         )
       })}
