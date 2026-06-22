@@ -233,7 +233,7 @@ const ROLE_TAGS = [
   { match: /^RIUNION[EI]\s*/i, label: 'Riunione', color: '#DB2777', Icon: Users },
 ]
 
-const WEEKDAY_RE = /^(LUNED[ÌI]|MARTED[ÌI]|MERCOLED[ÌI]|GIOVED[ÌI]|VENERD[ÌI]|SABATO|DOMENICA)\b/i
+const WEEKDAY_RE = /^(LUNED[ÌI]|MARTED[ÌI]|MERCOLED[ÌI]|GIOVED[ÌI]|VENERD[ÌI]|SABATO|DOMENICA)/i
 
 function isShoutLine(s) {
   // Riga breve, tutta maiuscola (accenti compresi), senza essere una riga con orario
