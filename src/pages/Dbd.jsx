@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
-import { ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, Clock, ClipboardList, MessageCircle, Users, Sparkles, Bus } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -223,50 +223,101 @@ export default function Dbd() {
   )
 }
 
-// Renderizza il testo del DBD con formattazione
+// Tag di "ruolo" riconosciuti a inizio paragrafo, con stile dedicato
+const ROLE_TAGS = [
+  { match: /^TASK\s*CM[\-:]?\s*/i, label: 'Task CM', color: '#1E6BF1', Icon: ClipboardList },
+  { match: /^COMUNICAZIONI\s*CM[\-:]?\s*/i, label: 'Comunicazioni CM', color: '#7C3AED', Icon: MessageCircle },
+  { match: /^(STAFF\s*GI[AÀ]\s*IN\s*META|STAFF\s*IN\s*VIAGGIO)[\-:]?\s*/i, label: 'Staff', color: '#D97706', Icon: Users },
+  { match: /^PROGRAMMI\s*CA[\-:]?\s*/i, label: 'Programmi CA', color: '#059669', Icon: Sparkles },
+  { match: /^(NAVETTE\s*ACM|ACM)[\-:]?\s*/i, label: 'ACM · Navette', color: '#0D9488', Icon: Bus },
+  { match: /^RIUNION[EI]\s*/i, label: 'Riunione', color: '#DB2777', Icon: Users },
+]
+
+const WEEKDAY_RE = /^(LUNED[ÌI]|MARTED[ÌI]|MERCOLED[ÌI]|GIOVED[ÌI]|VENERD[ÌI]|SABATO|DOMENICA)\b/i
+
+function isShoutLine(s) {
+  // Riga breve, tutta maiuscola (accenti compresi), senza essere una riga con orario
+  if (!s || s.length > 70) return false
+  if (/^\d/.test(s)) return false
+  const letters = s.replace(/[^A-Za-zÀ-ÿ]/g, '')
+  return letters.length > 1 && letters === letters.toUpperCase()
+}
+
+// Renderizza una singola riga di testo libero (dentro un blocco), gestendo orari e righe "shout"
+function ContentLine({ line, color }) {
+  const timeMatch = line.match(/^(\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?)[\.\-:]?\s*(.*)/)
+  if (timeMatch && timeMatch[2]) {
+    return (
+      <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+        <span style={{ fontSize: 11, fontWeight: 800, color, minWidth: 64, paddingTop: 1, flexShrink: 0, fontFamily: 'monospace' }}>
+          {timeMatch[1]}
+        </span>
+        <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.55, flex: 1 }}>{timeMatch[2]}</span>
+      </div>
+    )
+  }
+  if (isShoutLine(line)) {
+    return <div style={{ fontSize: 12.5, fontWeight: 700, color, lineHeight: 1.5 }}>{line}</div>
+  }
+  return <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{line}</div>
+}
+
+// Renderizza il testo del DBD raggruppando in blocchi per ruolo / sezione
 function DbdContent({ text, color }) {
-  const lines = text.split('\n')
+  const paragraphs = text.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean)
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {lines.map((line, i) => {
-        if (!line.trim()) return <div key={i} style={{ height: 6 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {paragraphs.map((para, pi) => {
+        const lines = para.split('\n').map(l => l.trim()).filter(Boolean)
+        const firstLine = lines[0] || ''
 
-        // Righe con orario tipo "10:00:" o "10:00-11:00:"
-        const timeMatch = line.match(/^(\d{1,2}[:\.]\d{2}(?:[-\/]\d{1,2}[:\.]\d{2})?):?\s*(.*)/)
-        if (timeMatch) {
+        // Sezione/giorno: paragrafo di una sola riga, breve, tutto maiuscolo, nessun tag di ruolo
+        const roleHit = ROLE_TAGS.find(r => r.match.test(firstLine))
+        if (lines.length === 1 && !roleHit && isShoutLine(firstLine) && !/^\d/.test(firstLine)) {
+          const isDay = WEEKDAY_RE.test(firstLine)
           return (
-            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color, minWidth: 70, paddingTop: 2, flexShrink: 0 }}>
-                {timeMatch[1]}
+            <div key={pi} style={{
+              marginTop: pi === 0 ? 0 : 6, marginBottom: 2,
+              padding: isDay ? '10px 14px' : '6px 0',
+              background: isDay ? color : 'transparent',
+              borderRadius: isDay ? 10 : 0,
+              borderBottom: isDay ? 'none' : `2px solid ${color}33`,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              {isDay && <Calendar size={13} color="#fff" />}
+              <span style={{
+                fontSize: isDay ? 13 : 11, fontWeight: 800, letterSpacing: '0.04em',
+                color: isDay ? '#fff' : color, textTransform: 'uppercase',
+              }}>
+                {firstLine}
               </span>
-              <span style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5, flex: 1 }}>
-                {timeMatch[2]}
-              </span>
             </div>
           )
         }
 
-        // Titoli tipo "DAY X" o "CONTROLLORI:" o righe in caps
-        if (line.trim() === line.trim().toUpperCase() && line.trim().length > 3 && !/^\d/.test(line)) {
+        // Blocco con tag di ruolo riconosciuto
+        if (roleHit) {
+          const { label, color: roleColor, Icon } = roleHit
+          const remainder = firstLine.replace(roleHit.match, '').trim()
+          const bodyLines = remainder ? [remainder, ...lines.slice(1)] : lines.slice(1)
           return (
-            <div key={i} style={{ fontSize: 11, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 8, paddingTop: 8, borderTop: i > 0 ? `1px solid ${color}22` : 'none' }}>
-              {line.trim()}
+            <div key={pi} style={{ borderRadius: 12, border: `1px solid ${roleColor}33`, background: `${roleColor}0A`, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: `${roleColor}18` }}>
+                <Icon size={13} color={roleColor} />
+                <span style={{ fontSize: 11, fontWeight: 800, color: roleColor, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</span>
+              </div>
+              <div style={{ padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {bodyLines.map((l, li) => <ContentLine key={li} line={l} color={roleColor} />)}
+              </div>
             </div>
           )
         }
 
-        // Righe con bullet "•" o "-" o "NB:"
-        if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('NB:')) {
-          return (
-            <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, paddingLeft: 12, borderLeft: `2px solid ${color}44` }}>
-              {line.trim()}
-            </div>
-          )
-        }
-
+        // Paragrafo libero (nessun tag, multi-riga o riga non "shout")
         return (
-          <div key={i} style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>
-            {line}
+          <div key={pi} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {lines.map((l, li) => <ContentLine key={li} line={l} color={color} />)}
           </div>
         )
       })}
