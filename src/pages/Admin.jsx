@@ -215,6 +215,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
         <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
         <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
+        <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
       </div>
 
       {tab === 'import' && (
@@ -271,6 +272,7 @@ export default function Admin() {
       {tab === 'stats' && stats && <StatsTab stats={stats} />}
       {tab === 'premi' && <PremiTab />}
       {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
+      {tab === 'cassa' && <CassaTab />}
     </div>
   )
 }
@@ -936,6 +938,96 @@ function StatsTab({ stats }) {
         </div>
       )}
 
+    </div>
+  )
+}
+
+function CassaTab() {
+  const [movimenti, setMovimenti] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filterDest, setFilterDest] = useState(null)
+
+  useEffect(() => { fetchAll() }, [])
+
+  async function fetchAll() {
+    setLoading(true)
+    let all = [], from = 0
+    const pageSize = 1000
+    while (true) {
+      const { data } = await supabase.from('cassa_movimenti').select('*').range(from, from + pageSize - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+    setMovimenti(all)
+    setLoading(false)
+  }
+
+  if (loading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico cassa...</div>
+
+  const filtered = filterDest ? movimenti.filter(m => m.destination === filterDest) : movimenti
+
+  // Raggruppa per destinazione + turno
+  const groupKey = m => `${m.destination}__${m.shift_num}`
+  const byShift = {}
+  filtered.forEach(m => {
+    const k = groupKey(m)
+    if (!byShift[k]) byShift[k] = { destination: m.destination, shift_num: m.shift_num, entrate: 0, uscite: 0, count: 0 }
+    if (m.tipo === 'entrata') byShift[k].entrate += Number(m.importo)
+    else byShift[k].uscite += Number(m.importo)
+    byShift[k].count++
+  })
+  const shiftRows = Object.values(byShift).sort((a, b) => a.destination.localeCompare(b.destination) || a.shift_num - b.shift_num)
+
+  const totEntrate = filtered.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
+  const totUscite = filtered.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Meta:</span>
+        <button onClick={() => setFilterDest(null)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterDest ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !filterDest ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterDest ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte</button>
+        {DESTINATIONS.map(d => (
+          <button key={d.id} onClick={() => setFilterDest(d.id)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterDest === d.id ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filterDest === d.id ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filterDest === d.id ? 'var(--iv-blue)' : 'var(--border)') }}>{d.name}</button>
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ flex: 1, background: '#ECFDF5', border: '1px solid #16A34A33', borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase' }}>Entrate totali</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>€{totEntrate.toFixed(2)}</div>
+        </div>
+        <div style={{ flex: 1, background: '#FEF2F2', border: '1px solid #DC262633', borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>Uscite totali</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>€{totUscite.toFixed(2)}</div>
+        </div>
+        <div style={{ flex: 1, background: 'var(--iv-blue-light)', border: '1px solid var(--iv-blue)33', borderRadius: 14, padding: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--iv-blue)', textTransform: 'uppercase' }}>Saldo</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--iv-blue)', marginTop: 4 }}>€{(totEntrate - totUscite).toFixed(2)}</div>
+        </div>
+      </div>
+
+      <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 100px 100px', padding: '10px 16px', background: 'var(--bg-secondary)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+          <div>Turno</div><div>Movimenti</div><div>Entrate</div><div>Uscite</div><div>Saldo</div>
+        </div>
+        {shiftRows.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento registrato</div>
+        ) : shiftRows.map((r, i) => {
+          const dest = DESTINATIONS.find(d => d.id === r.destination)
+          const saldoTurno = r.entrate - r.uscite
+          return (
+            <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 100px 100px', padding: '11px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none', fontSize: 13, alignItems: 'center' }}>
+              <div style={{ fontWeight: 600 }}>{dest?.name || r.destination} · {shiftLabel(r.destination, r.shift_num)}</div>
+              <div style={{ color: 'var(--text-tertiary)' }}>{r.count}</div>
+              <div style={{ color: '#16A34A' }}>€{r.entrate.toFixed(2)}</div>
+              <div style={{ color: '#DC2626' }}>€{r.uscite.toFixed(2)}</div>
+              <div style={{ fontWeight: 700 }}>€{saldoTurno.toFixed(2)}</div>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

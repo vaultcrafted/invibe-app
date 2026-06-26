@@ -22,6 +22,16 @@ const NAV_ITEMS = [
     )
   },
   {
+    id: 'cassa', label: 'Cassa', path: '/cassa', adminOnly: false,
+    icon: (active) => (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+        <rect x="2" y="6" width="20" height="14" rx="3" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
+        <path d="M2 10h20" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
+        <circle cx="17" cy="15" r="1.5" fill={active ? '#1E6BF1' : 'currentColor'}/>
+      </svg>
+    )
+  },
+  {
     id: 'staff', label: 'Staff', path: '/staff-list', adminOnly: false,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
