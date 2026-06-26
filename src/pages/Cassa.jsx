@@ -10,10 +10,7 @@ const DEST_COLORS = {
   gallipoli: '#DC2626', sardegna: '#7C3AED',
 }
 
-export const CATEGORIE = {
-  entrata: ['Raccolta buste servizi', 'Rimborso fornitore', 'Altro incasso'],
-  uscita: ['Pagamento locali/escursioni', 'Materiali', 'Rimborso staff', 'Cibo/bevande staff', 'Trasporti', 'Altro'],
-}
+export const CATEGORIE = ['SSP', 'Tassa di soggiorno', 'Escursioni', 'Cauzione', 'Paleo', 'Montecristo', 'Pazuzu', 'Mojito', 'Pranzo Laviron', 'Spesa staff', 'Rimborsi', 'Altro']
 
 export default function Cassa() {
   const { profile, isAdmin } = useAuth()
@@ -23,7 +20,7 @@ export default function Cassa() {
   const [selectedShift, setSelectedShift] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE.entrata[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
+  const [form, setForm] = useState({ categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
 
   const assignedShifts = isAdmin
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -54,22 +51,23 @@ export default function Cassa() {
     setLoading(false)
   }
 
-  function openForm(tipo) {
-    setForm({ tipo, categoria: CATEGORIE[tipo][0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
+  function openForm() {
+    setForm({ categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
     setShowForm(true)
   }
 
   async function handleSave() {
-    const importoNum = parseFloat(form.importo)
-    if (!importoNum || importoNum <= 0) return
+    const signed = parseFloat(form.importo)
+    if (!signed) return
+    const tipo = signed >= 0 ? 'entrata' : 'uscita'
     setSaving(true)
     await supabase.from('cassa_movimenti').insert({
       destination: selectedShift.destination,
       shift_num: selectedShift.shift_num,
       data: form.data,
-      tipo: form.tipo,
+      tipo,
       categoria: form.categoria,
-      importo: importoNum,
+      importo: Math.abs(signed),
       descrizione: form.descrizione || null,
       inserito_da: profile ? `${profile.nome} ${profile.cognome}` : null,
     })
@@ -134,15 +132,10 @@ export default function Cassa() {
           </div>
         </div>
 
-        {/* Bottoni aggiungi */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-          <button onClick={() => openForm('entrata')} style={{ flex: 1, padding: '12px', borderRadius: 12, background: '#ECFDF5', color: '#16A34A', border: '1px solid #16A34A33', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}>
-            <ArrowDownCircle size={16} /> Entrata
-          </button>
-          <button onClick={() => openForm('uscita')} style={{ flex: 1, padding: '12px', borderRadius: 12, background: '#FEF2F2', color: '#DC2626', border: '1px solid #DC262633', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}>
-            <ArrowUpCircle size={16} /> Uscita
-          </button>
-        </div>
+        {/* Bottone aggiungi */}
+        <button onClick={openForm} style={{ width: '100%', marginTop: 12, padding: '13px', borderRadius: 12, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}>
+          <Plus size={16} /> Nuovo movimento
+        </button>
       </div>
 
       {/* Lista movimenti */}
@@ -185,28 +178,28 @@ export default function Cassa() {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={() => setShowForm(false)}>
           <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-primary)', borderRadius: '20px 20px 0 0', padding: '20px 18px 28px', width: '100%', maxWidth: 480 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: form.tipo === 'entrata' ? '#16A34A' : '#DC2626' }}>
-                Nuova {form.tipo === 'entrata' ? 'entrata' : 'uscita'}
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Nuovo movimento
               </div>
               <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Importo (€) — positivo = entrata, negativo = uscita</label>
+                <input type="number" step="0.01" placeholder="es. 7100 oppure -25" value={form.importo} onChange={e => setForm(f => ({ ...f, importo: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 18, fontWeight: 700, marginTop: 4, color: form.importo && parseFloat(form.importo) < 0 ? '#DC2626' : '#16A34A' }} />
+              </div>
+              <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria</label>
                 <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 4 }}>
-                  {CATEGORIE[form.tipo].map(c => <option key={c} value={c}>{c}</option>)}
+                  {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Importo (€)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={form.importo} onChange={e => setForm(f => ({ ...f, importo: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 16, fontWeight: 600, marginTop: 4 }} />
-              </div>
-              <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Descrizione (opzionale)</label>
-                <input type="text" placeholder="es. Buste Escursioni gruppo Bertocchi" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))}
+                <input type="text" placeholder="es. tax Lavrion c2-c3-c4" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, marginTop: 4 }} />
               </div>
               <div>
@@ -216,7 +209,7 @@ export default function Cassa() {
               </div>
 
               <button onClick={handleSave} disabled={saving || !form.importo}
-                style={{ marginTop: 6, padding: '13px', borderRadius: 12, border: 'none', background: form.tipo === 'entrata' ? '#16A34A' : '#DC2626', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving || !form.importo ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                style={{ marginTop: 6, padding: '13px', borderRadius: 12, border: 'none', background: form.importo && parseFloat(form.importo) < 0 ? '#DC2626' : '#16A34A', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving || !form.importo ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Plus size={16} /> {saving ? 'Salvo...' : 'Aggiungi movimento'}
               </button>
             </div>
