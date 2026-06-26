@@ -969,15 +969,25 @@ function CassaTab() {
   const filtered = filterDest ? movimenti.filter(m => m.destination === filterDest) : movimenti
 
   // Raggruppa per destinazione + turno
-  const groupKey = m => `${m.destination}__${m.shift_num}`
+  const groupKey = (dest, shift) => `${dest}__${shift}`
   const byShift = {}
   filtered.forEach(m => {
-    const k = groupKey(m)
+    const k = groupKey(m.destination, m.shift_num)
     if (!byShift[k]) byShift[k] = { destination: m.destination, shift_num: m.shift_num, entrate: 0, uscite: 0, count: 0 }
     if (m.tipo === 'entrata') byShift[k].entrate += Number(m.importo)
     else byShift[k].uscite += Number(m.importo)
     byShift[k].count++
   })
+
+  // Aggiunge tutti i turni esistenti (anche a zero movimenti) per la/le meta selezionate
+  const destsToShow = filterDest ? [filterDest] : DESTINATIONS.map(d => d.id)
+  destsToShow.forEach(destId => {
+    (SHIFTS[destId] || []).forEach(s => {
+      const k = groupKey(destId, s.num)
+      if (!byShift[k]) byShift[k] = { destination: destId, shift_num: s.num, entrate: 0, uscite: 0, count: 0 }
+    })
+  })
+
   const shiftRows = Object.values(byShift).sort((a, b) => a.destination.localeCompare(b.destination) || a.shift_num - b.shift_num)
 
   const totEntrate = filtered.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
