@@ -34,13 +34,6 @@ function AdminRoute({ children }) {
   return children
 }
 
-function CassaRoute({ children }) {
-  const { isAdmin, isCM, loading } = useAuth()
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
-  if (!isAdmin && !isCM) return <Navigate to="/" replace />
-  return children
-}
-
 function AppShell() {
   const location = useLocation()
   const isLogin = location.pathname === '/login'
@@ -58,7 +51,7 @@ function AppShell() {
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/dbd" element={<ProtectedRoute><Dbd /></ProtectedRoute>} />
           <Route path="/dbd-admin" element={<AdminRoute><DbdAdmin /></AdminRoute>} />
-          <Route path="/cassa" element={<CassaRoute><Cassa /></CassaRoute>} />
+          <Route path="/cassa" element={<AdminRoute><Cassa /></AdminRoute>} />
           <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
           <Route path="/staff/:staffId" element={<ProtectedRoute><StaffProfile /></ProtectedRoute>} />
           <Route path="/weekly-vote/:destId/:shiftNum" element={<ProtectedRoute><WeeklyVote /></ProtectedRoute>} />
