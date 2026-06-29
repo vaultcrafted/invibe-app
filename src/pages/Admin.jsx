@@ -90,105 +90,149 @@ export default function Admin() {
     setImportLog([])
     try {
       const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf)
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 })
-      const header = rows[0] || []
-      const dataRows = rows.slice(1).filter(r => r.some(c => c))
-      const hasFlags = header.length >= 21 && String(header[17]).toLowerCase().includes('escursioni')
-      log('Trovati ' + dataRows.length + ' righe — formato ' + (hasFlags ? 'con flag' : 'base'))
-      const groupsMap = {}
-      for (const row of dataRows) {
-        const cognome = row[0] || ''
-        const nome = row[1] || ''
-        const sesso = row[2] || ''
-        const nascita = row[3] ? String(row[3]) : null
-        const nazionalita = row[4] || ''
-        const tipoDocumento = row[5] || ''
-        const numeroDocumento = row[6] || ''
-        const dataEmissione = row[7] ? String(row[7]) : null
-        const dataScadenza = row[8] ? String(row[8]) : null
-        const cittaPartenza = row[9] || ''
-        const pratica = row[10] || ''
-        const stato = row[11] || ''
-        const turnoRaw = row[13] || ''
-        const dataRaw = row[14] ? String(row[14]) : ''
-        const destinazioneRaw = row[15] || ''
-        const capogruppoCod = row[16] || ''
-        const escFlag = hasFlags ? String(row[17] || '0').trim() === '1' : null
-        const navFlag = hasFlags ? String(row[18] || '0').trim() === '1' : null
-        const assFlag = hasFlags ? String(row[19] || '0').trim() === '1' : null
-        const iscFlag = hasFlags ? String(row[20] || '0').trim() === '1' : null
-        const parsed = parseTurnoExcel(turnoRaw)
-        if (!parsed) continue
-        const { destination, shift_num } = parsed
-        const cgKey = capogruppoCod + '__' + destination + '__' + shift_num
-        if (!groupsMap[cgKey]) {
-          groupsMap[cgKey] = {
-            capogruppo_code: capogruppoCod,
-            capogruppo_display: formatCapogruppo(capogruppoCod),
-            destination, shift_num, pratica,
-            escursioni: escFlag, navetta: navFlag, assicurazione: assFlag, iscrizione: iscFlag,
-            participants: []
-          }
+      const wb = XLSX.read(buf, { cellDates: true })
+
+      const shPratiche = wb.Sheets['NON TOCCARE 121']
+      const shPart = wb.Sheets['NON TOCCARE 542']
+      if (!shPratiche || !shPart) {
+        log('❌ File non valido: mancano le schede "NON TOCCARE 121" e/o "NON TOCCARE 542".')
+        log('Carica il file CM completo (con le 3 estrazioni AVES).')
+        setImporting(false); e.target.value = ''; return
+      }
+
+      const txt = v => (v === undefined || v === null) ? '' : String(v).trim()
+      const toDate = v => {
+        if (v instanceof Date && !isNaN(v)) {
+          const o = new Date(v.getTime() - v.getTimezoneOffset() * 60000)
+          return o.toISOString().slice(0, 10)
         }
-        if (hasFlags) {
-          if (escFlag !== null) groupsMap[cgKey].escursioni = escFlag
-          if (navFlag !== null) groupsMap[cgKey].navetta = navFlag
-          if (assFlag !== null) groupsMap[cgKey].assicurazione = assFlag
-          if (iscFlag !== null) groupsMap[cgKey].iscrizione = iscFlag
+        return v ? String(v) : null
+      }
+      function asRows(ws) {
+        const arr = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, blankrows: false })
+        const header = (arr[0] || []).map(h => txt(h))
+        const idx = {}; header.forEach((h, i) => { idx[h] = i })
+        return { rows: arr.slice(1), get: (row, name) => row[idx[name]] }
+      }
+      const nameKey = (cognome, nome, nascita) =>
+        txt(cognome).toLowerCase() + '|' + txt(nome).toLowerCase() + '|' + (nascita ? String(nascita).slice(0, 10) : '')
+
+      // ---- 121 -> gruppi (uno per pratica) ----
+      const P = asRows(shPratiche)
+      const groupsByPratica = {}
+      const skip = { stage: 0, winter: 0, altro: 0 }
+      for (const r of P.rows) {
+        const pratica = txt(P.get(r, 'N Pratica'))
+        if (!pratica) continue
+        const desc = txt(P.get(r, 'Descrizione pratica'))
+        const parsed = parseTurnoExcel(desc)
+        if (!parsed) {
+          const d = desc.toUpperCase()
+          if (d.includes('STAGE')) skip.stage++
+          else if (d.includes('WINTER') || d.includes('SESTRIERE')) skip.winter++
+          else skip.altro++
+          continue
         }
-        groupsMap[cgKey].participants.push({
-          cognome: String(cognome).toUpperCase(),
-          nome: String(nome).charAt(0).toUpperCase() + String(nome).slice(1).toLowerCase(),
-          sesso: String(sesso).toUpperCase(),
-          nascita: nascita || null,
-          pratica, stato: String(stato),
-          nazionalita: String(nazionalita),
-          tipo_documento: String(tipoDocumento),
-          numero_documento: String(numeroDocumento),
-          data_emissione: dataEmissione || null,
-          data_scadenza: dataScadenza || null,
-          citta_partenza: String(cittaPartenza),
-          turno_raw: String(turnoRaw),
-          data_raw: dataRaw,
-          destinazione_raw: String(destinazioneRaw),
-          escursioni: escFlag ?? false,
-          navetta: navFlag ?? false,
-          assicurazione: assFlag ?? false,
-          iscrizione: iscFlag ?? false,
+        const code = txt(P.get(r, 'Richiedente'))
+        groupsByPratica[pratica] = {
+          pratica, capogruppo_code: code, capogruppo_display: formatCapogruppo(code),
+          destination: parsed.destination, shift_num: parsed.shift_num, participants: []
+        }
+      }
+
+      // ---- 542 -> partecipanti ----
+      const A = asRows(shPart)
+      for (const r of A.rows) {
+        const pratica = txt(A.get(r, 'Pratica'))
+        const g = groupsByPratica[pratica]
+        if (!g) continue
+        const nm = txt(A.get(r, 'Nome'))
+        g.participants.push({
+          cognome: txt(A.get(r, 'Cognome')).toUpperCase(),
+          nome: nm ? nm.charAt(0).toUpperCase() + nm.slice(1).toLowerCase() : '',
+          sesso: txt(A.get(r, 'Sesso')).toUpperCase(),
+          nascita: toDate(A.get(r, 'Data Nascita')),
+          nazionalita: txt(A.get(r, 'Descrizione stato nazionalità')),
+          tipo_documento: txt(A.get(r, 'Tipo documento')),
+          numero_documento: txt(A.get(r, 'Numero documento')),
+          data_emissione: toDate(A.get(r, 'Emesso il')),
+          data_scadenza: toDate(A.get(r, 'Scade il')),
+          citta_partenza: '', pratica, stato: '',
         })
       }
-      const groups = Object.values(groupsMap)
-      log('Trovati ' + groups.length + ' gruppi da ' + dataRows.length + ' righe')
-      let imported = 0, errors = 0
-      for (const g of groups) {
-        const { data: existing } = await supabase.from('groups').select('id').eq('capogruppo_code', g.capogruppo_code).eq('destination', g.destination).eq('shift_num', g.shift_num).maybeSingle()
-        let groupId
-        if (existing) {
-          groupId = existing.id
-          const updateData = { capogruppo_display: g.capogruppo_display, pratica: g.pratica }
-          if (g.escursioni !== null) updateData.escursioni = g.escursioni
-          if (g.navetta !== null) updateData.navetta = g.navetta
-          if (g.assicurazione !== null) updateData.assicurazione = g.assicurazione
-          if (g.iscrizione !== null) updateData.iscrizione = g.iscrizione
-          await supabase.from('groups').update(updateData).eq('id', groupId)
-        } else {
-          const { data: newG, error } = await supabase.from('groups').insert({
-            capogruppo_code: g.capogruppo_code, capogruppo_display: g.capogruppo_display,
-            destination: g.destination, shift_num: g.shift_num, pratica: g.pratica,
-            escursioni: g.escursioni ?? false, navetta: g.navetta ?? false,
-            assicurazione: g.assicurazione ?? false, iscrizione: g.iscrizione ?? false
-          }).select().single()
-          if (error) { errors++; continue }
-          groupId = newG.id
-        }
-        await supabase.from('participants').delete().eq('group_id', groupId)
-        await supabase.from('participants').insert(g.participants.map(p => ({ ...p, group_id: groupId })))
-        imported++
+
+      const groups = Object.values(groupsByPratica)
+      const totPart = groups.reduce((t, g) => t + g.participants.length, 0)
+      const senzaAnag = groups.filter(g => g.participants.length === 0).length
+      log('Lette ' + groups.length + ' pratiche, ' + totPart + ' persone')
+      if (senzaAnag) log('ℹ️ ' + senzaAnag + ' pratiche senza anagrafica (nomi non ancora caricati)')
+      const skipTot = skip.stage + skip.winter + skip.altro
+      if (skipTot) log('Saltate ' + skipTot + ' pratiche non-turno (' + skip.stage + ' stage staff, ' + skip.winter + ' winter, ' + skip.altro + ' altre)')
+
+      // ---- prefetch gruppi e partecipanti esistenti (per preservare "non presente") ----
+      const { data: exGroups } = await supabase.from('groups').select('id, pratica, capogruppo_code, destination, shift_num')
+      const gByPratica = {}, gByCg = {}
+      ;(exGroups || []).forEach(g => {
+        if (g.pratica) gByPratica[g.pratica] = g.id
+        gByCg[g.capogruppo_code + '|' + g.destination + '|' + g.shift_num] = g.id
+      })
+
+      const attivoMap = {} // groupId::nameKey -> attivo
+      let from = 0; const page = 1000
+      while (true) {
+        const { data: chunk } = await supabase.from('participants').select('group_id, cognome, nome, nascita, attivo').range(from, from + page - 1)
+        if (!chunk || chunk.length === 0) break
+        chunk.forEach(p => { attivoMap[p.group_id + '::' + nameKey(p.cognome, p.nome, p.nascita)] = p.attivo })
+        if (chunk.length < page) break
+        from += page
       }
-      log('✅ Importati: ' + imported + ' gruppi')
+
+      // ---- risolvi/crea gruppi ----
+      let nuoviG = 0, aggG = 0, errors = 0
+      const touchedGroupIds = []
+      for (const g of groups) {
+        let groupId = gByPratica[g.pratica] || gByCg[g.capogruppo_code + '|' + g.destination + '|' + g.shift_num] || null
+        const payload = { capogruppo_code: g.capogruppo_code, capogruppo_display: g.capogruppo_display, destination: g.destination, shift_num: g.shift_num, pratica: g.pratica }
+        if (groupId) {
+          await supabase.from('groups').update(payload).eq('id', groupId); aggG++
+        } else {
+          const { data: newG, error } = await supabase.from('groups').insert(payload).select('id').single()
+          if (error) { errors++; continue }
+          groupId = newG.id; nuoviG++
+        }
+        g._groupId = groupId
+        touchedGroupIds.push(groupId)
+      }
+
+      // ---- partecipanti: cancella sui gruppi toccati e reinserisci preservando "attivo" ----
+      let spariti = 0, caricati = 0
+      for (let i = 0; i < touchedGroupIds.length; i += 200) {
+        const slice = touchedGroupIds.slice(i, i + 200)
+        await supabase.from('participants').delete().in('group_id', slice)
+      }
+      const toInsert = []
+      for (const g of groups) {
+        if (!g._groupId) continue
+        const fileKeys = new Set(g.participants.map(p => nameKey(p.cognome, p.nome, p.nascita)))
+        Object.keys(attivoMap).forEach(k => {
+          if (k.startsWith(g._groupId + '::') && !fileKeys.has(k.split('::')[1])) spariti++
+        })
+        for (const p of g.participants) {
+          const k = g._groupId + '::' + nameKey(p.cognome, p.nome, p.nascita)
+          const att = (k in attivoMap) ? attivoMap[k] : true
+          toInsert.push({ ...p, group_id: g._groupId, attivo: att })
+        }
+      }
+      for (let i = 0; i < toInsert.length; i += 500) {
+        const { error } = await supabase.from('participants').insert(toInsert.slice(i, i + 500))
+        if (error) errors++; else caricati += Math.min(500, toInsert.length - i)
+      }
+
+      log('✅ Pratiche: ' + nuoviG + ' nuove, ' + aggG + ' aggiornate')
+      log('✅ Persone caricate: ' + caricati + ' — "non presente" preservato')
+      if (spariti) log('⚠️ ' + spariti + ' persone non più nel file (annullate dall\'ufficio)')
       if (errors) log('❌ Errori: ' + errors)
+      log('Fatto.')
     } catch (err) {
       log('❌ Errore: ' + err.message)
     }
@@ -224,7 +268,7 @@ export default function Admin() {
           <div className="card" style={{ textAlign: 'center', padding: 24 }}>
             <Upload size={32} color="var(--iv-blue)" style={{ marginBottom: 12 }} />
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>Carica file Excel partecipanti</div>
-            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>Formato: FILE_CM_2026.xlsx</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>File CM completo con schede AVES. I "non presente" vengono mantenuti.</div>
             <label style={{ display: 'inline-block', padding: '10px 20px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
               {importing ? 'Importazione...' : 'Seleziona file'}
               <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} disabled={importing} />
