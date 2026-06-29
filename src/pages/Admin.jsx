@@ -12,6 +12,7 @@ export default function Admin() {
   const [tab, setTab] = useState('import')
   const [importing, setImporting] = useState(false)
   const [importLog, setImportLog] = useState([])
+  const [progress, setProgress] = useState(null)
   const [staffList, setStaffList] = useState([])
   const [stats, setStats] = useState(null)
   const [incassiData, setIncassiData] = useState(null)
@@ -88,6 +89,7 @@ export default function Admin() {
     if (!file) return
     setImporting(true)
     setImportLog([])
+    setProgress({ label: 'Lettura del file…', pct: 4 })
     try {
       const buf = await file.arrayBuffer()
       const wb = XLSX.read(buf, { cellDates: true })
@@ -97,7 +99,7 @@ export default function Admin() {
       if (!shPratiche || !shPart) {
         log('❌ File non valido: mancano le schede "NON TOCCARE 121" e/o "NON TOCCARE 542".')
         log('Carica il file CM completo (con le 3 estrazioni AVES).')
-        setImporting(false); e.target.value = ''; return
+        setImporting(false); setProgress(null); e.target.value = ''; return
       }
 
       const txt = v => (v === undefined || v === null) ? '' : String(v).trim()
@@ -196,10 +198,13 @@ export default function Admin() {
       }
 
       // ---- risolvi/crea gruppi ----
+      setProgress({ label: 'Sincronizzo i gruppi…', pct: 12 })
       let nuoviG = 0, aggG = 0, errors = 0
       const errSamples = new Set()
       const touchedGroupIds = []
+      let gi = 0
       for (const g of groups) {
+        if (++gi % 15 === 0) setProgress({ label: `Sincronizzo i gruppi… (${gi}/${groups.length})`, pct: 12 + Math.round((gi / groups.length) * 46) })
         let groupId = gByPratica[g.pratica] || gByCg[g.capogruppo_code + '|' + g.destination + '|' + g.shift_num] || null
         const payload = { capogruppo_code: g.capogruppo_code, capogruppo_display: g.capogruppo_display, destination: g.destination, shift_num: g.shift_num, pratica: g.pratica }
         if (groupId) {
@@ -216,6 +221,7 @@ export default function Admin() {
       }
 
       // ---- partecipanti: cancella sui gruppi toccati e reinserisci preservando "attivo" ----
+      setProgress({ label: 'Preparo i partecipanti…', pct: 60 })
       let spariti = 0, caricati = 0
       for (let i = 0; i < touchedGroupIds.length; i += 200) {
         const slice = touchedGroupIds.slice(i, i + 200)
@@ -235,9 +241,11 @@ export default function Admin() {
         }
       }
       for (let i = 0; i < toInsert.length; i += 500) {
+        setProgress({ label: `Carico i partecipanti… (${Math.min(i + 500, toInsert.length)}/${toInsert.length})`, pct: 64 + Math.round((i / Math.max(toInsert.length, 1)) * 34) })
         const { error } = await supabase.from('participants').insert(toInsert.slice(i, i + 500))
         if (error) { errors++; if (errSamples.size < 6) errSamples.add('PART: ' + error.message) } else caricati += Math.min(500, toInsert.length - i)
       }
+      setProgress({ label: errors ? 'Completato con avvisi' : 'Completato', pct: 100 })
 
       log('✅ Pratiche: ' + nuoviG + ' nuove, ' + aggG + ' aggiornate')
       log('✅ Persone caricate: ' + caricati + ' — "non presente" preservato')
@@ -249,6 +257,7 @@ export default function Admin() {
       log('Fatto.')
     } catch (err) {
       log('❌ Errore: ' + err.message)
+      setProgress(null)
     }
     setImporting(false)
     e.target.value = ''
@@ -288,6 +297,33 @@ export default function Admin() {
               <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} disabled={importing} />
             </label>
           </div>
+          {progress && (
+            <div className="card" style={{ padding: 20, overflow: 'hidden' }}>
+              <style>{`
+                @keyframes iv-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(220%); } }
+                @keyframes iv-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+                @keyframes iv-pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+              `}</style>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {progress.pct < 100 ? (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', border: '3px solid rgba(30,107,241,0.18)', borderTopColor: 'var(--iv-blue)', animation: 'spin 0.7s linear infinite' }} />
+                  ) : (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#16A34A', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 800, animation: 'iv-pop 0.3s ease-out' }}>✓</div>
+                  )}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', animation: progress.pct < 100 ? 'iv-pulse 1.4s ease-in-out infinite' : 'none' }}>{progress.label}</div>
+                </div>
+                <div style={{ fontSize: 26, fontWeight: 800, color: progress.pct < 100 ? 'var(--iv-blue)' : '#16A34A', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{progress.pct}%</div>
+              </div>
+              <div style={{ height: 12, borderRadius: 8, background: 'var(--bg-secondary)', overflow: 'hidden', position: 'relative' }}>
+                <div style={{ height: '100%', width: `${progress.pct}%`, borderRadius: 8, background: progress.pct < 100 ? 'linear-gradient(90deg, #1E6BF1, #5B9BFF)' : 'linear-gradient(90deg, #16A34A, #4ADE80)', transition: 'width 0.45s cubic-bezier(0.4,0,0.2,1)', position: 'relative', overflow: 'hidden' }}>
+                  {progress.pct < 100 && (
+                    <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: '45%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)', animation: 'iv-shimmer 1.3s ease-in-out infinite' }} />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
           {importLog.length > 0 && (
             <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '16px 18px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
