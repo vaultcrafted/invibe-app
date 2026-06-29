@@ -94,7 +94,7 @@ export default function GroupDetail() {
     await supabase.from('participants').update({ attivo: target.attivo }).eq('id', participantId)
 
     const newNPax = updated.filter(p => p.attivo !== false).length
-    if (group.destination !== 'pag') {
+    {
       // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
       const svc = getServices(group.destination)
       const newGroupValues = {}
@@ -109,12 +109,6 @@ export default function GroupDetail() {
         setGroup(prev => ({ ...prev, ...newGroupValues }))
         await supabase.from('groups').update(newGroupValues).eq('id', groupId)
       }
-    } else {
-      SERVICES.forEach(sv => {
-        if (group[sv.id]) {
-          syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
-        }
-      })
     }
   }
 
@@ -135,7 +129,7 @@ export default function GroupDetail() {
   const males = activeParticipants.filter(p => p.sesso === 'M').length
   const females = activeParticipants.filter(p => p.sesso === 'F').length
 
-  const useQta = group.destination !== 'pag'
+  const useQta = true
   const services = getServices(group.destination)
   const riepilogoRows = useQta
     ? services.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))

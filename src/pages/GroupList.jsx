@@ -6,7 +6,7 @@ import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getService
 import Topbar from '../components/Topbar'
 
 function isServiceOn(g, sv) {
-  return g.destination === 'pag' ? !!g[sv.id] : (g[sv.id] || 0) > 0
+  return (g[sv.id] || 0) > 0
 }
 function groupServices(g) {
   return getServices(g.destination)

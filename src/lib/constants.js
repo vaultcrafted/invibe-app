@@ -91,12 +91,27 @@ export const SERVICES_SARDEGNA = [
   { id: 'sar_pacchetto_saltafila', label: 'Pacchetto Saltafila', prezzo: 20 },
 ]
 
-// Lista servizi attiva per destinazione (Pag ancora sui servizi generici, da rifare)
+// Pag: SSP / Boat / Vida sono sdoppiati cash/bonifico (campi separati)
+export const SERVICES_PAG = [
+  { id: 'pag_navetta', label: 'Navetta', prezzo: 55 },
+  { id: 'pag_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 15 },
+  { id: 'pag_ssp_cash', label: 'SSP (cash)', prezzo: 55 },
+  { id: 'pag_ssp_bonifico', label: 'SSP (bonifico)', prezzo: 55 },
+  { id: 'pag_boat_cash', label: 'Boat (cash)', prezzo: 40 },
+  { id: 'pag_boat_bonifico', label: 'Boat (bonifico)', prezzo: 40 },
+  { id: 'pag_vida_cash', label: 'Vida (cash)', prezzo: 15 },
+  { id: 'pag_vida_bonifico', label: 'Vida (bonifico)', prezzo: 15 },
+  { id: 'pag_vida_sun', label: 'Vida Sun', prezzo: 11 },
+  { id: 'pag_cantante_extra', label: 'Cantante extra', prezzo: 10 },
+]
+
+// Lista servizi attiva per destinazione
 export function getServices(destination) {
   if (destination === 'corfu') return SERVICES_CORFU
   if (destination === 'zante') return SERVICES_ZANTE
   if (destination === 'gallipoli') return SERVICES_GALLIPOLI
   if (destination === 'sardegna') return SERVICES_SARDEGNA
+  if (destination === 'pag') return SERVICES_PAG
   return SERVICES
 }
 
@@ -135,6 +150,17 @@ export const SHEET_SERVIZIO_MAP = {
   sar_tassa_soggiorno: 'Tassa di Soggiorno',
   sar_pacchetto_serate: 'Pacchetto Serate',
   sar_pacchetto_saltafila: 'Pacchetto Saltafila',
+  // Pag (cash/bonifico separati)
+  pag_navetta: 'Navetta in meta',
+  pag_tassa_soggiorno: 'Tassa di Soggiorno',
+  pag_ssp_cash: 'SSP CASH in meta',
+  pag_ssp_bonifico: 'SSP BONIFICO in meta',
+  pag_boat_cash: 'BOAT CASH in meta',
+  pag_boat_bonifico: 'BOAT BONIFICO in meta',
+  pag_vida_cash: 'VIDA CASH in meta',
+  pag_vida_bonifico: 'VIDA BONIFICO in meta',
+  pag_vida_sun: 'VIDA SUN',
+  pag_cantante_extra: 'Cantante extra',
 }
 
 // Codice turno mandato al webhook (C1, Z3, G2, S2, P1...). L'Apps Script apre il file "{codice} 2026".
