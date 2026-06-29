@@ -272,12 +272,17 @@ export default function GroupDetail() {
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span>🏠</span> Alloggio
               </div>
-              <div style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)' }}>
-                {group.alloggio
-                  ? <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 500 }}>{group.alloggio}</span>
-                  : <span style={{ fontSize: 13, color: 'var(--text-tertiary)', fontStyle: 'italic' }}>Presto in arrivo</span>
-                }
-              </div>
+              {editingAlloggio ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input className="input-field" placeholder="Alloggio del gruppo..." value={group.alloggio || ''} onChange={e => updateField('alloggio', e.target.value)} autoFocus />
+                  <button onClick={() => saveField('alloggio')} style={{ alignSelf: 'flex-end', padding: '8px 20px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Salva</button>
+                </div>
+              ) : (
+                <div onClick={() => setEditingAlloggio(true)} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: group.alloggio ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: group.alloggio ? 500 : 400, fontStyle: group.alloggio ? 'normal' : 'italic', flex: 1 }}>{group.alloggio || 'Aggiungi alloggio'}</span>
+                  <Edit2 size={14} color="var(--text-tertiary)" style={{ flexShrink: 0 }} />
+                </div>
+              )}
             </div>
 
             {/* Note */}
