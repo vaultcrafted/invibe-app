@@ -55,9 +55,12 @@ const NAV_ITEMS = [
 export default function Navigation() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin } = useAuth()
+  const { isAdmin, isCM } = useAuth()
 
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+  const visibleItems = NAV_ITEMS.filter(item => {
+    if (item.id === 'cassa') return isAdmin || isCM
+    return !item.adminOnly || isAdmin
+  })
 
   function isActive(item) {
     if (item.path === '/') return location.pathname === '/'
