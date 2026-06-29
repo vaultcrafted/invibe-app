@@ -54,13 +54,13 @@ export const SERVICES = [
 // Tutti i servizi di Corfù, stessa modalità: toggle (tutto il gruppo) + numero modificabile (quantità libera)
 export const SERVICES_CORFU = [
   { id: 'qta_escursioni', label: 'Escursioni', prezzo: 45 },
+  { id: 'qta_ssp', label: 'SSP', prezzo: 50 },
+  { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 35 },
   { id: 'qta_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
-  { id: 'qta_ssp', label: 'SSP', prezzo: 45 },
-  { id: 'qta_cauzione', label: 'Cauzione', prezzo: 50 },
-  { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 40 },
   { id: 'qta_barche_paleo', label: 'Barche Paleo', prezzo: 20 },
   { id: 'qta_montecristo', label: 'Montecristo', prezzo: 20 },
   { id: 'qta_mojito2', label: 'Mojito 2', prezzo: 10 },
+  { id: 'qta_pool_sunrise', label: 'Solo Pool Sunrise', prezzo: 10 },
   { id: 'qta_pranzo_laviron', label: 'Pranzo Laviron', prezzo: 10 },
 ]
 
@@ -125,11 +125,11 @@ export const SHEET_SERVIZIO_MAP = {
   qta_escursioni: 'Escursioni in meta',
   qta_tassa_soggiorno: 'Tassa di Soggiorno',
   qta_ssp: 'SSP in meta',
-  qta_cauzione: 'Cauzione',
   qta_pazuzu: 'Solo Pazuzu',
   qta_barche_paleo: 'Barche Paleo',
   qta_montecristo: 'Montecristo',
   qta_mojito2: 'Mojito 2',
+  qta_pool_sunrise: 'Solo Pool Sunrise',
   qta_pranzo_laviron: 'Pranzo Laviron',
   // Zante
   zan_escursioni: 'Escursioni in meta',
