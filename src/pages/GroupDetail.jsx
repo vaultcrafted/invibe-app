@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
 import { syncToSheet } from '../lib/sheetsSync'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
@@ -94,10 +94,11 @@ export default function GroupDetail() {
     await supabase.from('participants').update({ attivo: target.attivo }).eq('id', participantId)
 
     const newNPax = updated.filter(p => p.attivo !== false).length
-    if (group.destination === 'corfu') {
+    if (group.destination !== 'pag') {
       // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
+      const svc = getServices(group.destination)
       const newGroupValues = {}
-      SERVICES_CORFU.forEach(sv => {
+      svc.forEach(sv => {
         const current = group[sv.id] || 0
         if (oldNPax > 0 && current === oldNPax) {
           newGroupValues[sv.id] = newNPax
@@ -134,9 +135,10 @@ export default function GroupDetail() {
   const males = activeParticipants.filter(p => p.sesso === 'M').length
   const females = activeParticipants.filter(p => p.sesso === 'F').length
 
-  const isCorfu = group.destination === 'corfu'
-  const riepilogoRows = isCorfu
-    ? SERVICES_CORFU.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
+  const useQta = group.destination !== 'pag'
+  const services = getServices(group.destination)
+  const riepilogoRows = useQta
+    ? services.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
     : SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
   const costoTotale = riepilogoRows.reduce((tot, r) => tot + r.totale, 0)
 
@@ -185,12 +187,12 @@ export default function GroupDetail() {
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 10 }}>Servizi acquistati</div>
               <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                {isCorfu ? SERVICES_CORFU.map((sv, i) => {
+                {useQta ? services.map((sv, i) => {
                   const qty = group[sv.id] || 0
                   const active = qty > 0
                   const isSaving = saving === sv.id
                   return (
-                    <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < SERVICES_CORFU.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                       {/* Label */}
                       <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => toggleQtaService(sv.id)}>
                         <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</div>

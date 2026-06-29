@@ -64,8 +64,44 @@ export const SERVICES_CORFU = [
   { id: 'qta_pranzo_laviron', label: 'Pranzo Laviron', prezzo: 10 },
 ]
 
+// Servizi "in meta" per Zante / Gallipoli / Sardegna (a quantità, come Corfù).
+// Allineati 1:1 agli header dei fogli rendicontazione.
+export const SERVICES_ZANTE = [
+  { id: 'zan_escursioni', label: 'Escursioni', prezzo: 45 },
+  { id: 'zan_boat', label: 'Boat', prezzo: 40 },
+  { id: 'zan_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'zan_cebu', label: 'Cebu', prezzo: 15 },
+  { id: 'zan_bbq', label: 'BBQ', prezzo: 15 },
+]
+
+export const SERVICES_GALLIPOLI = [
+  { id: 'gal_escursioni', label: 'Escursioni', prezzo: 50 },
+  { id: 'gal_boat_party', label: 'Boat Party', prezzo: 40 },
+  { id: 'gal_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'gal_vega', label: 'Vega', prezzo: 25 },
+  { id: 'gal_dinner_elegant', label: 'Dinner Elegant', prezzo: 30 },
+  { id: 'gal_praja', label: 'Praja', prezzo: 25 },
+]
+
+export const SERVICES_SARDEGNA = [
+  { id: 'sar_escursioni', label: 'Escursioni', prezzo: 50 },
+  { id: 'sar_ssp', label: 'SSP', prezzo: 30 },
+  { id: 'sar_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 12 },
+  { id: 'sar_pacchetto_serate', label: 'Pacchetto Serate', prezzo: 50 },
+  { id: 'sar_pacchetto_saltafila', label: 'Pacchetto Saltafila', prezzo: 20 },
+]
+
+// Lista servizi attiva per destinazione (Pag ancora sui servizi generici, da rifare)
+export function getServices(destination) {
+  if (destination === 'corfu') return SERVICES_CORFU
+  if (destination === 'zante') return SERVICES_ZANTE
+  if (destination === 'gallipoli') return SERVICES_GALLIPOLI
+  if (destination === 'sardegna') return SERVICES_SARDEGNA
+  return SERVICES
+}
+
 // Nome esatto della colonna nel foglio Google Sheets di rendicontazione, per ogni servizio
-// (deve combaciare carattere per carattere con l'header del foglio)
+// (il confronto nel foglio ignora maiuscole/spazi, ma le PAROLE devono combaciare)
 export const SHEET_SERVIZIO_MAP = {
   pkg_escursioni: 'Escursioni in meta',
   tassa_soggiorno: 'Tassa di Soggiorno',
@@ -73,20 +109,40 @@ export const SHEET_SERVIZIO_MAP = {
   cauzione: 'Cauzione',
   qta_escursioni: 'Escursioni in meta',
   qta_tassa_soggiorno: 'Tassa di Soggiorno',
-  qta_ssp: 'SSP',
+  qta_ssp: 'SSP in meta',
   qta_cauzione: 'Cauzione',
   qta_pazuzu: 'Solo Pazuzu',
   qta_barche_paleo: 'Barche Paleo',
   qta_montecristo: 'Montecristo',
   qta_mojito2: 'Mojito 2',
   qta_pranzo_laviron: 'Pranzo Laviron',
+  // Zante
+  zan_escursioni: 'Escursioni in meta',
+  zan_boat: 'Boat',
+  zan_tassa_soggiorno: 'Tassa di Soggiorno',
+  zan_cebu: 'Cebu',
+  zan_bbq: 'BBQ',
+  // Gallipoli
+  gal_escursioni: 'Escursioni in meta',
+  gal_boat_party: 'Boat Party in meta',
+  gal_tassa_soggiorno: 'Tassa di Soggiorno',
+  gal_vega: 'Vega',
+  gal_dinner_elegant: 'Dinner Elegant',
+  gal_praja: 'Praja',
+  // Sardegna
+  sar_escursioni: 'Escursioni in meta',
+  sar_ssp: 'SSP',
+  sar_tassa_soggiorno: 'Tassa di Soggiorno',
+  sar_pacchetto_serate: 'Pacchetto Serate',
+  sar_pacchetto_saltafila: 'Pacchetto Saltafila',
 }
 
-// Nome del tab del foglio Google Sheets corrispondente a destinazione + turno
-// Per ora collegato solo Corfù — le altre mete tornano null (nessuna sync)
+// Codice turno mandato al webhook (C1, Z3, G2, S2, P1...). L'Apps Script apre il file "{codice} 2026".
+// Mete senza servizi mappati (Pag) non sincronizzano comunque, perché SHEET_SERVIZIO_MAP non li copre.
 export function getTurnoSheetName(destination, shiftNum) {
-  if (destination === 'corfu') return `CORFU' TURNO ${shiftNum}`
-  return null
+  const prefix = DEST_PREFIX[destination]
+  if (!prefix || !shiftNum) return null
+  return `${prefix}${shiftNum}`
 }
 
 // Maps turno column from Excel to destination + shift number
