@@ -17,7 +17,6 @@ export default function GroupList() {
   const navigate = useNavigate()
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('tutti')
   const [search, setSearch] = useState('')
 
   const dest = DESTINATIONS.find(d => d.id === destId)
@@ -46,11 +45,6 @@ export default function GroupList() {
   const totalPeople = groups.reduce((s, g) => s + (g.participants?.length || 0), 0)
 
   const filtered = groups
-    .filter(g => {
-      if (tab === 'completi') return groupServices(g).every(sv => isServiceOn(g, sv))
-      if (tab === 'mancanti') return groupServices(g).some(sv => !isServiceOn(g, sv))
-      return true
-    })
     .filter(g => !search || g.capogruppo_display?.toLowerCase().includes(search.toLowerCase()))
 
   if (!dest || !shift) return <div className="loading-screen"><p>Turno non trovato.</p></div>
@@ -60,13 +54,6 @@ export default function GroupList() {
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti</div>
-      <div className="tabs">
-        {['tutti', 'mancanti', 'completi'].map(t => (
-          <button key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
-          </button>
-        ))}
-      </div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo..." value={search} onChange={e => setSearch(e.target.value)} />
