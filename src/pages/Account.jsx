@@ -34,15 +34,13 @@ export default function Account() {
   useEffect(() => {
     if (!profile?.id) return
     async function fetchAttestati() {
-      const nomi = ['antincendio', 'psa', 'blsd']
+      const { data: files } = await supabase.storage.from('attestati').list(profile.id)
+      if (!files) return
       const urls = {}
-      for (const nome of nomi) {
-        const { data } = supabase.storage.from('attestati').getPublicUrl(`${profile.id}/${nome}.pdf`)
-        // Verifica che il file esista effettivamente
-        try {
-          const res = await fetch(data.publicUrl, { method: 'HEAD' })
-          if (res.ok) urls[nome] = data.publicUrl
-        } catch {}
+      for (const file of files) {
+        const stem = file.name.replace('.pdf', '')
+        const { data } = supabase.storage.from('attestati').getPublicUrl(`${profile.id}/${file.name}`)
+        urls[stem] = data.publicUrl
       }
       setAttestati(urls)
     }
