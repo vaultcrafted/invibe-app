@@ -170,7 +170,15 @@ export default function Admin() {
       if (skipTot) log('Saltate ' + skipTot + ' pratiche non-turno (' + skip.stage + ' stage staff, ' + skip.winter + ' winter, ' + skip.altro + ' altre)')
 
       // ---- prefetch gruppi e partecipanti esistenti (per preservare "non presente") ----
-      const { data: exGroups } = await supabase.from('groups').select('id, pratica, capogruppo_code, destination, shift_num')
+      const exGroups = []
+      let gFrom = 0
+      while (true) {
+        const { data: gChunk } = await supabase.from('groups').select('id, pratica, capogruppo_code, destination, shift_num').range(gFrom, gFrom + 999)
+        if (!gChunk || gChunk.length === 0) break
+        exGroups.push(...gChunk)
+        if (gChunk.length < 1000) break
+        gFrom += 1000
+      }
       const gByPratica = {}, gByCg = {}
       ;(exGroups || []).forEach(g => {
         if (g.pratica) gByPratica[g.pratica] = g.id
