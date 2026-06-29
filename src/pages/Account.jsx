@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LogOut, Mail, Phone, User, FileText, Shield, MapPin } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -23,11 +24,30 @@ function getRuoloColor(ruolo) {
 export default function Account() {
   const { profile, signOut, fetchProfile, user, isAdmin } = useAuth()
   const navigate = useNavigate()
+  const [attestati, setAttestati] = useState({})
   const initials = ((profile?.nome?.[0] || '') + (profile?.cognome?.[0] || '')).toUpperCase()
   const ruoloColor = getRuoloColor(profile?.ruolo)
   const lastSignIn = user?.last_sign_in_at
     ? new Date(user.last_sign_in_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
     : null
+
+  useEffect(() => {
+    if (!profile?.id) return
+    async function fetchAttestati() {
+      const nomi = ['antincendio', 'psa', 'blsd']
+      const urls = {}
+      for (const nome of nomi) {
+        const { data } = supabase.storage.from('attestati').getPublicUrl(`${profile.id}/${nome}.pdf`)
+        // Verifica che il file esista effettivamente
+        try {
+          const res = await fetch(data.publicUrl, { method: 'HEAD' })
+          if (res.ok) urls[nome] = data.publicUrl
+        } catch {}
+      }
+      setAttestati(urls)
+    }
+    fetchAttestati()
+  }, [profile?.id])
 
   async function handleLogout() { await signOut(); navigate('/login') }
 
@@ -103,9 +123,9 @@ export default function Account() {
         {/* Attestati */}
         <div className="card">
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>I miei attestati</div>
-          <AttestatoDownload label="Antincendio" url={profile?.att_antincendio} />
-          <AttestatoDownload label="Primo Soccorso" url={profile?.att_primo_soccorso} />
-          <AttestatoDownload label="BLSD" url={profile?.att_blsd} isLast={true} />
+          <AttestatoDownload label="Antincendio" url={attestati.antincendio} />
+          <AttestatoDownload label="Primo Soccorso" url={attestati.psa} />
+          <AttestatoDownload label="BLSD" url={attestati.blsd} isLast={true} />
         </div>
 
         {/* Logout */}
