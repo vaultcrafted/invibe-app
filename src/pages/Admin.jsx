@@ -189,15 +189,18 @@ export default function Admin() {
 
       // ---- risolvi/crea gruppi ----
       let nuoviG = 0, aggG = 0, errors = 0
+      const errSamples = new Set()
       const touchedGroupIds = []
       for (const g of groups) {
         let groupId = gByPratica[g.pratica] || gByCg[g.capogruppo_code + '|' + g.destination + '|' + g.shift_num] || null
         const payload = { capogruppo_code: g.capogruppo_code, capogruppo_display: g.capogruppo_display, destination: g.destination, shift_num: g.shift_num, pratica: g.pratica }
         if (groupId) {
-          await supabase.from('groups').update(payload).eq('id', groupId); aggG++
+          const { error } = await supabase.from('groups').update(payload).eq('id', groupId)
+          if (error) { errors++; if (errSamples.size < 6) errSamples.add('UPD ' + g.pratica + ': ' + error.message); continue }
+          aggG++
         } else {
           const { data: newG, error } = await supabase.from('groups').insert(payload).select('id').single()
-          if (error) { errors++; continue }
+          if (error) { errors++; if (errSamples.size < 6) errSamples.add('INS ' + g.pratica + ': ' + error.message); continue }
           groupId = newG.id; nuoviG++
         }
         g._groupId = groupId
@@ -225,13 +228,16 @@ export default function Admin() {
       }
       for (let i = 0; i < toInsert.length; i += 500) {
         const { error } = await supabase.from('participants').insert(toInsert.slice(i, i + 500))
-        if (error) errors++; else caricati += Math.min(500, toInsert.length - i)
+        if (error) { errors++; if (errSamples.size < 6) errSamples.add('PART: ' + error.message) } else caricati += Math.min(500, toInsert.length - i)
       }
 
       log('✅ Pratiche: ' + nuoviG + ' nuove, ' + aggG + ' aggiornate')
       log('✅ Persone caricate: ' + caricati + ' — "non presente" preservato')
       if (spariti) log('⚠️ ' + spariti + ' persone non più nel file (annullate dall\'ufficio)')
-      if (errors) log('❌ Errori: ' + errors)
+      if (errors) {
+        log('❌ Errori: ' + errors)
+        errSamples.forEach(m => log('   • ' + m))
+      }
       log('Fatto.')
     } catch (err) {
       log('❌ Errore: ' + err.message)
