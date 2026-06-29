@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, shiftLabel } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 function isServiceOn(g, sv) {
-  return g.destination === 'corfu' ? (g[sv.id] || 0) > 0 : !!g[sv.id]
+  return g.destination === 'pag' ? !!g[sv.id] : (g[sv.id] || 0) > 0
 }
 function groupServices(g) {
-  return g.destination === 'corfu' ? SERVICES_CORFU : SERVICES
+  return getServices(g.destination)
 }
 
 export default function GroupList() {
