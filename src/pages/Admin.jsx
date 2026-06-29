@@ -142,6 +142,21 @@ export default function Admin() {
         }
       }
 
+      // ---- 1294 -> assicurazione / iscrizione per pratica ----
+      const assicSet = new Set(), iscrSet = new Set()
+      const shServizi = wb.Sheets['NON TOCCARE 1294']
+      if (shServizi) {
+        const S = asRows(shServizi)
+        for (const r of S.rows) {
+          const prat = txt(S.get(r, 'N pratica'))
+          const cod = txt(S.get(r, 'Servizio'))
+          if (!prat || !cod) continue
+          if (cod === 'ASSMEDEURO') { assicSet.add(prat); iscrSet.add(prat) } // ISCRIZIONE & ASS. MEDICA
+          else if (cod === 'BAGA') assicSet.add(prat)                          // ASS. BAGAGLIO
+          else if (cod === 'PREM') iscrSet.add(prat)                           // ISCRIZIONE PREMIUM
+        }
+      }
+
       // ---- 542 -> partecipanti ----
       const A = asRows(shPart)
       for (const r of A.rows) {
@@ -159,6 +174,8 @@ export default function Admin() {
           numero_documento: txt(A.get(r, 'Numero documento')),
           data_emissione: toDate(A.get(r, 'Emesso il')),
           data_scadenza: toDate(A.get(r, 'Scade il')),
+          assicurazione: assicSet.has(pratica),
+          iscrizione: iscrSet.has(pratica),
           citta_partenza: '', pratica, stato: '',
         })
       }
