@@ -68,7 +68,7 @@ export default function Navigation() {
     <>
       <nav className="sidebar">
         <div style={{ padding: '0 8px', marginBottom: 20 }}>
-          <img src="/Logotipo.png" alt="Invibe" style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)', display: 'block' }} />
+          <img src="/Logotipo.png" alt="Invibe" onClick={() => navigate('/')} style={{ height: 28, objectFit: 'contain', filter: 'brightness(0) invert(1)', display: 'block', cursor: 'pointer' }} />
         </div>
         {visibleItems.map(item => {
           const active = isActive(item)

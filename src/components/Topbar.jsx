@@ -17,7 +17,7 @@ export default function Topbar({ showBack = false, showAvatar = true }) {
         <div style={{ width: 32 }} />
       )}
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-        <img src="/Logo.png" alt="Invibe" style={{ height: 26, objectFit: 'contain', filter: 'brightness(0) invert(1)' }} />
+        <img src="/Logo.png" alt="Invibe" onClick={() => navigate('/')} style={{ height: 26, objectFit: 'contain', filter: 'brightness(0) invert(1)', cursor: 'pointer' }} />
       </div>
       {showAvatar ? (
         <button className="topbar-avatar" onClick={() => navigate('/account')} title="Account">
