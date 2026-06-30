@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices } from '../lib/constants'
+
+// Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
+const ALL_SERVICE_IDS = [...new Set(DESTINATIONS.flatMap(d => getServices(d.id).map(s => s.id)))]
 import { CATEGORIE } from './Cassa'
 import Topbar from '../components/Topbar'
 
@@ -43,7 +46,7 @@ export default function Admin() {
       while (true) {
         const { data: page, error } = await supabase
           .from('groups')
-          .select('id, capogruppo_display, destination, shift_num, pkg_escursioni, tassa_soggiorno, pkg_ssp, cauzione, qta_escursioni, qta_tassa_soggiorno, qta_ssp, qta_cauzione, qta_pazuzu, qta_barche_paleo, qta_montecristo, qta_mojito2, qta_pranzo_laviron')
+          .select('id, capogruppo_display, destination, shift_num, ' + ALL_SERVICE_IDS.join(', '))
           .order('destination').order('shift_num').order('capogruppo_display')
           .range(gFrom, gFrom + pageSize - 1)
         if (error) { console.error(error); setIncassiData([]); return }
@@ -705,14 +708,13 @@ function IncassiTab({ data, loading }) {
 
   if (loading || !data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico incassi...</div>
 
-  const isCorfuView = filterDest === 'corfu'
-  const SV = isCorfuView ? SERVICES_CORFU : SERVICES // [{id, label, prezzo}]
+  // Servizi mostrati come colonne: quelli della meta selezionata. In "Tutte" niente colonne servizio (metas diverse), solo Pax e Totale.
+  const SV = filterDest ? getServices(filterDest) : null
   const isQty = viewMode === 'quantita'
 
-  // Quantità di un servizio per un gruppo: per Corfù è il numero diretto, per le altre mete è 0/pax (booleano)
+  // Quantità di un servizio per un gruppo: SEMPRE la colonna a quantità (modello nuovo)
   function svQty(g, sv) {
-    if (isCorfuView) return g[sv.id] || 0
-    return g[sv.id] ? (g.num_partecipanti || 0) : 0
+    return g[sv.id] || 0
   }
   // Valore in € (quantità × prezzo)
   function svValue(g, sv) {
@@ -721,6 +723,10 @@ function IncassiTab({ data, loading }) {
   // Cella mostrata: € o numero secondo la vista scelta
   function svCell(g, sv) {
     return isQty ? svQty(g, sv) : svValue(g, sv)
+  }
+  // Servizi che concorrono al totale di un gruppo: quelli della SUA meta
+  function groupServices(g) {
+    return filterDest ? SV : getServices(g.destination)
   }
 
   // Filtra gruppi
@@ -736,9 +742,9 @@ function IncassiTab({ data, loading }) {
     ? [...new Set(data.filter(g => g.destination === filterDest).map(g => g.shift_num))].sort((a, b) => a - b)
     : []
 
-  // Calcola totale riga
+  // Calcola totale riga (sui servizi della meta del gruppo)
   function rowTotal(g) {
-    return SV.reduce((t, sv) => t + svCell(g, sv), 0)
+    return groupServices(g).reduce((t, sv) => t + svCell(g, sv), 0)
   }
 
   // Calcola totale colonna per un set di gruppi
@@ -808,13 +814,13 @@ function IncassiTab({ data, loading }) {
             <tr>
               <th style={{ ...thLeftStyle, minWidth: 140 }}>Capogruppo</th>
               <th style={{ ...thStyle, minWidth: 60 }}>Pax</th>
-              {SV.map(sv => <th key={sv.id} style={{ ...thStyle, minWidth: 90 }}>{sv.label}</th>)}
+              {SV && SV.map(sv => <th key={sv.id} style={{ ...thStyle, minWidth: 90 }}>{sv.label}</th>)}
               <th style={{ ...thStyle, minWidth: 80, color: 'var(--iv-blue)' }}>{isQty ? 'Tot. servizi' : 'Totale'}</th>
             </tr>
           </thead>
           <tbody>
             {groups.length === 0 ? (
-              <tr><td colSpan={3 + SV.length} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>Nessun dato</td></tr>
+              <tr><td colSpan={3 + (SV ? SV.length : 0)} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>Nessun dato</td></tr>
             ) : (() => {
               const rows = []
               // Raggruppa per dest → shift
@@ -834,7 +840,7 @@ function IncassiTab({ data, loading }) {
                   // Header turno
                   rows.push(
                     <tr key={`h-${destId}-${sNum}`}>
-                      <td colSpan={3 + SV.length} style={{ padding: '8px 12px', background: destColor + '15', borderBottom: '0.5px solid var(--border)', borderTop: '1px solid ' + destColor + '33' }}>
+                      <td colSpan={3 + (SV ? SV.length : 0)} style={{ padding: '8px 12px', background: destColor + '15', borderBottom: '0.5px solid var(--border)', borderTop: '1px solid ' + destColor + '33' }}>
                         <span style={{ fontSize: 12, fontWeight: 800, color: destColor }}>{dest?.name} · {shiftLabel(destId, Number(sNum))}</span>
                         <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 8 }}>{sGroups.length} gruppi</span>
                       </td>
@@ -848,7 +854,7 @@ function IncassiTab({ data, loading }) {
                       <tr key={g.id}>
                         <td style={tdLeftStyle}>{g.capogruppo_display}</td>
                         <td style={tdStyle}>{n}</td>
-                        {SV.map(sv => {
+                        {SV && SV.map(sv => {
                           const val = svCell(g, sv)
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? (isQty ? val : `€${val}`) : '—'}</td>
                         })}
@@ -861,7 +867,7 @@ function IncassiTab({ data, loading }) {
                     <tr key={`sub-${destId}-${sNum}`} style={subtotalStyle}>
                       <td style={{ ...tdLeftStyle, ...subtotalStyle }}>Subtotale {shiftLabel(destId, Number(sNum))}</td>
                       <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>{isQty ? colTotal(sGroups, sv) : `€${colTotal(sGroups, sv)}`}</td>)}
+                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>{isQty ? colTotal(sGroups, sv) : `€${colTotal(sGroups, sv)}`}</td>)}
                       <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>{isQty ? grandTotal(sGroups) : `€${grandTotal(sGroups)}`}</td>
                     </tr>
                   )
@@ -873,7 +879,7 @@ function IncassiTab({ data, loading }) {
                     <tr key={`dest-${destId}`} style={{ background: destColor + '20' }}>
                       <td style={{ ...tdLeftStyle, background: 'transparent', color: destColor, fontWeight: 800 }}>TOTALE {dest?.name?.toUpperCase()}</td>
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{isQty ? colTotal(allDestGroups, sv) : `€${colTotal(allDestGroups, sv)}`}</td>)}
+                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{isQty ? colTotal(allDestGroups, sv) : `€${colTotal(allDestGroups, sv)}`}</td>)}
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>{isQty ? grandTotal(allDestGroups) : `€${grandTotal(allDestGroups)}`}</td>
                     </tr>
                   )
@@ -885,7 +891,7 @@ function IncassiTab({ data, loading }) {
                 <tr key="grand" style={grandStyle}>
                   <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
                   <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                  {SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
+                  {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
                   <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>{isQty ? grandTotal(groups) : `€${grandTotal(groups)}`}</td>
                 </tr>
               )
