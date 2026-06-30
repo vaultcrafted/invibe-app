@@ -122,7 +122,7 @@ export default function Admin() {
       // ---- 121 -> gruppi (uno per pratica) ----
       const P = asRows(shPratiche)
       const groupsByPratica = {}
-      const skip = { stage: 0, winter: 0, altro: 0 }
+      const skip = { stage: 0, winter: 0, altro: 0, staffbook: 0 }
       for (const r of P.rows) {
         const pratica = txt(P.get(r, 'N Pratica'))
         if (!pratica) continue
@@ -136,6 +136,7 @@ export default function Admin() {
           continue
         }
         const code = txt(P.get(r, 'Richiedente'))
+        if (code.toUpperCase().includes('STAFF')) { skip.staffbook++; continue } // prenotazioni staff: non sono gruppi partecipanti
         groupsByPratica[pratica] = {
           pratica, capogruppo_code: code, capogruppo_display: formatCapogruppo(code),
           destination: parsed.destination, shift_num: parsed.shift_num, participants: []
@@ -187,6 +188,7 @@ export default function Admin() {
       if (senzaAnag) log('ℹ️ ' + senzaAnag + ' pratiche senza anagrafica (nomi non ancora caricati)')
       const skipTot = skip.stage + skip.winter + skip.altro
       if (skipTot) log('Saltate ' + skipTot + ' pratiche non-turno (' + skip.stage + ' stage staff, ' + skip.winter + ' winter, ' + skip.altro + ' altre)')
+      if (skip.staffbook) log('Saltate ' + skip.staffbook + ' prenotazioni staff (codice "STAFF")')
 
       // ---- prefetch gruppi e partecipanti esistenti (per preservare "non presente") ----
       const exGroups = []
