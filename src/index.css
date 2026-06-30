@@ -35,7 +35,10 @@ html, body, #root {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 16px;
   color: var(--text-primary);
-  background: var(--bg-secondary);
+  /* sfondo radice scuro come la bottom nav: evita la striscia bianca
+     nella safe-area in fondo su mobile. Il contenuto resta bianco
+     perché .main-content ha background var(--bg-primary). */
+  background: #0f1923;
   -webkit-font-smoothing: antialiased;
 }
 
