@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import Navigation from './components/Navigation'
+import InstallPrompt from './components/InstallPrompt'
 import Login from './pages/Login'
 import Destinations from './pages/Destinations'
 import ShiftSelect from './pages/ShiftSelect'
@@ -61,6 +62,7 @@ function AppShell() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>
+      {!isLogin && <InstallPrompt />}
     </div>
   )
 }

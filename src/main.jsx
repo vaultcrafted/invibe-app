@@ -11,3 +11,12 @@ createRoot(document.getElementById('root')).render(
     </AuthProvider>
   </StrictMode>
 )
+
+// Nasconde la schermata d'avvio appena l'app è montata
+const splash = document.getElementById('splash')
+if (splash) {
+  setTimeout(() => {
+    splash.classList.add('hide')
+    setTimeout(() => splash.remove(), 500)
+  }, 350)
+}
