@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS } from '../lib/constants'
 
 const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallipoli: '#DC2626', sardegna: '#7C3AED' }
@@ -43,23 +44,32 @@ function MetaChips({ meta, setMeta }) {
 }
 
 export default function PaxContentTab() {
+  const { profile } = useAuth()
   const [section, setSection] = useState('programmi')
   const [meta, setMeta] = useState('corfu')
   const col = DEST_COLORS[meta]
 
+  const autore = profile ? `${profile.nome} ${profile.cognome}` : null
+  async function onLog(tipo, azione, extra = {}) {
+    try {
+      await supabase.from('pax_log').insert({ tipo, azione, destination: extra.destination ?? meta, shift_num: extra.shift_num ?? null, dettaglio: extra.dettaglio ?? null, autore })
+    } catch (e) { /* il log non deve mai bloccare un'azione */ }
+  }
+
   return (
     <div style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Segmented value={section} onChange={setSection} options={[['programmi', 'Programmi'], ['poi', "Punti d'interesse"], ['numeri', 'Numeri']]} />
-      <MetaChips meta={meta} setMeta={setMeta} />
-      {section === 'programmi' && <Programmi meta={meta} col={col} />}
-      {section === 'poi' && <Poi meta={meta} col={col} />}
-      {section === 'numeri' && <Numeri meta={meta} col={col} />}
+      <Segmented value={section} onChange={setSection} options={[['programmi', 'Programmi'], ['poi', "Punti d'interesse"], ['numeri', 'Numeri'], ['log', 'Log']]} />
+      {section !== 'log' && <MetaChips meta={meta} setMeta={setMeta} />}
+      {section === 'programmi' && <Programmi meta={meta} col={col} onLog={onLog} />}
+      {section === 'poi' && <Poi meta={meta} col={col} onLog={onLog} />}
+      {section === 'numeri' && <Numeri meta={meta} col={col} onLog={onLog} />}
+      {section === 'log' && <LogSection />}
     </div>
   )
 }
 
 /* ---------------- PROGRAMMI ---------------- */
-function Programmi({ meta, col }) {
+function Programmi({ meta, col, onLog }) {
   const shifts = SHIFTS[meta] || []
   const metaName = DESTINATIONS.find(d => d.id === meta)?.name || ''
   const [turno, setTurno] = useState(shifts[0]?.num || 1)
@@ -86,6 +96,7 @@ function Programmi({ meta, col }) {
   async function handleFile(file) {
     if (!file) return
     if (file.type !== 'application/pdf') { setMsg({ t: 'err', m: 'Serve un file PDF.' }); return }
+    const wasThere = !!row?.pdf_path
     setBusy(true); setMsg(null)
     const path = `${meta}/${meta}-${turno}.pdf`
     const { error: upErr } = await supabase.storage.from('pax-programmi').upload(path, file, { upsert: true, contentType: 'application/pdf' })
@@ -95,6 +106,7 @@ function Programmi({ meta, col }) {
     setBusy(false)
     if (dbErr) { setMsg({ t: 'err', m: 'Salvataggio fallito: ' + dbErr.message }); return }
     setMsg({ t: 'ok', m: 'Programma caricato ✓' }); loadAll()
+    onLog?.('programma', wasThere ? 'sostituito' : 'caricato', { destination: meta, shift_num: turno, dettaglio: `${metaName} ${turno}` })
   }
   async function saveTitolo() { if (row) { await supabase.from('pax_programmi').update({ titolo: titolo || null }).eq('id', row.id); loadAll() } }
   async function remove() {
@@ -102,6 +114,7 @@ function Programmi({ meta, col }) {
     if (row.pdf_path) await supabase.storage.from('pax-programmi').remove([row.pdf_path])
     await supabase.from('pax_programmi').delete().eq('id', row.id)
     setMsg(null); loadAll()
+    onLog?.('programma', 'rimosso', { destination: meta, shift_num: turno, dettaglio: `${metaName} ${turno}` })
   }
 
   return (
@@ -179,7 +192,7 @@ function Programmi({ meta, col }) {
 }
 
 /* ---------------- POI ---------------- */
-function Poi({ meta, col }) {
+function Poi({ meta, col, onLog }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const empty = { categoria: 'Spiagge', nome: '', descrizione: '', maps_url: '', telefono: '' }
@@ -197,10 +210,17 @@ function Poi({ meta, col }) {
     if (!form.nome.trim()) return
     setBusy(true)
     await supabase.from('pax_poi').insert({ destination: meta, categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null, ordine: list.length, attivo: true })
-    setBusy(false); setForm(empty); setOpen(false); load()
+    setBusy(false); onLog?.('poi', 'aggiunto', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` }); setForm(empty); setOpen(false); load()
   }
-  async function del(id) { await supabase.from('pax_poi').delete().eq('id', id); load() }
-  async function toggle(p) { await supabase.from('pax_poi').update({ attivo: !p.attivo }).eq('id', p.id); load() }
+  async function del(id) {
+    const p = list.find(x => x.id === id)
+    await supabase.from('pax_poi').delete().eq('id', id)
+    onLog?.('poi', 'rimosso', { destination: meta, dettaglio: p?.nome }); load()
+  }
+  async function toggle(p) {
+    await supabase.from('pax_poi').update({ attivo: !p.attivo }).eq('id', p.id)
+    onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${p.nome} → ${!p.attivo ? 'visibile' : 'nascosto'}` }); load()
+  }
 
   return (
     <>
@@ -255,7 +275,7 @@ function Poi({ meta, col }) {
 }
 
 /* ---------------- NUMERI ---------------- */
-function Numeri({ meta, col }) {
+function Numeri({ meta, col, onLog }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [form, setForm] = useState({ etichetta: '', numero: '' })
@@ -271,10 +291,17 @@ function Numeri({ meta, col }) {
     if (!form.etichetta.trim() || !form.numero.trim()) return
     setBusy(true)
     await supabase.from('pax_numeri').insert({ destination: meta, etichetta: form.etichetta.trim(), numero: form.numero.trim(), ordine: list.length, attivo: true })
-    setBusy(false); setForm({ etichetta: '', numero: '' }); load()
+    setBusy(false); onLog?.('numero', 'aggiunto', { destination: meta, dettaglio: `${form.etichetta.trim()} · ${form.numero.trim()}` }); setForm({ etichetta: '', numero: '' }); load()
   }
-  async function del(id) { await supabase.from('pax_numeri').delete().eq('id', id); load() }
-  async function toggle(n) { await supabase.from('pax_numeri').update({ attivo: !n.attivo }).eq('id', n.id); load() }
+  async function del(id) {
+    const n = list.find(x => x.id === id)
+    await supabase.from('pax_numeri').delete().eq('id', id)
+    onLog?.('numero', 'rimosso', { destination: meta, dettaglio: n?.etichetta }); load()
+  }
+  async function toggle(n) {
+    await supabase.from('pax_numeri').update({ attivo: !n.attivo }).eq('id', n.id)
+    onLog?.('numero', 'modificato', { destination: meta, dettaglio: `${n.etichetta} → ${!n.attivo ? 'visibile' : 'nascosto'}` }); load()
+  }
 
   return (
     <>
@@ -304,6 +331,84 @@ function Numeri({ meta, col }) {
             </div>
           </div>
         ))}
+    </>
+  )
+}
+
+/* ---------------- LOG (tempo reale) ---------------- */
+const AZIONE_STYLE = {
+  caricato: { bg: 'var(--success-light)', c: 'var(--success)', e: '⬆️' },
+  sostituito: { bg: '#FEF3C7', c: '#92400E', e: '🔄' },
+  rimosso: { bg: 'var(--danger-light)', c: 'var(--danger)', e: '🗑️' },
+  aggiunto: { bg: 'var(--success-light)', c: 'var(--success)', e: '＋' },
+  modificato: { bg: '#DBEAFE', c: '#1E40AF', e: '✏️' },
+}
+const TIPO_LABEL = { programma: 'Programma', poi: 'Punto', numero: 'Numero' }
+
+function fmtTime(ts) {
+  const d = new Date(ts)
+  const today = new Date()
+  const sameDay = d.toDateString() === today.toDateString()
+  const hm = d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+  if (sameDay) return 'oggi ' + hm
+  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) + ' ' + hm
+}
+
+function LogSection() {
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [live, setLive] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    supabase.from('pax_log').select('*').order('ts', { ascending: false }).limit(150)
+      .then(({ data }) => { if (alive) { setRows(data || []); setLoading(false) } })
+
+    const ch = supabase.channel('pax_log_live')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'pax_log' }, payload => {
+        setRows(prev => [payload.new, ...prev].slice(0, 200))
+      })
+      .subscribe(status => { if (status === 'SUBSCRIBED') setLive(true) })
+
+    return () => { alive = false; supabase.removeChannel(ch) }
+  }, [])
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: live ? 'var(--success)' : 'var(--text-tertiary)', animation: live ? 'pulse 1.2s infinite' : 'none' }} />
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>{live ? 'In ascolto in tempo reale' : 'Connessione…'}</span>
+        <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}`}</style>
+      </div>
+
+      {loading ? <div className="spinner" style={{ margin: '20px auto' }} />
+        : rows.length === 0 ? <div style={{ textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13, padding: 20 }}>Nessuna modifica registrata.</div>
+        : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rows.map(r => {
+              const a = AZIONE_STYLE[r.azione] || { bg: 'var(--bg-tertiary)', c: 'var(--text-secondary)', e: '•' }
+              const dest = DESTINATIONS.find(d => d.id === r.destination)
+              return (
+                <div key={r.id} className="card" style={{ padding: '11px 13px', margin: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: a.bg, color: a.c, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>{a.e}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                        {TIPO_LABEL[r.tipo] || r.tipo} <span style={{ color: a.c }}>{r.azione}</span>
+                        {dest && <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}> · {dest.flag} {dest.name}</span>}
+                      </div>
+                      {r.dettaglio && <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.dettaglio}</div>}
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{fmtTime(r.ts)}</div>
+                      {r.autore && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600 }}>{r.autore}</div>}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
     </>
   )
 }
