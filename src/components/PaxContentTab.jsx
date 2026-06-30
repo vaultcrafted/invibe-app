@@ -61,6 +61,7 @@ export default function PaxContentTab() {
 /* ---------------- PROGRAMMI ---------------- */
 function Programmi({ meta, col }) {
   const shifts = SHIFTS[meta] || []
+  const metaName = DESTINATIONS.find(d => d.id === meta)?.name || ''
   const [turno, setTurno] = useState(shifts[0]?.num || 1)
   const [all, setAll] = useState([])          // tutti i programmi della meta
   const [titolo, setTitolo] = useState('')
@@ -131,7 +132,7 @@ function Programmi({ meta, col }) {
               background: on ? col : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (on ? col : 'var(--border)')
             }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: ok ? (on ? '#fff' : 'var(--success)') : (on ? 'rgba(255,255,255,.4)' : 'var(--border-mid)') }} />
-              T{s.num} · {s.label}
+              {metaName} {s.num}
             </button>
           )
         })}
@@ -140,7 +141,7 @@ function Programmi({ meta, col }) {
       {/* card upload */}
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Turno {turno} · {shifts.find(s => s.num === turno)?.label}</div>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>{metaName} {turno}</div>
           <span style={{ fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, background: pdfUrl ? 'var(--success-light)' : 'var(--bg-tertiary)', color: pdfUrl ? 'var(--success)' : 'var(--text-tertiary)' }}>
             {pdfUrl ? '● Caricato' : '○ Da caricare'}
           </span>
