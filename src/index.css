@@ -31,7 +31,8 @@
 }
 
 html, body, #root {
-  height: 100%;
+  height: 100vh; /* fallback browser vecchi */
+  height: 100dvh; /* altezza viewport dinamica: la nav arriva al fondo reale */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 16px;
   color: var(--text-primary);
@@ -57,7 +58,8 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   flex-direction: row;
   width: 100%;
-  height: 100%;
+  height: 100vh; /* fallback */
+  height: 100dvh;
 }
 
 /* Sidebar — desktop */
