@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
-import { Save, ChevronDown, Check } from 'lucide-react'
+import { Save, ChevronDown, Check, Upload } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -27,6 +28,83 @@ export default function DbdAdmin() {
   const [entryId, setEntryId] = useState(null)
   const [showDestDrop, setShowDestDrop] = useState(false)
   const [showShiftDrop, setShowShiftDrop] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const [importLog, setImportLog] = useState([])
+
+  // Normalizza il nome meta dal file -> id destinazione
+  function normDest(v) {
+    const s = String(v || '').toLowerCase().trim()
+    if (s.startsWith('corf')) return 'corfu'
+    if (s.startsWith('pag') || s.includes('isola di pag')) return 'pag'
+    if (s.startsWith('zant')) return 'zante'
+    if (s.startsWith('galli')) return 'gallipoli'
+    if (s.startsWith('sard')) return 'sardegna'
+    return null
+  }
+  // Trova una colonna per nome (accetta varianti)
+  function pick(row, names) {
+    for (const k of Object.keys(row)) {
+      const kn = k.toLowerCase().trim()
+      if (names.some(n => kn === n || kn.includes(n))) return row[k]
+    }
+    return undefined
+  }
+
+  async function handleDbdImport(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImporting(true)
+    setImportLog(['Lettura del file…'])
+    try {
+      const buf = await file.arrayBuffer()
+      const wb = XLSX.read(buf, { type: 'array' })
+      const sheet = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      if (!rows.length) { setImportLog(['Nessuna riga trovata nel file.']); setImporting(false); e.target.value=''; return }
+
+      // prefetch esistenti
+      const { data: existing } = await supabase.from('dbd_entries').select('id, destination, shift_num, day_num')
+      const byKey = {}
+      ;(existing || []).forEach(en => { byKey[`${en.destination}|${en.shift_num}|${en.day_num}`] = en.id })
+
+      let ins = 0, upd = 0, errs = 0
+      const errSamples = []
+      for (const r of rows) {
+        const dest = normDest(pick(r, ['meta', 'destinazione', 'destination']))
+        const dayNumRaw = pick(r, ['giorno', 'day_num', 'day'])
+        const day = parseInt(dayNumRaw, 10)
+        if (!dest || !day) { errs++; if (errSamples.length < 5) errSamples.push(`Riga saltata (meta/giorno non validi): ${JSON.stringify(r).slice(0,60)}`); continue }
+        let shift = pick(r, ['turno', 'shift_num', 'shift'])
+        shift = (shift === '' || shift == null) ? 0 : parseInt(shift, 10)
+        if (isNaN(shift)) shift = 0
+        const dayLabelV = String(pick(r, ['titolo', 'day_label', 'etichetta']) || '').trim()
+        const contentV = String(pick(r, ['contenuto', 'content', 'programma']) || '')
+
+        const payload = { destination: dest, shift_num: shift, day_num: day, day_label: dayLabelV, content: contentV, updated_at: new Date().toISOString() }
+        const key = `${dest}|${shift}|${day}`
+        try {
+          if (byKey[key]) {
+            const { error } = await supabase.from('dbd_entries').update(payload).eq('id', byKey[key])
+            if (error) throw error
+            upd++
+          } else {
+            const { data, error } = await supabase.from('dbd_entries').insert(payload).select('id').single()
+            if (error) throw error
+            byKey[key] = data.id
+            ins++
+          }
+        } catch (err) { errs++; if (errSamples.length < 5) errSamples.push(err.message) }
+      }
+      const log = [`Lette ${rows.length} righe`, `✓ ${ins} nuove, ${upd} aggiornate`]
+      if (errs) { log.push(`⚠️ ${errs} righe con problemi`); errSamples.forEach(s => log.push('• ' + s)) }
+      log.push('Fatto.')
+      setImportLog(log)
+    } catch (err) {
+      setImportLog(['❌ Errore: ' + err.message])
+    }
+    setImporting(false)
+    e.target.value = ''
+  }
 
   useEffect(() => {
     if (!isAdmin) { navigate('/'); return }
@@ -89,6 +167,29 @@ export default function DbdAdmin() {
       <div style={{ padding: '14px 16px 0' }}>
         <div style={{ fontSize: 18, fontWeight: 800 }}>Editor DBD</div>
         <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>Modifica il programma giornaliero per ogni destinazione</div>
+      </div>
+
+      {/* Import da file */}
+      <div style={{ padding: '14px 16px 0' }}>
+        <div className="card" style={{ padding: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <Upload size={16} color="var(--iv-blue)" />
+            <div style={{ fontSize: 14, fontWeight: 700 }}>Importa DBD da file</div>
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: 12 }}>
+            File Excel con colonne: <b>meta</b>, <b>turno</b> (0 = tutti i turni), <b>giorno</b> (1-8), <b>titolo</b>, <b>contenuto</b>. Le righe già presenti vengono aggiornate.
+          </div>
+          <label style={{ display: 'inline-block', padding: '9px 18px', background: importing ? 'var(--bg-secondary)' : 'var(--iv-blue)', color: importing ? 'var(--text-secondary)' : '#fff', borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: importing ? 'default' : 'pointer' }}>
+            {importing ? 'Importazione…' : 'Seleziona file'}
+            <input type="file" accept=".xlsx,.xls" onChange={handleDbdImport} disabled={importing} style={{ display: 'none' }} />
+          </label>
+
+          {importLog.length > 0 && (
+            <div style={{ marginTop: 12, background: 'var(--bg-secondary)', borderRadius: 10, padding: '10px 12px', fontSize: 12.5, lineHeight: 1.6, color: 'var(--text-primary)' }}>
+              {importLog.map((l, i) => <div key={i}>{l}</div>)}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Selettori */}
