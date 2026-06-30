@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
+import { enqueueInsert, enqueueDelete, cancelOp, subscribe as subscribeSync } from '../lib/syncQueue'
 import Topbar from '../components/Topbar'
 import { Wallet, Plus, ArrowDownCircle, ArrowUpCircle, X } from 'lucide-react'
 
@@ -40,6 +41,16 @@ export default function Cassa() {
 
   useEffect(() => { if (selectedShift) loadMovimenti() }, [selectedShift])
 
+  // Quando la coda si svuota ed è tornata la rete, ricarico per allineare i movimenti ottimistici col server.
+  useEffect(() => {
+    let prevPending = 0
+    const unsub = subscribeSync(st => {
+      if (prevPending > 0 && st.pending === 0 && st.online && selectedShift) loadMovimenti()
+      prevPending = st.pending
+    })
+    return unsub
+  }, [selectedShift])
+
   async function loadMovimenti() {
     setLoading(true)
     const { data } = await supabase.from('cassa_movimenti')
@@ -61,9 +72,8 @@ export default function Cassa() {
   async function handleSave() {
     const amount = parseFloat(form.importo)
     if (!amount || amount <= 0) return
-    setSaving(true)
     setSaveError(null)
-    const { error } = await supabase.from('cassa_movimenti').insert({
+    const row = {
       destination: selectedShift.destination,
       shift_num: selectedShift.shift_num,
       data: form.data,
@@ -72,16 +82,23 @@ export default function Cassa() {
       importo: amount,
       descrizione: form.descrizione || null,
       inserito_da: profile ? `${profile.nome} ${profile.cognome}` : null,
-    })
-    setSaving(false)
-    if (error) { setSaveError(error.message); return }
+    }
+    // accodo (parte subito se online) e mostro la riga ottimisticamente
+    const opId = enqueueInsert('cassa_movimenti', row)
+    const optimistic = { ...row, id: 'tmp_' + opId, created_at: new Date().toISOString(), _pending: true, _opId: opId }
+    setMovimenti(prev => [optimistic, ...prev])
     setShowForm(false)
-    loadMovimenti()
   }
 
   async function handleDelete(id) {
-    await supabase.from('cassa_movimenti').delete().eq('id', id)
-    loadMovimenti()
+    const mov = movimenti.find(m => m.id === id)
+    // se è un inserimento non ancora sincronizzato, annullo l'op invece di cancellare a vuoto
+    if (mov && mov._pending && mov._opId && cancelOp(mov._opId)) {
+      setMovimenti(prev => prev.filter(m => m.id !== id))
+      return
+    }
+    setMovimenti(prev => prev.filter(m => m.id !== id))
+    enqueueDelete('cassa_movimenti', { id })
   }
 
   const totaleEntrate = movimenti.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
@@ -156,7 +173,10 @@ export default function Cassa() {
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < movimenti.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                   {isEntrata ? <ArrowDownCircle size={18} color="#16A34A" style={{ flexShrink: 0 }} /> : <ArrowUpCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{m.categoria}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {m.categoria}
+                      {m._pending && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#D97706', background: '#FEF3C7', border: '0.5px solid #FDE68A', padding: '1px 6px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.04em' }}>in attesa</span>}
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                       {dataFmt}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
                     </div>

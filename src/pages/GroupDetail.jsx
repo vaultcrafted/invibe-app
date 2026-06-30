@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
-import { syncToSheet } from '../lib/sheetsSync'
+import { enqueueUpdate } from '../lib/syncQueue'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
 // Icone servizi custom
@@ -55,13 +55,17 @@ export default function GroupDetail() {
     setLoading(false)
   }
 
+  function sheetPayload(serviceId, quantita) {
+    return { destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita }
+  }
+
   async function toggleService(serviceId) {
     const newVal = !group[serviceId]
     setGroup(prev => ({ ...prev, [serviceId]: newVal }))
-    setSaving(serviceId)
-    await supabase.from('groups').update({ [serviceId]: newVal }).eq('id', groupId)
-    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: newVal ? participants.length : 0 })
-    setSaving(null)
+    enqueueUpdate('groups', { id: groupId }, { [serviceId]: newVal }, {
+      dedupKey: `groups:${groupId}:${serviceId}`,
+      sheet: [sheetPayload(serviceId, newVal ? participants.length : 0)],
+    })
   }
 
   function updateQtaService(serviceId, value) {
@@ -70,20 +74,21 @@ export default function GroupDetail() {
   }
 
   async function saveQtaService(serviceId) {
-    setSaving(serviceId)
-    await supabase.from('groups').update({ [serviceId]: group[serviceId] || 0 }).eq('id', groupId)
-    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: group[serviceId] || 0 })
-    setSaving(null)
+    const qty = group[serviceId] || 0
+    enqueueUpdate('groups', { id: groupId }, { [serviceId]: qty }, {
+      dedupKey: `groups:${groupId}:${serviceId}`,
+      sheet: [sheetPayload(serviceId, qty)],
+    })
   }
 
   async function toggleQtaService(serviceId) {
     const current = group[serviceId] || 0
     const newQty = current > 0 ? 0 : participants.filter(p => p.attivo !== false).length
     setGroup(prev => ({ ...prev, [serviceId]: newQty }))
-    setSaving(serviceId)
-    await supabase.from('groups').update({ [serviceId]: newQty }).eq('id', groupId)
-    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: serviceId, quantita: newQty })
-    setSaving(null)
+    enqueueUpdate('groups', { id: groupId }, { [serviceId]: newQty }, {
+      dedupKey: `groups:${groupId}:${serviceId}`,
+      sheet: [sheetPayload(serviceId, newQty)],
+    })
   }
 
   async function toggleParticipantActive(participantId) {
@@ -91,30 +96,30 @@ export default function GroupDetail() {
     const updated = participants.map(p => p.id === participantId ? { ...p, attivo: p.attivo === false } : p)
     setParticipants(updated)
     const target = updated.find(p => p.id === participantId)
-    await supabase.from('participants').update({ attivo: target.attivo }).eq('id', participantId)
+    enqueueUpdate('participants', { id: participantId }, { attivo: target.attivo }, {
+      dedupKey: `participants:${participantId}:attivo`,
+    })
 
     const newNPax = updated.filter(p => p.attivo !== false).length
-    {
-      // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
-      const svc = getServices(group.destination)
-      const newGroupValues = {}
-      svc.forEach(sv => {
-        const current = group[sv.id] || 0
-        if (oldNPax > 0 && current === oldNPax) {
-          newGroupValues[sv.id] = newNPax
-          syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: sv.id, quantita: newNPax })
-        }
-      })
-      if (Object.keys(newGroupValues).length > 0) {
-        setGroup(prev => ({ ...prev, ...newGroupValues }))
-        await supabase.from('groups').update(newGroupValues).eq('id', groupId)
+    // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
+    const svc = getServices(group.destination)
+    svc.forEach(sv => {
+      const current = group[sv.id] || 0
+      if (oldNPax > 0 && current === oldNPax) {
+        setGroup(prev => ({ ...prev, [sv.id]: newNPax }))
+        enqueueUpdate('groups', { id: groupId }, { [sv.id]: newNPax }, {
+          dedupKey: `groups:${groupId}:${sv.id}`,
+          sheet: [sheetPayload(sv.id, newNPax)],
+        })
       }
-    }
+    })
   }
 
   async function updateField(field, value) { setGroup(prev => ({ ...prev, [field]: value })) }
   async function saveField(field) {
-    await supabase.from('groups').update({ [field]: group[field] }).eq('id', groupId)
+    enqueueUpdate('groups', { id: groupId }, { [field]: group[field] }, {
+      dedupKey: `groups:${groupId}:${field}`,
+    })
     if (field === 'alloggio') setEditingAlloggio(false)
     if (field === 'note') setEditingNote(false)
   }
