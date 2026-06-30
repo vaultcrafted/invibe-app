@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import PaxContentTab from '../components/PaxContentTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
@@ -332,6 +333,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
         <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
+        <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
       </div>
 
       {tab === 'import' && (
@@ -421,6 +423,7 @@ export default function Admin() {
       {tab === 'premi' && <PremiTab />}
       {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
       {tab === 'cassa' && <CassaTab />}
+      {tab === 'pax' && <PaxContentTab />}
     </div>
   )
 }
