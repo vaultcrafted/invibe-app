@@ -360,17 +360,11 @@ export default function GroupDetail() {
                     {isExpanded && (
                       <div style={{ padding: '4px 16px 16px 16px', background: 'var(--bg-secondary)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
-                          <InfoField label="Indirizzo" value={p.indirizzo} wide />
-                          <InfoField label="Città" value={p.citta} />
-                          <InfoField label="Prov" value={p.prov} />
-                          <InfoField label="Residenza" value={p.stato_residenza} />
                           <InfoField label="Data di nascita" value={fmtDate(p.nascita)} />
                           <InfoField label="Sesso" value={p.sesso} />
                           <InfoField label="Telefono" value={p.telefono} href={p.telefono ? 'tel:' + p.telefono : null} />
                           <InfoField label="E-Mail" value={p.email} href={p.email ? 'mailto:' + p.email : null} wide />
                           <InfoField label="Nazionalità" value={p.nazionalita} />
-                          <InfoField label="Città di partenza" value={p.citta_partenza} />
-                          <InfoField label="Tipo documento" value={p.tipo_documento} />
                           <InfoField label="Pratica" value={p.pratica} />
                         </div>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 12 }}>
