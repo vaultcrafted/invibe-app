@@ -4,7 +4,7 @@ import PaxContentTab from '../components/PaxContentTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode } from '../lib/constants'
 
 // Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
 const ALL_SERVICE_IDS = [...new Set(DESTINATIONS.flatMap(d => getServices(d.id).map(s => s.id)))]
@@ -73,7 +73,7 @@ export default function Admin() {
       while (true) {
         const { data: page, error } = await supabase
           .from('groups')
-          .select('id, capogruppo_display, destination, shift_num, ' + ALL_SERVICE_IDS.join(', '))
+          .select('id, capogruppo_code, capogruppo_display, destination, shift_num, ' + ALL_SERVICE_IDS.join(', '))
           .order('destination').order('shift_num').order('capogruppo_display')
           .range(gFrom, gFrom + pageSize - 1)
         if (error) { console.error(error); setIncassiData([]); return }
@@ -918,7 +918,7 @@ function IncassiTab({ data, loading }) {
                     const tot = rowTotal(g)
                     rows.push(
                       <tr key={g.id}>
-                        <td style={tdLeftStyle}>{g.capogruppo_display}</td>
+                        <td style={tdLeftStyle}>{capogruppoCode(g.capogruppo_code) && <span className="code-chip" style={{ marginRight: 6 }}>{capogruppoCode(g.capogruppo_code)}</span>}{g.capogruppo_display}</td>
                         <td style={tdStyle}>{n}</td>
                         {SV && SV.map(sv => {
                           const val = svCell(g, sv)

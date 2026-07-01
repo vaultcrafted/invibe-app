@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 function isServiceOn(g, sv) {
@@ -45,7 +45,11 @@ export default function GroupList() {
   const totalPeople = groups.reduce((s, g) => s + (g.participants?.length || 0), 0)
 
   const filtered = groups
-    .filter(g => !search || g.capogruppo_display?.toLowerCase().includes(search.toLowerCase()))
+    .filter(g => {
+      if (!search) return true
+      const q = search.toLowerCase()
+      return g.capogruppo_display?.toLowerCase().includes(q) || String(g.capogruppo_code || '').toLowerCase().includes(q)
+    })
 
   if (!dest || !shift) return <div className="loading-screen"><p>Turno non trovato.</p></div>
 
@@ -56,7 +60,7 @@ export default function GroupList() {
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
-        <input placeholder="Cerca capogruppo..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
         {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
       <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi</div>
@@ -85,7 +89,10 @@ function GroupCard({ group, onClick }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{group.capogruppo_display}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {capogruppoCode(group.capogruppo_code) && <span className="code-chip">{capogruppoCode(group.capogruppo_code)}</span>}
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{group.capogruppo_display}</span>
+          </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
             {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
           </div>

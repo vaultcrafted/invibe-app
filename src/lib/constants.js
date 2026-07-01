@@ -194,6 +194,12 @@ export function getInitials(name) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
+export function capogruppoCode(code) {
+  if (!code) return ''
+  const m = String(code).match(/^\s*(\d+)/)
+  return m ? m[1] : String(code).trim()
+}
+
 export function calcAge(birthDate) {
   if (!birthDate) return null
   const today = new Date()

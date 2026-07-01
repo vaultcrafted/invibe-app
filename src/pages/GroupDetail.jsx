@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge } from '../lib/constants'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode } from '../lib/constants'
 import { enqueueUpdate } from '../lib/syncQueue'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
@@ -150,7 +150,10 @@ export default function GroupDetail() {
           <ChevronLeft size={18} color="#fff" />
         </button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>{group.capogruppo_display}</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2 }}>
+            {capogruppoCode(group.capogruppo_code) && <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontWeight: 700, opacity: 0.85, marginRight: 8 }}>{capogruppoCode(group.capogruppo_code)}</span>}
+            {group.capogruppo_display}
+          </div>
           <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>
             {dest?.name} · {shift?.label || `Turno ${group.shift_num}`}
           </div>
