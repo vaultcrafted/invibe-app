@@ -48,7 +48,7 @@ export default function GroupDetail() {
   async function fetchGroup() {
     const { data } = await supabase
       .from('groups')
-      .select('*, participants(id, nome, cognome, sesso, nascita, attivo, nazionalita, tipo_documento, numero_documento, data_emissione, data_scadenza, citta_partenza, pratica, stato, escursioni, navetta, assicurazione, iscrizione)')
+      .select('*, participants(id, nome, cognome, sesso, nascita, attivo, nazionalita, tipo_documento, numero_documento, data_emissione, data_scadenza, citta_partenza, pratica, stato, indirizzo, citta, prov, cap, stato_residenza, telefono, email, escursioni, navetta, assicurazione, iscrizione)')
       .eq('id', groupId)
       .single()
     if (data) { setGroup(data); setParticipants(data.participants || []) }
@@ -360,6 +360,14 @@ export default function GroupDetail() {
                     {isExpanded && (
                       <div style={{ padding: '4px 16px 16px 16px', background: 'var(--bg-secondary)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
+                          <InfoField label="Indirizzo" value={p.indirizzo} wide />
+                          <InfoField label="Città" value={p.citta} />
+                          <InfoField label="Prov" value={p.prov} />
+                          <InfoField label="Residenza" value={p.stato_residenza} />
+                          <InfoField label="Data di nascita" value={fmtDate(p.nascita)} />
+                          <InfoField label="Sesso" value={p.sesso} />
+                          <InfoField label="Telefono" value={p.telefono} href={p.telefono ? 'tel:' + p.telefono : null} />
+                          <InfoField label="E-Mail" value={p.email} href={p.email ? 'mailto:' + p.email : null} wide />
                           <InfoField label="Nazionalità" value={p.nazionalita} />
                           <InfoField label="Città di partenza" value={p.citta_partenza} />
                           <InfoField label="Tipo documento" value={p.tipo_documento} />
@@ -389,11 +397,13 @@ export default function GroupDetail() {
   )
 }
 
-function InfoField({ label, value }) {
+function InfoField({ label, value, wide, href }) {
   return (
-    <div>
+    <div style={wide ? { gridColumn: '1 / -1' } : undefined}>
       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
-      <div style={{ fontSize: 12, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)', marginTop: 2 }}>{value || '—'}</div>
+      {href && value
+        ? <a href={href} style={{ fontSize: 12, color: 'var(--accent, #1E6BF1)', marginTop: 2, display: 'block', textDecoration: 'none', wordBreak: 'break-word' }}>{value}</a>
+        : <div style={{ fontSize: 12, color: value ? 'var(--text-primary)' : 'var(--text-tertiary)', marginTop: 2, wordBreak: 'break-word' }}>{value || '—'}</div>}
     </div>
   )
 }
