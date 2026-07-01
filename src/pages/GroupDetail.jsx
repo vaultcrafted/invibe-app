@@ -371,11 +371,7 @@ export default function GroupDetail() {
                           <InfoField label="Nazionalità" value={p.nazionalita} />
                           <InfoField label="Città di partenza" value={p.citta_partenza} />
                           <InfoField label="Tipo documento" value={p.tipo_documento} />
-                          <InfoField label="Numero documento" value={p.numero_documento} />
-                          <InfoField label="Data emissione" value={fmtDate(p.data_emissione)} />
-                          <InfoField label="Data scadenza" value={fmtDate(p.data_scadenza)} />
                           <InfoField label="Pratica" value={p.pratica} />
-                          <InfoField label="Stato" value={p.stato} />
                         </div>
                         <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 12 }}>
                           {legacyFlags.map(f => (
