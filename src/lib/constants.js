@@ -200,6 +200,14 @@ export function capogruppoCode(code) {
   return m ? m[1] : String(code).trim()
 }
 
+// Mappa un id servizio -> chiave "prenotato" (prebook). null se non tracciato.
+export function prebookKeyForService(id) {
+  if (!id) return null
+  if (id.includes('ssp')) return 'ssp'
+  if (id.includes('escursioni')) return 'escursioni'
+  return null
+}
+
 export function calcAge(birthDate) {
   if (!birthDate) return null
   const today = new Date()

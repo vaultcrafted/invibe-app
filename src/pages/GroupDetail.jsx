@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode } from '../lib/constants'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService } from '../lib/constants'
 import { enqueueUpdate } from '../lib/syncQueue'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
@@ -193,11 +193,24 @@ export default function GroupDetail() {
                   const qty = group[sv.id] || 0
                   const active = qty > 0
                   const isSaving = saving === sv.id
+                  const pbKey = prebookKeyForService(sv.id)
+                  const prebooked = pbKey && group.prebook && group.prebook[pbKey] != null ? Number(group.prebook[pbKey]) : null
+                  const short = prebooked != null && qty < prebooked
                   return (
                     <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                       {/* Label */}
                       <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => toggleQtaService(sv.id)}>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</span>
+                          {prebooked != null && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
+                              background: short ? '#FEF3C7' : 'var(--bg-secondary)',
+                              color: short ? '#92600A' : 'var(--text-secondary)',
+                              border: '0.5px solid ' + (short ? '#FCD9A5' : 'var(--border)') }}>
+                              prenotate {prebooked}
+                            </span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                           €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
                           {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
