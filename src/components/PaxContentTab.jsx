@@ -43,6 +43,26 @@ function MetaChips({ meta, setMeta }) {
   )
 }
 
+// Upload PDF con percentuale reale (Supabase non espone il progress: uso XHR diretto)
+async function uploadPdfWithProgress(file, path, onProgress) {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY
+  const { data } = await supabase.auth.getSession()
+  const token = data?.session?.access_token || anon
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${url}/storage/v1/object/pax-programmi/${path}`, true)
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.setRequestHeader('apikey', anon)
+    xhr.setRequestHeader('x-upsert', 'true')
+    xhr.setRequestHeader('Content-Type', 'application/pdf')
+    xhr.upload.onprogress = e => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error('HTTP ' + xhr.status))
+    xhr.onerror = () => reject(new Error('rete'))
+    xhr.send(file)
+  })
+}
+
 export default function PaxContentTab() {
   const { profile } = useAuth()
   const [section, setSection] = useState('programmi')
@@ -76,6 +96,7 @@ function Programmi({ meta, col, onLog }) {
   const [all, setAll] = useState([])          // tutti i programmi della meta
   const [titolo, setTitolo] = useState('')
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [drag, setDrag] = useState(false)
   const [msg, setMsg] = useState(null)
   const fileRef = useRef(null)
@@ -97,13 +118,16 @@ function Programmi({ meta, col, onLog }) {
     if (!file) return
     if (file.type !== 'application/pdf') { setMsg({ t: 'err', m: 'Serve un file PDF.' }); return }
     const wasThere = !!row?.pdf_path
-    setBusy(true); setMsg(null)
+    setBusy(true); setProgress(0); setMsg(null)
     const path = `${meta}/${meta}-${turno}.pdf`
-    const { error: upErr } = await supabase.storage.from('pax-programmi').upload(path, file, { upsert: true, contentType: 'application/pdf' })
-    if (upErr) { setBusy(false); setMsg({ t: 'err', m: 'Upload fallito: ' + upErr.message }); return }
+    try {
+      await uploadPdfWithProgress(file, path, pct => setProgress(pct))
+    } catch (e) {
+      setBusy(false); setProgress(0); setMsg({ t: 'err', m: 'Upload fallito: ' + e.message }); return
+    }
     const { error: dbErr } = await supabase.from('pax_programmi')
       .upsert({ destination: meta, shift_num: turno, titolo: titolo || null, pdf_path: path, updated_at: new Date().toISOString() }, { onConflict: 'destination,shift_num' })
-    setBusy(false)
+    setBusy(false); setProgress(0)
     if (dbErr) { setMsg({ t: 'err', m: 'Salvataggio fallito: ' + dbErr.message }); return }
     setMsg({ t: 'ok', m: 'Programma caricato ✓' }); loadAll()
     onLog?.('programma', wasThere ? 'sostituito' : 'caricato', { destination: meta, shift_num: turno, dettaglio: `${metaName} ${turno}` })
@@ -173,9 +197,13 @@ function Programmi({ meta, col, onLog }) {
           }}>
           <div style={{ fontSize: 30, marginBottom: 6 }}>{busy ? '⏳' : '📄'}</div>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
-            {busy ? 'Carico…' : (pdfUrl ? 'Sostituisci il PDF' : 'Trascina il PDF o tocca per scegliere')}
+            {busy ? `Carico… ${progress}%` : (pdfUrl ? 'Sostituisci il PDF' : 'Trascina il PDF o tocca per scegliere')}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3 }}>Solo file PDF</div>
+          {busy
+            ? <div style={{ height: 6, borderRadius: 999, background: 'var(--bg-tertiary)', overflow: 'hidden', marginTop: 10, maxWidth: 240, marginLeft: 'auto', marginRight: 'auto' }}>
+                <div style={{ height: '100%', width: `${progress}%`, background: col, borderRadius: 999, transition: 'width .15s' }} />
+              </div>
+            : <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 3 }}>Solo file PDF</div>}
           <input ref={fileRef} type="file" accept="application/pdf" onChange={e => { handleFile(e.target.files?.[0]); e.target.value = '' }} disabled={busy} style={{ display: 'none' }} />
         </div>
 
