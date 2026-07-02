@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import { enqueueInsert, enqueueDelete, cancelOp, subscribe as subscribeSync } from '../lib/syncQueue'
 import Topbar from '../components/Topbar'
-import { Wallet, Plus, ArrowDownCircle, ArrowUpCircle, X } from 'lucide-react'
+import { Wallet, Plus, ArrowDownCircle, ArrowUpCircle, X, ArrowLeft } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -16,9 +16,17 @@ export const CATEGORIE = ['SSP', 'Tassa di soggiorno', 'Escursioni', 'Cauzione',
 export default function Cassa() {
   const { profile, isAdmin } = useAuth()
 
+  const [view, setView] = useState('summary')          // 'summary' | 'detail'
+  const [selectedShift, setSelectedShift] = useState(null)
+
+  // riepilogo
+  const [allMov, setAllMov] = useState([])
+  const [summaryLoading, setSummaryLoading] = useState(true)
+  const [filterDest, setFilterDest] = useState(null)
+
+  // dettaglio turno
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
-  const [selectedShift, setSelectedShift] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
@@ -35,21 +43,38 @@ export default function Cassa() {
     return { destination, shift_num, destName: dest.name, color: DEST_COLORS[destination] }
   }).filter(Boolean)
 
-  useEffect(() => {
-    if (shiftObjects.length > 0 && !selectedShift) setSelectedShift(shiftObjects[0])
-  }, [profile])
+  // carica tutti i movimenti per il riepilogo
+  useEffect(() => { loadSummary() }, [profile])
 
-  useEffect(() => { if (selectedShift) loadMovimenti() }, [selectedShift])
+  async function loadSummary() {
+    setSummaryLoading(true)
+    let all = [], from = 0
+    const pageSize = 1000
+    while (true) {
+      const { data } = await supabase.from('cassa_movimenti').select('*').range(from, from + pageSize - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < pageSize) break
+      from += pageSize
+    }
+    setAllMov(all)
+    setSummaryLoading(false)
+  }
 
-  // Quando la coda si svuota ed è tornata la rete, ricarico per allineare i movimenti ottimistici col server.
+  useEffect(() => { if (view === 'detail' && selectedShift) loadMovimenti() }, [selectedShift, view])
+
+  // Quando la coda si svuota ed è tornata la rete, ricarico la vista attiva.
   useEffect(() => {
     let prevPending = 0
     const unsub = subscribeSync(st => {
-      if (prevPending > 0 && st.pending === 0 && st.online && selectedShift) loadMovimenti()
+      if (prevPending > 0 && st.pending === 0 && st.online) {
+        if (view === 'detail' && selectedShift) loadMovimenti()
+        else loadSummary()
+      }
       prevPending = st.pending
     })
     return unsub
-  }, [selectedShift])
+  }, [view, selectedShift])
 
   async function loadMovimenti() {
     setLoading(true)
@@ -62,6 +87,9 @@ export default function Cassa() {
     setMovimenti(data || [])
     setLoading(false)
   }
+
+  function openTurno(s) { setSelectedShift(s); setShowForm(false); setView('detail') }
+  function backToSummary() { setSelectedShift(null); setView('summary'); loadSummary() }
 
   function openForm() {
     setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
@@ -83,7 +111,6 @@ export default function Cassa() {
       descrizione: form.descrizione || null,
       inserito_da: profile ? `${profile.nome} ${profile.cognome}` : null,
     }
-    // accodo (parte subito se online) e mostro la riga ottimisticamente
     const opId = enqueueInsert('cassa_movimenti', row)
     const optimistic = { ...row, id: 'tmp_' + opId, created_at: new Date().toISOString(), _pending: true, _opId: opId }
     setMovimenti(prev => [optimistic, ...prev])
@@ -92,7 +119,6 @@ export default function Cassa() {
 
   async function handleDelete(id) {
     const mov = movimenti.find(m => m.id === id)
-    // se è un inserimento non ancora sincronizzato, annullo l'op invece di cancellare a vuoto
     if (mov && mov._pending && mov._opId && cancelOp(mov._opId)) {
       setMovimenti(prev => prev.filter(m => m.id !== id))
       return
@@ -101,41 +127,118 @@ export default function Cassa() {
     enqueueDelete('cassa_movimenti', { id })
   }
 
+  // ================= RIEPILOGO =================
+  if (view === 'summary') {
+    const agg = {}
+    allMov.forEach(m => {
+      const k = m.destination + '__' + m.shift_num
+      if (!agg[k]) agg[k] = { entrate: 0, uscite: 0, count: 0 }
+      if (m.tipo === 'entrata') agg[k].entrate += Number(m.importo)
+      else agg[k].uscite += Number(m.importo)
+      agg[k].count++
+    })
+
+    const rows = shiftObjects
+      .filter(s => !filterDest || s.destination === filterDest)
+      .map(s => ({ ...s, ...(agg[s.destination + '__' + s.shift_num] || { entrate: 0, uscite: 0, count: 0 }) }))
+      .sort((a, b) => a.destination.localeCompare(b.destination) || a.shift_num - b.shift_num)
+
+    const fMov = filterDest ? allMov.filter(m => m.destination === filterDest) : allMov
+    const totE = fMov.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
+    const totU = fMov.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
+
+    const destIds = [...new Set(shiftObjects.map(s => s.destination))]
+
+    return (
+      <div className="page">
+        <Topbar showBack={false} showAvatar={false} />
+
+        <div style={{ padding: '14px 16px 0' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Wallet size={13} /> Cassa
+          </div>
+        </div>
+
+        {shiftObjects.length === 0 ? (
+          <div className="empty-state"><p>Nessun turno assegnato.</p></div>
+        ) : summaryLoading ? (
+          <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
+        ) : (
+          <div style={{ padding: '12px 16px 32px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Filtro meta */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Meta:</span>
+              <button onClick={() => setFilterDest(null)} style={chip(!filterDest)}>Tutte</button>
+              {DESTINATIONS.filter(d => destIds.includes(d.id)).map(d => (
+                <button key={d.id} onClick={() => setFilterDest(d.id)} style={chip(filterDest === d.id)}>{d.name}</button>
+              ))}
+            </div>
+
+            {/* Totali */}
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 150px', background: '#ECFDF5', border: '1px solid #16A34A33', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase' }}>Entrate totali</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#16A34A', marginTop: 4 }}>€{totE.toFixed(2)}</div>
+              </div>
+              <div style={{ flex: '1 1 150px', background: '#FEF2F2', border: '1px solid #DC262633', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>Uscite totali</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: '#DC2626', marginTop: 4 }}>€{totU.toFixed(2)}</div>
+              </div>
+              <div style={{ flex: '1 1 150px', background: 'var(--iv-blue-light)', border: '1px solid var(--iv-blue)', borderRadius: 14, padding: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--iv-blue)', textTransform: 'uppercase' }}>Saldo</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--iv-blue)', marginTop: 4 }}>€{(totE - totU).toFixed(2)}</div>
+              </div>
+            </div>
+
+            {/* Tabella turni */}
+            <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflowX: 'auto' }}>
+              <div style={{ minWidth: 520 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 100px 100px', padding: '10px 16px', background: 'var(--bg-secondary)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                  <div>Turno</div><div>Movimenti</div><div>Entrate</div><div>Uscite</div><div>Saldo</div>
+                </div>
+                {rows.length === 0 ? (
+                  <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun turno</div>
+                ) : rows.map((r, i) => {
+                  const saldoTurno = r.entrate - r.uscite
+                  return (
+                    <div key={i} onClick={() => openTurno(r)}
+                      style={{ display: 'grid', gridTemplateColumns: '1fr 90px 100px 100px 100px', padding: '11px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none', fontSize: 13, alignItems: 'center', cursor: 'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <div style={{ fontWeight: 600, color: 'var(--iv-blue)' }}>{r.destName} · {shiftLabel(r.destination, r.shift_num)}</div>
+                      <div style={{ color: 'var(--text-tertiary)' }}>{r.count}</div>
+                      <div style={{ color: '#16A34A' }}>€{r.entrate.toFixed(2)}</div>
+                      <div style={{ color: '#DC2626' }}>€{r.uscite.toFixed(2)}</div>
+                      <div style={{ fontWeight: 700 }}>€{saldoTurno.toFixed(2)}</div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ================= DETTAGLIO TURNO =================
   const totaleEntrate = movimenti.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
   const totaleUscite = movimenti.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
   const saldo = totaleEntrate - totaleUscite
   const color = selectedShift?.color || 'var(--iv-blue)'
 
-  if (shiftObjects.length === 0) return (
-    <div className="page">
-      <Topbar showBack={false} showAvatar={false} />
-      <div className="empty-state"><p>Nessun turno assegnato.</p></div>
-    </div>
-  )
-
   return (
     <div className="page">
       <Topbar showBack={false} showAvatar={false} />
 
-      {/* Selettore turno */}
-      {shiftObjects.length > 1 && (
-        <div style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16, overflowX: 'auto', display: 'flex', gap: 8, minHeight: 36 }}>
-          {shiftObjects.map((s, i) => {
-            const active = selectedShift?.destination === s.destination && selectedShift?.shift_num === s.shift_num
-            return (
-              <button key={i} onClick={() => setSelectedShift(s)} style={{
-                padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
-                background: active ? s.color : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)',
-                border: '0.5px solid ' + (active ? s.color : 'var(--border)'),
-              }}>
-                {s.destName} {shiftLabel(s.destination, s.shift_num)}
-              </button>
-            )
-          })}
-        </div>
-      )}
+      {/* Torna al riepilogo */}
+      <div style={{ padding: '12px 16px 0' }}>
+        <button onClick={backToSummary} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, padding: 0 }}>
+          <ArrowLeft size={16} /> Tutti i turni
+        </button>
+      </div>
 
-      <div style={{ padding: '14px 16px 0' }}>
+      <div style={{ padding: '10px 16px 0' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Wallet size={13} /> Cassa · {selectedShift ? `${selectedShift.destName} · ${shiftLabel(selectedShift.destination, selectedShift.shift_num)}` : ''}
         </div>
@@ -152,7 +255,6 @@ export default function Cassa() {
           </div>
         </div>
 
-        {/* Bottone aggiungi */}
         <button onClick={openForm} style={{ width: '100%', marginTop: 12, padding: '13px', borderRadius: 12, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}>
           <Plus size={16} /> Nuovo movimento
         </button>
@@ -255,4 +357,8 @@ export default function Cassa() {
       )}
     </div>
   )
+}
+
+function chip(active) {
+  return { padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)') }
 }
