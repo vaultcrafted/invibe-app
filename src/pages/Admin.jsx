@@ -440,30 +440,63 @@ function StaffCard({ staff }) {
   const [open, setOpen] = useState(false)
   const assigned = staff.assigned_shifts || []
   const initials = ((staff.nome?.[0] || '') + (staff.cognome?.[0] || '')).toUpperCase()
+  const inattivo = staff.attivo === false
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('it-IT') : null
+  const info = [
+    ['Ruolo', staff.ruolo],
+    ['Tipologia', staff.tipologia],
+    ['Nascita', fmtDate(staff.nascita)],
+    ['Città', staff.citta],
+    ['Sesso', staff.sesso],
+    ['Telefono', staff.telefono],
+    ['Email', staff.email],
+    ['Taglia maglia', staff.taglia_maglia],
+    ['Anno ingresso', staff.anno_ingresso],
+    ['Crew leader', staff.crew_leader],
+    ['Settimane 2024', staff.settimane_2024],
+    ['Settimane 2025', staff.settimane_2025],
+    ['Settimane 2026', staff.settimane_2026],
+  ].filter(([, v]) => v !== null && v !== undefined && v !== '')
   return (
-    <div className="card">
+    <div className="card" style={inattivo ? { opacity: 0.6 } : undefined}>
       <button style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10 }} onClick={() => setOpen(o => !o)}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{staff.nome} {staff.cognome}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{staff.role === 'admin' ? 'Admin' : assigned.length + ' turni assegnati'}</div>
+          <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+            {staff.nome} {staff.cognome}
+            {inattivo && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', border: '0.5px solid #FCA5A5', padding: '1px 6px', borderRadius: 20, textTransform: 'uppercase' }}>disattivato</span>}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{staff.role === 'admin' ? 'Admin' : (staff.ruolo || (assigned.length + ' turni assegnati'))}</div>
         </div>
         <div style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>{open ? '▲' : '▼'}</div>
       </button>
 
       {open && (
-        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
-          {assigned.length === 0 ? (
-            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Nessun turno assegnato</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {assigned.map((a, i) => (
-                <span key={i} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', border: '0.5px solid var(--iv-blue)' }}>
-                  {(DESTINATIONS.find(d => d.id === a.destination)?.name || a.destination)} · {shiftLabel(a.destination, a.shift_num)}
-                </span>
+        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {info.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
+              {info.map(([label, value]) => (
+                <div key={label}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase' }}>{label}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>{String(value)}</div>
+                </div>
               ))}
             </div>
           )}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 5 }}>Turni assegnati</div>
+            {assigned.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Nessun turno assegnato</div>
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {assigned.map((a, i) => (
+                  <span key={i} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', border: '0.5px solid var(--iv-blue)' }}>
+                    {(DESTINATIONS.find(d => d.id === a.destination)?.name || a.destination)} · {shiftLabel(a.destination, a.shift_num)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
