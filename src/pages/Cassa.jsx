@@ -16,7 +16,7 @@ export const CATEGORIE = ['SSP', 'Tassa di soggiorno', 'Escursioni', 'Cauzione',
 
 // Cassa nel menù = SOLA LETTURA (recap veloce). I movimenti si aggiungono dal pannello Admin.
 export default function Cassa() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, isFullAccess } = useAuth()
 
   const [view, setView] = useState('summary')          // 'summary' | 'detail'
   const [selectedShift, setSelectedShift] = useState(null)
@@ -30,7 +30,7 @@ export default function Cassa() {
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const assignedShifts = isAdmin
+  const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
     : (profile?.assigned_shifts || [])
 

@@ -22,7 +22,7 @@ function getCurrentDayNum(shiftStart, today = new Date()) {
 }
 
 export default function Dbd() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, isFullAccess } = useAuth()
   const navigate = useNavigate()
 
   const [entries, setEntries] = useState([]) // tutti i DBD caricati
@@ -31,7 +31,7 @@ export default function Dbd() {
   const [selectedDay, setSelectedDay] = useState(1)
 
   // Turni dello staff (o tutti se admin)
-  const assignedShifts = isAdmin
+  const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
     : (profile?.assigned_shifts || [])
 

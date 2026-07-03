@@ -5,13 +5,13 @@ import Topbar from '../components/Topbar'
 
 export default function ShiftSelect() {
   const { destId } = useParams()
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, isFullAccess } = useAuth()
   const navigate = useNavigate()
 
   const dest = DESTINATIONS.find(d => d.id === destId)
   const shifts = SHIFTS[destId] || []
 
-  const assignedNums = isAdmin
+  const assignedNums = isFullAccess
     ? shifts.map(s => s.num)
     : (profile?.assigned_shifts || []).filter(s => s.destination === destId).map(s => s.shift_num)
 

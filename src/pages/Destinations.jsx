@@ -12,7 +12,7 @@ const DEST_IMAGES = {
 }
 
 export default function Destinations() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, isFullAccess } = useAuth()
   const navigate = useNavigate()
 
   const assignedDests = profile?.assigned_shifts
@@ -27,7 +27,7 @@ export default function Destinations() {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '8px 16px 16px', justifyContent: 'center' }}>
         {DESTINATIONS.map(dest => {
-          const isAssigned = isAdmin || assignedDests.includes(dest.id)
+          const isAssigned = isFullAccess || assignedDests.includes(dest.id)
           return (
             <button
               key={dest.id}

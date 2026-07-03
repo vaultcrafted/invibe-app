@@ -4,6 +4,7 @@ import PaxContentTab from '../components/PaxContentTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../context/AuthContext'
 import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode } from '../lib/constants'
 
 // Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
@@ -13,7 +14,8 @@ import Topbar from '../components/Topbar'
 
 export default function Admin() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('import')
+  const { isFullAccess, canImport, canEditCassa, profile } = useAuth()
+  const [tab, setTab] = useState(canImport ? 'import' : 'cassa')
   const [importing, setImporting] = useState(false)
   const [importLog, setImportLog] = useState([])
   const [progress, setProgress] = useState(null)
@@ -327,16 +329,16 @@ export default function Admin() {
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
       <div className="tabs">
-        <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>
-        <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
-        <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
-        <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
-        <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
+        {canImport && <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>}
+        {isFullAccess && <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>}
+        {isFullAccess && <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>}
+        {isFullAccess && <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>}
+        {isFullAccess && <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>}
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
-        <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
+        {isFullAccess && <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>}
       </div>
 
-      {tab === 'import' && (
+      {canImport && tab === 'import' && (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card" style={{ textAlign: 'center', padding: 24 }}>
             <Upload size={32} color="var(--iv-blue)" style={{ marginBottom: 12 }} />
@@ -405,7 +407,7 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === 'staff' && (
+      {isFullAccess && tab === 'staff' && (
         <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {staffList.map(staff => (
             <StaffCard key={staff.id} staff={staff} onToggle={toggleAssignment} />
@@ -414,16 +416,16 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === 'stats' && (stats ? <StatsTab stats={stats} /> : (
+      {isFullAccess && tab === 'stats' && (stats ? <StatsTab stats={stats} /> : (
         <div style={{ padding: '60px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--text-secondary)' }}>
           <div className="spinner" />
           <div style={{ fontSize: 13 }}>Carico le statistiche…</div>
         </div>
       ))}
-      {tab === 'premi' && <PremiTab />}
-      {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
+      {isFullAccess && tab === 'premi' && <PremiTab />}
+      {isFullAccess && tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
       {tab === 'cassa' && <CassaTab />}
-      {tab === 'pax' && <PaxContentTab />}
+      {isFullAccess && tab === 'pax' && <PaxContentTab />}
     </div>
   )
 }
@@ -1139,6 +1141,8 @@ function StatsTab({ stats }) {
 }
 
 function CassaTab() {
+  const { isFullAccess, profile } = useAuth()
+  const myShifts = isFullAccess ? null : (profile?.assigned_shifts || [])
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDest, setFilterDest] = useState(null)
@@ -1167,10 +1171,12 @@ function CassaTab() {
 
   if (loading) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico cassa...</div>
 
-  const filtered = filterDest ? movimenti.filter(m => m.destination === filterDest) : movimenti
+  const groupKey = (dest, shift) => `${dest}__${shift}`
+  const allowedKeys = myShifts ? new Set(myShifts.map(s => groupKey(s.destination, s.shift_num))) : null
+  const scoped = allowedKeys ? movimenti.filter(m => allowedKeys.has(groupKey(m.destination, m.shift_num))) : movimenti
+  const filtered = filterDest ? scoped.filter(m => m.destination === filterDest) : scoped
 
   // Raggruppa per destinazione + turno
-  const groupKey = (dest, shift) => `${dest}__${shift}`
   const byShift = {}
   filtered.forEach(m => {
     const k = groupKey(m.destination, m.shift_num)
@@ -1180,14 +1186,21 @@ function CassaTab() {
     byShift[k].count++
   })
 
-  // Aggiunge tutti i turni esistenti (anche a zero movimenti) per la/le meta selezionate
-  const destsToShow = filterDest ? [filterDest] : DESTINATIONS.map(d => d.id)
-  destsToShow.forEach(destId => {
-    (SHIFTS[destId] || []).forEach(s => {
-      const k = groupKey(destId, s.num)
-      if (!byShift[k]) byShift[k] = { destination: destId, shift_num: s.num, entrate: 0, uscite: 0, count: 0 }
+  // Aggiunge i turni a zero movimenti. Full: tutti i turni delle mete mostrate. CM/ACM: solo i propri.
+  if (myShifts) {
+    myShifts.filter(s => !filterDest || s.destination === filterDest).forEach(s => {
+      const k = groupKey(s.destination, s.shift_num)
+      if (!byShift[k]) byShift[k] = { destination: s.destination, shift_num: s.shift_num, entrate: 0, uscite: 0, count: 0 }
     })
-  })
+  } else {
+    const destsToShow = filterDest ? [filterDest] : DESTINATIONS.map(d => d.id)
+    destsToShow.forEach(destId => {
+      (SHIFTS[destId] || []).forEach(s => {
+        const k = groupKey(destId, s.num)
+        if (!byShift[k]) byShift[k] = { destination: destId, shift_num: s.num, entrate: 0, uscite: 0, count: 0 }
+      })
+    })
+  }
 
   const shiftRows = Object.values(byShift).sort((a, b) => a.destination.localeCompare(b.destination) || a.shift_num - b.shift_num)
 
@@ -1199,7 +1212,7 @@ function CassaTab() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Meta:</span>
         <button onClick={() => setFilterDest(null)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterDest ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !filterDest ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterDest ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte</button>
-        {DESTINATIONS.map(d => (
+        {DESTINATIONS.filter(d => !myShifts || myShifts.some(s => s.destination === d.id)).map(d => (
           <button key={d.id} onClick={() => setFilterDest(d.id)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filterDest === d.id ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filterDest === d.id ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filterDest === d.id ? 'var(--iv-blue)' : 'var(--border)') }}>{d.name}</button>
         ))}
       </div>
@@ -1247,6 +1260,7 @@ function CassaTab() {
 }
 
 function CassaTurnoDetail({ destination, shiftNum, onBack }) {
+  const { canEditCassa } = useAuth()
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -1320,9 +1334,11 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         </div>
       </div>
 
-      <button onClick={openForm} style={{ padding: '12px', borderRadius: 12, background: 'var(--iv-blue)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', width: 'fit-content', paddingLeft: 20, paddingRight: 20 }}>
-        <Plus size={16} /> Nuovo movimento
-      </button>
+      {canEditCassa && (
+        <button onClick={openForm} style={{ padding: '12px', borderRadius: 12, background: 'var(--iv-blue)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', width: 'fit-content', paddingLeft: 20, paddingRight: 20 }}>
+          <Plus size={16} /> Nuovo movimento
+        </button>
+      )}
 
       <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (
@@ -1344,9 +1360,11 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
               <div style={{ fontSize: 14, fontWeight: 700, color: isEntrata ? '#16A34A' : '#DC2626', flexShrink: 0 }}>
                 {isEntrata ? '+' : '-'}€{Number(m.importo).toFixed(2)}
               </div>
-              <button onClick={() => handleDelete(m.id)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                <X size={14} />
-              </button>
+              {canEditCassa && (
+                <button onClick={() => handleDelete(m.id)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
           )
         })}

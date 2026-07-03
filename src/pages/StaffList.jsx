@@ -106,7 +106,7 @@ function ShiftMemberView({ selectedDest, selectedShift, members, isAdmin, profil
 }
 
 export default function StaffList() {
-  const { isAdmin, profile } = useAuth()
+  const { isAdmin, isFullAccess, profile } = useAuth()
   const navigate = useNavigate()
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
@@ -122,7 +122,7 @@ export default function StaffList() {
     })
   }, [])
 
-  const myShifts = isAdmin
+  const myShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
     : (profile?.assigned_shifts || [])
 

@@ -13,10 +13,10 @@ const MONTHS = [
 ]
 
 export default function Calendario() {
-  const { profile, isAdmin } = useAuth()
+  const { profile, isAdmin, isFullAccess } = useAuth()
   const navigate = useNavigate()
 
-  const assignedShifts = isAdmin
+  const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
     : (profile?.assigned_shifts || [])
 

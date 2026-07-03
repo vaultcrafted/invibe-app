@@ -49,8 +49,21 @@ export function AuthProvider({ children }) {
 
   const isAdmin = profile?.role === 'admin'
 
+  // Ruolo (mansione) per i livelli di accesso. Match esatto: "ACM" NON deve contare come "CM".
+  const ru = (profile?.ruolo || '').toUpperCase()
+  const isUfficio = /\bUFFICIO\b/.test(ru)
+  const isSupervisor = /SUPERVISOR/.test(ru)      // copre SUPERVISOR / SUPERVISORE
+  const isCM = /\bCM\b/.test(ru)                   // \bCM\b non matcha "ACM"
+  const isACM = /\bACM\b/.test(ru)
+  // Accesso globale (tutto sbloccato): solo ufficio e supervisor.
+  const isFullAccess = isUfficio || isSupervisor
+  // Inserimento movimenti in cassa: ufficio, supervisor, CM (non ACM).
+  const canEditCassa = isFullAccess || isCM
+  // Import Excel (sovrascrive tutto il DB): solo accesso globale.
+  const canImport = isFullAccess
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, isFullAccess, isCM, isACM, canEditCassa, canImport, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
