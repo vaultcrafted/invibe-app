@@ -2,17 +2,19 @@ import { useEffect, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
-import { enqueueInsert, enqueueDelete, cancelOp, subscribe as subscribeSync } from '../lib/syncQueue'
+import { subscribe as subscribeSync } from '../lib/syncQueue'
 import Topbar from '../components/Topbar'
-import { Wallet, Plus, ArrowDownCircle, ArrowUpCircle, X, ArrowLeft } from 'lucide-react'
+import { Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
   gallipoli: '#DC2626', sardegna: '#7C3AED',
 }
 
+// Esportata per l'inserimento movimenti nel pannello Admin.
 export const CATEGORIE = ['SSP', 'Tassa di soggiorno', 'Escursioni', 'Cauzione', 'Paleo', 'Montecristo', 'Pazuzu', 'Mojito', 'Pranzo Laviron', 'Spesa staff', 'Rimborsi', 'Altro']
 
+// Cassa nel menù = SOLA LETTURA (recap veloce). I movimenti si aggiungono dal pannello Admin.
 export default function Cassa() {
   const { profile, isAdmin } = useAuth()
 
@@ -24,13 +26,9 @@ export default function Cassa() {
   const [summaryLoading, setSummaryLoading] = useState(true)
   const [filterDest, setFilterDest] = useState(null)
 
-  // dettaglio turno
+  // dettaglio turno (lettura)
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
-  const [saveError, setSaveError] = useState(null)
 
   const assignedShifts = isAdmin
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -43,7 +41,6 @@ export default function Cassa() {
     return { destination, shift_num, destName: dest.name, color: DEST_COLORS[destination] }
   }).filter(Boolean)
 
-  // carica tutti i movimenti per il riepilogo
   useEffect(() => { loadSummary() }, [profile])
 
   async function loadSummary() {
@@ -63,7 +60,7 @@ export default function Cassa() {
 
   useEffect(() => { if (view === 'detail' && selectedShift) loadMovimenti() }, [selectedShift, view])
 
-  // Quando la coda si svuota ed è tornata la rete, ricarico la vista attiva.
+  // Quando la coda di sync si svuota (dopo scritture altrove), ricarico la vista attiva.
   useEffect(() => {
     let prevPending = 0
     const unsub = subscribeSync(st => {
@@ -88,44 +85,8 @@ export default function Cassa() {
     setLoading(false)
   }
 
-  function openTurno(s) { setSelectedShift(s); setShowForm(false); setView('detail') }
+  function openTurno(s) { setSelectedShift(s); setView('detail') }
   function backToSummary() { setSelectedShift(null); setView('summary'); loadSummary() }
-
-  function openForm() {
-    setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
-    setSaveError(null)
-    setShowForm(true)
-  }
-
-  async function handleSave() {
-    const amount = parseFloat(form.importo)
-    if (!amount || amount <= 0) return
-    setSaveError(null)
-    const row = {
-      destination: selectedShift.destination,
-      shift_num: selectedShift.shift_num,
-      data: form.data,
-      tipo: form.tipo,
-      categoria: form.categoria,
-      importo: amount,
-      descrizione: form.descrizione || null,
-      inserito_da: profile ? `${profile.nome} ${profile.cognome}` : null,
-    }
-    const opId = enqueueInsert('cassa_movimenti', row)
-    const optimistic = { ...row, id: 'tmp_' + opId, created_at: new Date().toISOString(), _pending: true, _opId: opId }
-    setMovimenti(prev => [optimistic, ...prev])
-    setShowForm(false)
-  }
-
-  async function handleDelete(id) {
-    const mov = movimenti.find(m => m.id === id)
-    if (mov && mov._pending && mov._opId && cancelOp(mov._opId)) {
-      setMovimenti(prev => prev.filter(m => m.id !== id))
-      return
-    }
-    setMovimenti(prev => prev.filter(m => m.id !== id))
-    enqueueDelete('cassa_movimenti', { id })
-  }
 
   // ================= RIEPILOGO =================
   if (view === 'summary') {
@@ -155,7 +116,7 @@ export default function Cassa() {
 
         <div style={{ padding: '14px 16px 0' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Wallet size={13} /> Cassa
+            <Wallet size={13} /> Cassa · recap
           </div>
         </div>
 
@@ -221,7 +182,7 @@ export default function Cassa() {
     )
   }
 
-  // ================= DETTAGLIO TURNO =================
+  // ================= DETTAGLIO TURNO (lettura) =================
   const totaleEntrate = movimenti.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
   const totaleUscite = movimenti.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
   const saldo = totaleEntrate - totaleUscite
@@ -231,7 +192,6 @@ export default function Cassa() {
     <div className="page">
       <Topbar showBack={false} showAvatar={false} />
 
-      {/* Torna al riepilogo */}
       <div style={{ padding: '12px 16px 0' }}>
         <button onClick={backToSummary} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600, padding: 0 }}>
           <ArrowLeft size={16} /> Tutti i turni
@@ -254,13 +214,9 @@ export default function Cassa() {
             <span>↑ Uscite €{totaleUscite.toFixed(2)}</span>
           </div>
         </div>
-
-        <button onClick={openForm} style={{ width: '100%', marginTop: 12, padding: '13px', borderRadius: 12, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border)', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer' }}>
-          <Plus size={16} /> Nuovo movimento
-        </button>
       </div>
 
-      {/* Lista movimenti */}
+      {/* Lista movimenti (lettura) */}
       <div style={{ padding: '4px 16px 32px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
@@ -275,10 +231,7 @@ export default function Cassa() {
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < movimenti.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                   {isEntrata ? <ArrowDownCircle size={18} color="#16A34A" style={{ flexShrink: 0 }} /> : <ArrowUpCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {m.categoria}
-                      {m._pending && <span style={{ fontSize: 9.5, fontWeight: 700, color: '#D97706', background: '#FEF3C7', border: '0.5px solid #FDE68A', padding: '1px 6px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.04em' }}>in attesa</span>}
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{m.categoria}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                       {dataFmt}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
                     </div>
@@ -286,75 +239,12 @@ export default function Cassa() {
                   <div style={{ fontSize: 14, fontWeight: 700, color: isEntrata ? '#16A34A' : '#DC2626', flexShrink: 0 }}>
                     {isEntrata ? '+' : '-'}€{Number(m.importo).toFixed(2)}
                   </div>
-                  {isAdmin && (
-                    <button onClick={() => handleDelete(m.id)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                      <X size={14} />
-                    </button>
-                  )}
                 </div>
               )
             })}
           </div>
         )}
       </div>
-
-      {/* Modale aggiungi movimento */}
-      {showForm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 50 }} onClick={() => setShowForm(false)}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-primary)', borderRadius: '20px 20px 0 0', padding: '20px 18px 28px', width: '100%', maxWidth: 480 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>
-                Nuovo movimento
-              </div>
-              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={() => setForm(f => ({ ...f, tipo: 'entrata' }))} style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1.5px solid ' + (form.tipo === 'entrata' ? '#16A34A' : 'var(--border)'), background: form.tipo === 'entrata' ? '#ECFDF5' : 'transparent', color: form.tipo === 'entrata' ? '#16A34A' : 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <ArrowDownCircle size={15} /> Entrata
-                </button>
-                <button onClick={() => setForm(f => ({ ...f, tipo: 'uscita' }))} style={{ flex: 1, padding: '10px', borderRadius: 10, border: '1.5px solid ' + (form.tipo === 'uscita' ? '#DC2626' : 'var(--border)'), background: form.tipo === 'uscita' ? '#FEF2F2' : 'transparent', color: form.tipo === 'uscita' ? '#DC2626' : 'var(--text-secondary)', fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                  <ArrowUpCircle size={15} /> Uscita
-                </button>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Importo (€)</label>
-                <input type="number" min="0" step="0.01" placeholder="0.00" value={form.importo} onChange={e => setForm(f => ({ ...f, importo: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 18, fontWeight: 700, marginTop: 4, color: form.tipo === 'entrata' ? '#16A34A' : '#DC2626' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria</label>
-                <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 4 }}>
-                  {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Descrizione (opzionale)</label>
-                <input type="text" placeholder="es. tax Lavrion c2-c3-c4" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, marginTop: 4 }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Data</label>
-                <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, marginTop: 4 }} />
-              </div>
-
-              {saveError && (
-                <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #DC262633', color: '#DC2626', fontSize: 12 }}>
-                  Errore nel salvataggio: {saveError}
-                </div>
-              )}
-
-              <button onClick={handleSave} disabled={saving || !form.importo}
-                style={{ marginTop: 6, padding: '13px', borderRadius: 12, border: 'none', background: form.tipo === 'entrata' ? '#16A34A' : '#DC2626', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving || !form.importo ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <Plus size={16} /> {saving ? 'Salvo...' : 'Aggiungi movimento'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
