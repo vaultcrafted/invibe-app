@@ -15,7 +15,11 @@ import Topbar from '../components/Topbar'
 export default function Admin() {
   const navigate = useNavigate()
   const { isFullAccess, canImport, canEditCassa, profile } = useAuth()
-  const [tab, setTab] = useState(canImport ? 'import' : 'cassa')
+  // Scope ai turni assegnati per CM/ACM (null = accesso globale).
+  const scopeShifts = isFullAccess ? null : (profile?.assigned_shifts || [])
+  const scopeSet = scopeShifts ? new Set(scopeShifts.map(s => `${s.destination}__${s.shift_num}`)) : null
+  const inScope = (dest, num) => !scopeSet || scopeSet.has(`${dest}__${num}`)
+  const [tab, setTab] = useState(canImport ? 'import' : 'staff')
   const [importing, setImporting] = useState(false)
   const [importLog, setImportLog] = useState([])
   const [progress, setProgress] = useState(null)
@@ -31,7 +35,8 @@ export default function Admin() {
 
   async function fetchStaff() {
     const { data } = await supabase.from('staff_profiles').select('*').order('cognome')
-    setStaffList(data || [])
+    const list = (data || []).filter(s => isFullAccess || (s.assigned_shifts || []).some(sh => inScope(sh.destination, sh.shift_num)))
+    setStaffList(list)
   }
 
   async function fetchStats() {
@@ -59,9 +64,10 @@ export default function Admin() {
       if (data.length < PAGE) break
       pfrom += PAGE
     }
-    const totalParts = Object.values(partCount).reduce((a, b) => a + b, 0)
+    const scopedGroups = groups.filter(g => inScope(g.destination, g.shift_num))
+    const totalParts = scopedGroups.reduce((a, g) => a + (partCount[g.id] || 0), 0)
     setStats({
-      groups: groups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0 })),
+      groups: scopedGroups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0 })),
       totalParts,
     })
   }
@@ -98,7 +104,7 @@ export default function Admin() {
         if (page.length < pageSize) break
         from += pageSize
       }
-      setIncassiData(groups.map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
+      setIncassiData(groups.filter(g => inScope(g.destination, g.shift_num)).map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
     } catch (e) {
       console.error(e)
       setIncassiData([])
@@ -330,12 +336,12 @@ export default function Admin() {
       <Topbar showBack={true} showAvatar={false} />
       <div className="tabs">
         {canImport && <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>}
-        {isFullAccess && <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>}
-        {isFullAccess && <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>}
-        {isFullAccess && <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>}
-        {isFullAccess && <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>}
+        <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
+        <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
+        <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
+        <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
-        {isFullAccess && <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>}
+        <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
       </div>
 
       {canImport && tab === 'import' && (
@@ -407,30 +413,30 @@ export default function Admin() {
         </div>
       )}
 
-      {isFullAccess && tab === 'staff' && (
+      {tab === 'staff' && (
         <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {staffList.map(staff => (
-            <StaffCard key={staff.id} staff={staff} onToggle={toggleAssignment} />
+            <StaffCard key={staff.id} staff={staff} onToggle={toggleAssignment} canEdit={isFullAccess} />
           ))}
           {staffList.length === 0 && <div className="empty-state"><p>Nessuno staff registrato.</p></div>}
         </div>
       )}
 
-      {isFullAccess && tab === 'stats' && (stats ? <StatsTab stats={stats} /> : (
+      {tab === 'stats' && (stats ? <StatsTab stats={stats} /> : (
         <div style={{ padding: '60px 16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--text-secondary)' }}>
           <div className="spinner" />
           <div style={{ fontSize: 13 }}>Carico le statistiche…</div>
         </div>
       ))}
-      {isFullAccess && tab === 'premi' && <PremiTab />}
-      {isFullAccess && tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
+      {tab === 'premi' && <PremiTab scope={scopeShifts} />}
+      {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
       {tab === 'cassa' && <CassaTab />}
-      {isFullAccess && tab === 'pax' && <PaxContentTab />}
+      {tab === 'pax' && <PaxContentTab scope={scopeShifts} />}
     </div>
   )
 }
 
-function StaffCard({ staff, onToggle }) {
+function StaffCard({ staff, onToggle, canEdit }) {
   const [open, setOpen] = useState(false)
   const assigned = staff.assigned_shifts || []
   const initials = ((staff.nome?.[0] || '') + (staff.cognome?.[0] || '')).toUpperCase()
@@ -444,7 +450,24 @@ function StaffCard({ staff, onToggle }) {
         </div>
         <div style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>{open ? '▲' : '▼'}</div>
       </button>
-      {open && staff.role !== 'admin' && (
+
+      {open && !canEdit && (
+        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
+          {assigned.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Nessun turno assegnato</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {assigned.map((a, i) => (
+                <span key={i} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', border: '0.5px solid var(--iv-blue)' }}>
+                  {(DESTINATIONS.find(d => d.id === a.destination)?.name || a.destination)} · {shiftLabel(a.destination, a.shift_num)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {open && canEdit && staff.role !== 'admin' && (
         <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {DESTINATIONS.map(dest => (
             <div key={dest.id}>
@@ -529,7 +552,9 @@ function ServiceRow({ s, totalGroups }) {
   )
 }
 
-function PremiTab() {
+function PremiTab({ scope }) {
+  const scopeSet = scope ? new Set(scope.map(s => `${s.destination}__${s.shift_num}`)) : null
+  const scopeMetas = scope ? [...new Set(scope.map(s => s.destination))] : null
   const [votes, setVotes] = useState([])
   const [profiles, setProfiles] = useState([])
   const [loading, setLoading] = useState(true)
@@ -542,7 +567,7 @@ function PremiTab() {
         supabase.from('votes').select('voted_for_id, type, destination, shift_num'),
         supabase.from('staff_profiles').select('id, nome, cognome, ruolo'),
       ])
-      setVotes(v || [])
+      setVotes((v || []).filter(vote => !scopeSet || scopeSet.has(`${vote.destination}__${vote.shift_num}`)))
       setProfiles(p || [])
       setLoading(false)
     }
@@ -569,7 +594,7 @@ function PremiTab() {
 
       {/* Selettore destinazione */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {DESTINATIONS.map(dest => {
+        {DESTINATIONS.filter(d => !scopeMetas || scopeMetas.includes(d.id)).map(dest => {
           const hasVotes = votes.some(v => v.destination === dest.id)
           if (!hasVotes) return null
           const col = DEST_COLORS[dest.id]
@@ -980,9 +1005,11 @@ function StatsTab({ stats }) {
   const groups = stats.groups
   const totalGroups = groups.length
   const totalParts = stats.totalParts
+  // Solo le mete che hanno gruppi (scoping CM/ACM: mostra solo le loro).
+  const metasPresent = DESTINATIONS.filter(d => groups.some(g => g.destination === d.id))
 
   // Riepilogo per destinazione (sempre calcolato)
-  const destRows = DESTINATIONS.map(dest => {
+  const destRows = metasPresent.map(dest => {
     const dg = groups.filter(g => g.destination === dest.id)
     if (!dg.length) return null
     const services = computeServices(dg, getServices(dest.id))
@@ -1042,7 +1069,7 @@ function StatsTab({ stats }) {
 
       {/* Filtri meta */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {DESTINATIONS.map(dest => {
+        {metasPresent.map(dest => {
           const active = filterDest === dest.id
           const col = DEST_COLORS[dest.id]
           const exists = destRows.some(r => r.dest.id === dest.id)

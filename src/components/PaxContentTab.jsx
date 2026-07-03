@@ -26,10 +26,10 @@ function Segmented({ value, onChange, options }) {
   )
 }
 
-function MetaChips({ meta, setMeta }) {
+function MetaChips({ meta, setMeta, allowedMetas }) {
   return (
     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {DESTINATIONS.map(d => {
+      {DESTINATIONS.filter(d => !allowedMetas || allowedMetas.includes(d.id)).map(d => {
         const on = meta === d.id, col = DEST_COLORS[d.id]
         return (
           <button key={d.id} onClick={() => setMeta(d.id)} style={{
@@ -63,11 +63,13 @@ async function uploadPdfWithProgress(file, path, onProgress) {
   })
 }
 
-export default function PaxContentTab() {
+export default function PaxContentTab({ scope }) {
   const { profile } = useAuth()
+  const scopeMetas = scope ? [...new Set(scope.map(s => s.destination))] : null
   const [section, setSection] = useState('programmi')
-  const [meta, setMeta] = useState('corfu')
+  const [meta, setMeta] = useState(scopeMetas ? (scopeMetas[0] || 'corfu') : 'corfu')
   const col = DEST_COLORS[meta]
+  const metaShifts = scope ? scope.filter(s => s.destination === meta).map(s => s.shift_num) : null
 
   const autore = profile ? `${profile.nome} ${profile.cognome}` : null
   async function onLog(tipo, azione, extra = {}) {
@@ -79,8 +81,8 @@ export default function PaxContentTab() {
   return (
     <div style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Segmented value={section} onChange={setSection} options={[['programmi', 'Programmi'], ['poi', "Punti d'interesse"], ['numeri', 'Numeri'], ['log', 'Log']]} />
-      {section !== 'log' && <MetaChips meta={meta} setMeta={setMeta} />}
-      {section === 'programmi' && <Programmi meta={meta} col={col} onLog={onLog} />}
+      {section !== 'log' && <MetaChips meta={meta} setMeta={setMeta} allowedMetas={scopeMetas} />}
+      {section === 'programmi' && <Programmi meta={meta} col={col} onLog={onLog} allowedShifts={metaShifts} />}
       {section === 'poi' && <Poi meta={meta} col={col} onLog={onLog} />}
       {section === 'numeri' && <Numeri meta={meta} col={col} onLog={onLog} />}
       {section === 'log' && <LogSection />}
@@ -89,8 +91,9 @@ export default function PaxContentTab() {
 }
 
 /* ---------------- PROGRAMMI ---------------- */
-function Programmi({ meta, col, onLog }) {
-  const shifts = SHIFTS[meta] || []
+function Programmi({ meta, col, onLog, allowedShifts }) {
+  const allShifts = SHIFTS[meta] || []
+  const shifts = allowedShifts ? allShifts.filter(s => allowedShifts.includes(s.num)) : allShifts
   const metaName = DESTINATIONS.find(d => d.id === meta)?.name || ''
   const [turno, setTurno] = useState(shifts[0]?.num || 1)
   const [all, setAll] = useState([])          // tutti i programmi della meta
