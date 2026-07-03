@@ -45,6 +45,27 @@ export default function Destinations() {
           )
         })}
       </div>
+      <div style={{ padding: '0 16px 12px' }}>
+        <button
+          onClick={() => navigate('/mie-info')}
+          style={{ width: '100%', padding: '16px 18px', background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, textAlign: 'left', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+        >
+          <div style={{ width: 46, height: 46, borderRadius: 13, background: 'linear-gradient(135deg, var(--iv-blue) 0%, #7C3AED 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24">
+              <rect x="3" y="4" width="18" height="18" rx="3" stroke="#fff" strokeWidth="2"/>
+              <path d="M16 2v4M8 2v4M3 10h18" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>La mia settimana</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>Programma, alloggi, locali & market, rooming</div>
+          </div>
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+            <path d="M9 18l6-6-6-6" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
       {isAdmin && (
         <div style={{ padding: '0 16px 16px' }}>
           <button
