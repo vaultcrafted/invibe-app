@@ -27,20 +27,35 @@ export default function Destinations() {
       </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: '8px 16px 16px', justifyContent: 'center' }}>
         {DESTINATIONS.map(dest => {
-          const isAssigned = isFullAccess || assignedDests.includes(dest.id)
+          const personalMode = !isFullAccess && assignedDests.length > 0
+          const isMine = assignedDests.includes(dest.id)
+          const highlight = personalMode && isMine
+          const dim = personalMode && !isMine
           return (
             <button
               key={dest.id}
               onClick={() => navigate('/destination/' + dest.id)}
-              style={{ width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', border: 'none', padding: 0, flexShrink: 0 }}
+              style={{
+                width: 150, height: 150, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer', padding: 0, flexShrink: 0,
+                border: highlight ? '2.5px solid var(--iv-blue)' : '2.5px solid transparent',
+                opacity: dim ? 0.5 : 1,
+                filter: dim ? 'saturate(0.7)' : 'none',
+                transform: dim ? 'scale(0.94)' : 'scale(1)',
+                boxShadow: highlight ? '0 6px 20px rgba(30,107,241,0.28)' : 'none',
+                transition: 'transform .15s, opacity .15s',
+              }}
             >
               <img src={DEST_IMAGES[dest.id]} alt={dest.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(160deg, rgba(0,0,0,0) 30%, rgba(0,0,0,0.45) 100%)' }} />
+              {highlight && (
+                <div style={{ position: 'absolute', top: 8, right: 8, background: 'var(--iv-blue)', color: '#fff', fontSize: 9.5, fontWeight: 800, padding: '3px 8px', borderRadius: 20, textTransform: 'uppercase', letterSpacing: '0.04em', boxShadow: '0 1px 4px rgba(0,0,0,0.25)' }}>
+                  Tuo turno
+                </div>
+              )}
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '10px 12px' }}>
                 <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.3)', lineHeight: 1.1 }}>{dest.name}</div>
                 <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.85)', marginTop: 2, fontWeight: 500 }}>{dest.turni} turni</div>
               </div>
-
             </button>
           )
         })}
