@@ -416,7 +416,7 @@ export default function Admin() {
       {tab === 'staff' && (
         <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {staffList.map(staff => (
-            <StaffCard key={staff.id} staff={staff} onToggle={toggleAssignment} canEdit={isFullAccess} />
+            <StaffCard key={staff.id} staff={staff} />
           ))}
           {staffList.length === 0 && <div className="empty-state"><p>Nessuno staff registrato.</p></div>}
         </div>
@@ -436,7 +436,7 @@ export default function Admin() {
   )
 }
 
-function StaffCard({ staff, onToggle, canEdit }) {
+function StaffCard({ staff }) {
   const [open, setOpen] = useState(false)
   const assigned = staff.assigned_shifts || []
   const initials = ((staff.nome?.[0] || '') + (staff.cognome?.[0] || '')).toUpperCase()
@@ -451,7 +451,7 @@ function StaffCard({ staff, onToggle, canEdit }) {
         <div style={{ color: 'var(--text-tertiary)', fontSize: 18 }}>{open ? '▲' : '▼'}</div>
       </button>
 
-      {open && !canEdit && (
+      {open && (
         <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12 }}>
           {assigned.length === 0 ? (
             <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Nessun turno assegnato</div>
@@ -464,26 +464,6 @@ function StaffCard({ staff, onToggle, canEdit }) {
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {open && canEdit && staff.role !== 'admin' && (
-        <div style={{ marginTop: 12, borderTop: '0.5px solid var(--border)', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {DESTINATIONS.map(dest => (
-            <div key={dest.id}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 }}>{dest.flag} {dest.name}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                {SHIFTS[dest.id].map(s => {
-                  const isOn = assigned.some(a => a.destination === dest.id && a.shift_num === s.num)
-                  return (
-                    <button key={s.num} onClick={() => onToggle(staff.id, dest.id, s.num)} style={{ padding: '4px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: isOn ? 'var(--iv-blue)' : 'var(--bg-tertiary)', color: isOn ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isOn ? 'var(--iv-blue)' : 'var(--border)'), cursor: 'pointer' }}>
-                      {shiftLabel(dest.id, s.num)}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          ))}
         </div>
       )}
     </div>
