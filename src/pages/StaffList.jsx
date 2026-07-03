@@ -27,8 +27,9 @@ function getInitials(nome, cognome) {
 const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallipoli: '#DC2626', sardegna: '#7C3AED' }
 const DEST_IMAGES = { pag: '/Pag.png', corfu: '/Corfu.png', zante: '/Zante.png', gallipoli: '/Gallipoli.png', sardegna: '/Sardegna.png' }
 
-function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVote }) {
-  const color = getRuoloColor(s.ruolo)
+function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVote, turnoRuolo }) {
+  const ruolo = turnoRuolo || s.ruolo
+  const color = getRuoloColor(ruolo)
   return (
     <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', background: isVoted ? '#FEF9C3' : 'var(--bg-primary)', border: isVoted ? '1px solid #FDE047' : '0.5px solid var(--border)' }}
       onClick={() => { if (votable && onVote) onVote(); else navigate(`/staff/${s.id}`) }}>
@@ -39,7 +40,7 @@ function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVot
         <div style={{ fontSize: 14, fontWeight: 600 }}>{s.nome} {s.cognome}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
           {s.role === 'admin' && <span style={{ fontSize: 10, fontWeight: 700, color: '#D4AC0D' }}>⭐ Admin</span>}
-          {s.ruolo && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: color + '18', color, border: '0.5px solid ' + color + '44' }}>{s.ruolo}</span>}
+          {ruolo && <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 20, background: color + '18', color, border: '0.5px solid ' + color + '44' }}>{ruolo}</span>}
         </div>
       </div>
       {voteCount > 0 && <div style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 12, background: '#D4AC0D', color: '#fff', flexShrink: 0 }}>{voteCount} ⭐</div>}
@@ -91,14 +92,17 @@ function ShiftMemberView({ selectedDest, selectedShift, members, isAdmin, profil
         </button>
         {members.length === 0
           ? <div className="empty-state"><p>Nessun risultato</p></div>
-          : members.map(s => (
+          : members.map(s => {
+              const turnoRuolo = (s.assigned_shifts || []).find(a => a.destination === selectedDest && a.shift_num === selectedShift)?.ruolo
+              return (
               <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate}
+                turnoRuolo={turnoRuolo}
                 votable={s.id !== profile?.id}
                 isVoted={dailyVote === s.id}
                 voteCount={canSeeVotes ? (voteCounts[s.id] || 0) : null}
                 onVote={() => castVote(s.id)}
               />
-            ))
+            )})
         }
       </div>
     </div>
