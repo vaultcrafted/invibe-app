@@ -27,6 +27,22 @@ function getInitials(nome, cognome) {
 const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallipoli: '#DC2626', sardegna: '#7C3AED' }
 const DEST_IMAGES = { pag: '/Pag.png', corfu: '/Corfu.png', zante: '/Zante.png', gallipoli: '/Gallipoli.png', sardegna: '/Sardegna.png' }
 
+// Ordine di visualizzazione dello staff dentro un turno (uguale per tutti i turni).
+function roleRank(ruolo) {
+  const r = (ruolo || '').toUpperCase()
+  if (/\bACM\b/.test(r)) return 1
+  if (/\bCM\b/.test(r)) return 0
+  if (/\bACA\b/.test(r)) return 3
+  if (/\bCA\b/.test(r)) return 2
+  if (/\bDJ\b/.test(r)) return 4
+  if (/VOCAL|VOICE|VOCE/.test(r)) return 5
+  if (/FOTO\s*MEDIA/.test(r)) return 7
+  if (/FOTO|FOTOGRAF/.test(r)) return 6
+  if (/\bRM\b/.test(r)) return 8
+  if (/\bARM\b/.test(r)) return 9
+  return 100
+}
+
 function StaffRowCard({ s, isAdmin, navigate, votable, isVoted, voteCount, onVote, turnoRuolo }) {
   const ruolo = turnoRuolo || s.ruolo
   const color = getRuoloColor(ruolo)
@@ -92,17 +108,22 @@ function ShiftMemberView({ selectedDest, selectedShift, members, isAdmin, profil
         </button>
         {members.length === 0
           ? <div className="empty-state"><p>Nessun risultato</p></div>
-          : members.map(s => {
-              const turnoRuolo = (s.assigned_shifts || []).find(a => a.destination === selectedDest && a.shift_num === selectedShift)?.ruolo
-              return (
+          : [...members]
+              .map(s => ({ s, tr: (s.assigned_shifts || []).find(a => a.destination === selectedDest && a.shift_num === selectedShift)?.ruolo }))
+              .sort((a, b) => {
+                const ra = roleRank(a.tr || a.s.ruolo), rb = roleRank(b.tr || b.s.ruolo)
+                if (ra !== rb) return ra - rb
+                return (a.s.cognome || '').localeCompare(b.s.cognome || '')
+              })
+              .map(({ s, tr }) => (
               <StaffRowCard key={s.id} s={s} isAdmin={isAdmin} navigate={navigate}
-                turnoRuolo={turnoRuolo}
+                turnoRuolo={tr}
                 votable={s.id !== profile?.id}
                 isVoted={dailyVote === s.id}
                 voteCount={canSeeVotes ? (voteCounts[s.id] || 0) : null}
                 onVote={() => castVote(s.id)}
               />
-            )})
+            ))
         }
       </div>
     </div>
