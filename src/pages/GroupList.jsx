@@ -26,6 +26,7 @@ export default function GroupList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [svcFilter, setSvcFilter] = useState(null)   // id servizio da filtrare, o 'prebook_esc'
+  const [filterOpen, setFilterOpen] = useState(false)
 
   const dest = DESTINATIONS.find(d => d.id === destId)
   const shift = SHIFTS[destId]?.find(s => s.num === parseInt(shiftNum))
@@ -87,37 +88,17 @@ export default function GroupList() {
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
         {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
-      <div style={{ padding: '2px 16px 8px' }}>
-        <div style={{ position: 'relative' }}>
-          <select
-            value={svcFilter || ''}
-            onChange={e => setSvcFilter(e.target.value || null)}
-            style={{
-              width: '100%', appearance: 'none', WebkitAppearance: 'none',
-              padding: '11px 38px 11px 14px', borderRadius: 12,
-              border: '0.5px solid ' + (svcFilter ? 'var(--iv-blue)' : 'var(--border)'),
-              background: svcFilter ? 'var(--iv-blue-light)' : 'var(--bg-secondary)',
-              color: svcFilter ? 'var(--iv-blue)' : 'var(--text-secondary)',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer', outline: 'none',
-            }}
-          >
-            <option value="">Filtra per servizio — tutti i gruppi</option>
-            <option value="prebook_esc">Escursioni prenotate (prebooking)</option>
-            <optgroup label="Chi HA preso">
-              {getServices(destId).map(sv => (
-                <option key={'has_' + sv.id} value={'has:' + sv.id}>{sv.label}</option>
-              ))}
-            </optgroup>
-            <optgroup label="Chi NON ha preso">
-              {getServices(destId).map(sv => (
-                <option key={'no_' + sv.id} value={'no:' + sv.id}>Senza {sv.label}</option>
-              ))}
-            </optgroup>
-          </select>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-            <path d="M6 9l6 6 6-6" stroke={svcFilter ? 'var(--iv-blue)' : 'var(--text-tertiary)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
+      <div style={{ padding: '2px 16px 8px', display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={() => setFilterOpen(true)} style={{
+          flex: 1, display: 'flex', alignItems: 'center', gap: 9, padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
+          background: svcFilter ? 'var(--iv-blue-light)' : 'var(--bg-secondary)',
+          border: '0.5px solid ' + (svcFilter ? 'var(--iv-blue)' : 'var(--border)'),
+          color: svcFilter ? 'var(--iv-blue)' : 'var(--text-secondary)', fontSize: 14, fontWeight: 600,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 5h16M7 12h10M10 19h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          <span style={{ flex: 1, textAlign: 'left' }}>{svcFilter ? filterLabel(svcFilter, destId) : 'Filtra per servizio'}</span>
+          {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
+        </button>
       </div>
       <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi{svcFilter ? ' · filtro attivo' : ''}</div>
       {loading ? (
@@ -131,6 +112,72 @@ export default function GroupList() {
           ))}
         </div>
       )}
+
+      {filterOpen && (
+        <FilterSheet
+          destId={destId}
+          current={svcFilter}
+          onPick={(v) => { setSvcFilter(v); setFilterOpen(false) }}
+          onClose={() => setFilterOpen(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function filterLabel(v, destId) {
+  if (!v) return 'Filtra per servizio'
+  if (v === 'prebook_esc') return 'Escursioni prebooking'
+  const id = v.replace(/^(has:|no:)/, '')
+  const sv = getServices(destId).find(s => s.id === id)
+  const name = sv ? sv.label : id
+  return v.startsWith('no:') ? 'Senza ' + name : name
+}
+
+function FilterSheet({ destId, current, onPick, onClose }) {
+  const svcList = getServices(destId)
+  const Pill = ({ value, label, tone }) => {
+    const active = current === value
+    const c = tone === 'amber' ? '#B45309' : tone === 'red' ? '#DC2626' : 'var(--iv-blue)'
+    const bg = tone === 'amber' ? '#FEF3C7' : tone === 'red' ? '#FEF2F2' : 'var(--iv-blue-light)'
+    return (
+      <button onClick={() => onPick(value)} style={{
+        padding: '9px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+        background: active ? c : bg + '99', color: active ? '#fff' : c,
+        border: '0.5px solid ' + (active ? c : bg),
+      }}>{label}</button>
+    )
+  }
+  const Group = ({ title, children }) => (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>{title}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{children}</div>
+    </div>
+  )
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', animation: 'fadeIn .15s ease' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '80vh', overflowY: 'auto', background: 'var(--bg-primary)', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: '10px 20px 28px', boxShadow: '0 -8px 30px rgba(0,0,0,0.18)', animation: 'sheetUp .22s cubic-bezier(0.22,1,0.36,1)' }}>
+        <div style={{ width: 38, height: 4, borderRadius: 4, background: 'var(--border-mid)', margin: '4px auto 16px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
+          <span style={{ fontSize: 18, fontWeight: 800 }}>Filtra i gruppi</span>
+          <button onClick={onClose} style={{ marginLeft: 'auto', background: 'var(--bg-secondary)', border: 'none', borderRadius: 10, width: 32, height: 32, fontSize: 18, color: 'var(--text-secondary)', cursor: 'pointer' }}>×</button>
+        </div>
+
+        <button onClick={() => onPick(null)} style={{
+          width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 12, marginBottom: 18, cursor: 'pointer', fontSize: 14, fontWeight: 600,
+          background: !current ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !current ? '#fff' : 'var(--text-primary)', border: 'none',
+        }}>Tutti i gruppi</button>
+
+        <Group title="Prenotazioni">
+          <Pill value="prebook_esc" label="Escursioni prebooking" tone="amber" />
+        </Group>
+        <Group title="Chi ha preso">
+          {svcList.map(sv => <Pill key={'h' + sv.id} value={'has:' + sv.id} label={sv.label} tone="blue" />)}
+        </Group>
+        <Group title="Chi non ha preso">
+          {svcList.map(sv => <Pill key={'n' + sv.id} value={'no:' + sv.id} label={'Senza ' + sv.label} tone="red" />)}
+        </Group>
+      </div>
     </div>
   )
 }
