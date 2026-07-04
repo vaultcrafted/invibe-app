@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
@@ -24,6 +24,7 @@ function getCurrentDayNum(shiftStart, today = new Date()) {
 export default function Dbd() {
   const { profile, isAdmin, isFullAccess } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
   const [entries, setEntries] = useState([]) // tutti i DBD caricati
   const [loading, setLoading] = useState(true)
@@ -67,11 +68,15 @@ export default function Dbd() {
 
   useEffect(() => {
     if (shiftObjects.length > 0) {
-      const active = detectActiveShift()
+      const pDest = searchParams.get('dest'), pShift = searchParams.get('shift'), pDay = searchParams.get('day')
+      const target = (pDest && pShift != null)
+        ? shiftObjects.find(s => s.destination === pDest && s.shift_num === parseInt(pShift))
+        : null
+      const active = target || detectActiveShift()
       setSelectedShift(active)
       if (active) {
-        const dayNum = getCurrentDayNum(active.start)
-        setSelectedDay(Math.max(1, Math.min(dayNum, 9)))
+        const day = (pDay != null && !isNaN(parseInt(pDay))) ? parseInt(pDay) : getCurrentDayNum(active.start)
+        setSelectedDay(Math.max(1, Math.min(day, 9)))
       }
     }
     loadEntries()

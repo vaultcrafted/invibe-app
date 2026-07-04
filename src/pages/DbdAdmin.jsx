@@ -81,7 +81,9 @@ export default function DbdAdmin() {
     }
     setLoading(false)
     setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    // Torna alla vista del programma sul meta/turno/giorno appena salvato
+    const q = shiftNum > 0 ? `?dest=${destination}&shift=${shiftNum}&day=${dayNum}` : `?dest=${destination}&day=${dayNum}`
+    setTimeout(() => navigate('/dbd' + q), 600)
   }
 
   if (!isAdmin) return null
