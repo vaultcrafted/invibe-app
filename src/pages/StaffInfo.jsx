@@ -28,6 +28,7 @@ export default function StaffInfo() {
   const [poi, setPoi] = useState([])
   const [rooming, setRooming] = useState([])   // alloggi del turno
   const [editRooming, setEditRooming] = useState(false)
+  const [poiSel, setPoiSel] = useState(null)   // POI aperto nella sottoscheda
   const [savingRooming, setSavingRooming] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -138,18 +139,14 @@ export default function StaffInfo() {
             {/* Mappe alloggi */}
             <Section icon={<Home size={16} color={color} />} title="Mappe alloggi" color={color}>
               {alloggi.length === 0 ? <Empty text="Nessun alloggio inserito." /> : (
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {alloggi.map((p, i) => <PoiRow key={p.id} p={p} color={color} last={i === alloggi.length - 1} />)}
-                </div>
+                <PoiGrid items={alloggi} color={color} onOpen={setPoiSel} />
               )}
             </Section>
 
             {/* Locali & Market */}
             <Section icon={<Music size={16} color={color} />} title="Locali & Market" color={color}>
               {localiMarket.length === 0 ? <Empty text="Nessun locale o market inserito." /> : (
-                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                  {localiMarket.map((p, i) => <PoiRow key={p.id} p={p} color={color} last={i === localiMarket.length - 1} />)}
-                </div>
+                <PoiGrid items={localiMarket} color={color} onOpen={setPoiSel} />
               )}
             </Section>
 
@@ -182,6 +179,8 @@ export default function StaffInfo() {
           </>
         )}
       </div>
+
+      {poiSel && <PoiSheet p={poiSel} color={color} onClose={() => setPoiSel(null)} />}
     </div>
   )
 }
@@ -194,6 +193,75 @@ function Section({ icon, title, color, children }) {
         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</span>
       </div>
       {children}
+    </div>
+  )
+}
+
+function PoiGrid({ items, color, onOpen }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      {items.map(p => (
+        <button key={p.id} onClick={() => onOpen(p)} style={{
+          background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 16, cursor: 'pointer',
+          padding: '14px 8px 11px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, textAlign: 'center',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.04)', minHeight: 96,
+        }}>
+          <div style={{ width: 42, height: 42, borderRadius: 13, background: color + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21 }}>{CAT_EMOJI[p.categoria] || '📍'}</div>
+          <div style={{ fontSize: 11.5, fontWeight: 700, lineHeight: 1.15, color: 'var(--text-primary)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.nome}</div>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function poiCoords(url) {
+  if (!url) return null
+  const pats = [/@(-?\d+\.\d+),(-?\d+\.\d+)/, /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, /[?&](?:q|ll|destination|center)=(-?\d+\.\d+),(-?\d+\.\d+)/]
+  for (const re of pats) { const m = url.match(re); if (m) return [parseFloat(m[1]), parseFloat(m[2])] }
+  return null
+}
+
+function PoiSheet({ p, color, onClose }) {
+  const coords = poiCoords(p.maps_url)
+  const [imgOk, setImgOk] = useState(true)
+  const mapImg = coords
+    ? `https://staticmap.openstreetmap.de/staticmap.php?center=${coords[0]},${coords[1]}&zoom=15&size=640x300&markers=${coords[0]},${coords[1]},red-pushpin`
+    : null
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', animation: 'fadeIn .15s ease' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '86vh', overflowY: 'auto', background: 'var(--bg-primary)', borderTopLeftRadius: 24, borderTopRightRadius: 24, boxShadow: '0 -8px 30px rgba(0,0,0,0.2)', animation: 'sheetUp .24s cubic-bezier(0.22,1,0.36,1)' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 4, background: 'var(--border-mid)', margin: '10px auto 4px' }} />
+
+        {/* Mini-mappa statica (se ci sono le coordinate) */}
+        {mapImg && imgOk ? (
+          <a href={p.maps_url} target="_blank" rel="noreferrer" style={{ display: 'block', margin: '8px 16px 0', borderRadius: 16, overflow: 'hidden', position: 'relative', border: '0.5px solid var(--border)' }}>
+            <img src={mapImg} alt="Mappa" onError={() => setImgOk(false)} style={{ width: '100%', height: 170, objectFit: 'cover', display: 'block' }} />
+            <div style={{ position: 'absolute', right: 10, bottom: 10, background: color, color: '#fff', fontSize: 11.5, fontWeight: 700, padding: '6px 11px', borderRadius: 999, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <MapPin size={13} color="#fff" /> Apri in Maps
+            </div>
+          </a>
+        ) : null}
+
+        <div style={{ padding: '16px 20px 26px' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.categoria}</div>
+          <div style={{ fontSize: 21, fontWeight: 800, marginTop: 2 }}>{p.nome}</div>
+          {p.descrizione && <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 6, lineHeight: 1.5 }}>{p.descrizione}</div>}
+
+          <div style={{ display: 'flex', gap: 9, marginTop: 16 }}>
+            {p.maps_url && (
+              <a href={p.maps_url} target="_blank" rel="noreferrer" style={{ flex: 1, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: color, color: '#fff', fontSize: 14, fontWeight: 700, padding: '13px', borderRadius: 13 }}>
+                <MapPin size={17} color="#fff" /> Apri in Google Maps
+              </a>
+            )}
+            {p.telefono && (
+              <a href={`tel:${p.telefono}`} style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, background: 'var(--bg-secondary)', color: 'var(--text-primary)', fontSize: 14, fontWeight: 700, padding: '13px 18px', borderRadius: 13, border: '0.5px solid var(--border)' }}>
+                <Phone size={16} /> Chiama
+              </a>
+            )}
+          </div>
+          {!coords && p.maps_url && <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 10 }}>Anteprima mappa non disponibile per questo link — il pulsante apre comunque la posizione.</div>}
+        </div>
+      </div>
     </div>
   )
 }
