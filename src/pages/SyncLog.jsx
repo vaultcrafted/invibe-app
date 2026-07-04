@@ -111,7 +111,7 @@ export default function SyncLog() {
         <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
           <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>⚡ Sincronizza ora</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {Object.entries(SCRIPTS).map(([k, v]) => {
+            {Object.entries(SCRIPTS).filter(([k]) => endpoints[k]).map(([k, v]) => {
               const busy = running[k]
               const pct = progress[k] || 0
               const configured = !!endpoints[k]
