@@ -71,7 +71,7 @@ export default function Dbd() {
       setSelectedShift(active)
       if (active) {
         const dayNum = getCurrentDayNum(active.start)
-        setSelectedDay(Math.max(1, Math.min(dayNum, 8)))
+        setSelectedDay(Math.max(1, Math.min(dayNum, 9)))
       }
     }
     loadEntries()
@@ -96,7 +96,7 @@ export default function Dbd() {
   }
 
   const content = getContent()
-  const totalDays = 8
+  const totalDays = 9
 
   // Calcola giorno della settimana per navigazione
   function getDayDate(shift, dayNum) {
@@ -141,7 +141,7 @@ export default function Dbd() {
       {shiftObjects.length > 1 && (
         <div style={{ paddingTop: 10, paddingBottom: 4, paddingLeft: 16, paddingRight: 16, overflowX: 'auto', overflowY: 'visible', display: 'flex', gap: 8, scrollbarWidth: 'none', msOverflowStyle: 'none', minHeight: 36 }}>
           {shiftObjects.map((s, i) => (
-            <button key={i} onClick={() => { setSelectedShift(s); setSelectedDay(Math.max(1, Math.min(getCurrentDayNum(s.start), 8))) }}
+            <button key={i} onClick={() => { setSelectedShift(s); setSelectedDay(Math.max(1, Math.min(getCurrentDayNum(s.start), 9))) }}
               style={{
                 padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, cursor: 'pointer',
                 background: selectedShift?.destination === s.destination && selectedShift?.shift_num === s.shift_num ? s.color : 'var(--bg-secondary)',

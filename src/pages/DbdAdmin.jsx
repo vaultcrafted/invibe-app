@@ -140,7 +140,7 @@ export default function DbdAdmin() {
 
       {/* Navigazione giorni */}
       <div style={{ padding: '14px 16px 0', display: 'flex', gap: 6, overflowX: 'auto' }}>
-        {Array.from({ length: 8 }, (_, i) => i + 1).map(d => (
+        {Array.from({ length: 9 }, (_, i) => i + 1).map(d => (
           <button key={d} onClick={() => setDayNum(d)} style={{
             width: 40, height: 44, borderRadius: 10, flexShrink: 0, cursor: 'pointer', border: 'none',
             background: d === dayNum ? color : 'var(--bg-secondary)',
