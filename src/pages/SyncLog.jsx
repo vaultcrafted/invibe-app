@@ -47,6 +47,13 @@ export default function SyncLog() {
     setLoading(false)
   }
 
+  async function delLog(id) {
+    if (!window.confirm('Eliminare questo log?')) return
+    const { error } = await supabase.from('sync_logs').delete().eq('id', id)
+    if (error) { setNote({ t: 'err', m: 'Impossibile eliminare (permessi). Esegui sync_logs_delete.sql.' }); return }
+    setLogs(ls => ls.filter(x => x.id !== id))
+  }
+
   async function runNow(script) {
     const ep = endpoints[script]
     if (!ep) { setNote({ t: 'err', m: 'Endpoint non configurato per ' + script + '. Vedi sync_endpoints.sql.' }); return }
@@ -177,7 +184,8 @@ export default function SyncLog() {
                   const details = Array.isArray(l.details) ? l.details : []
                   return (
                     <div key={l.id} className="card" style={{ padding: 0, overflow: 'hidden', borderLeft: '3px solid ' + (isErr ? '#DC2626' : info.color) }}>
-                      <button onClick={() => setOpenId(open ? null : l.id)} style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', cursor: 'pointer' }}>
+                      <div style={{ display: 'flex', alignItems: 'stretch' }}>
+                      <button onClick={() => setOpenId(open ? null : l.id)} style={{ flex: 1, minWidth: 0, textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12, padding: '13px 14px', cursor: 'pointer' }}>
                         <div style={{ width: 38, height: 38, borderRadius: 11, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, background: info.color + '18' }}>{info.emoji}</div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -192,6 +200,10 @@ export default function SyncLog() {
                         </div>
                         {details.length > 0 && <span style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>{open ? '▲' : '▼'}</span>}
                       </button>
+                      <button onClick={() => delLog(l.id)} title="Elimina log" style={{ flexShrink: 0, background: 'none', border: 'none', borderLeft: '0.5px solid var(--border)', padding: '0 14px', cursor: 'pointer', color: 'var(--text-tertiary)', display: 'flex', alignItems: 'center' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      </button>
+                      </div>
                       {open && (
                         <div style={{ borderTop: '0.5px solid var(--border)', padding: '10px 14px', background: 'var(--bg-secondary)' }}>
                           {isErr && l.error && <div style={{ fontSize: 12, color: '#DC2626', marginBottom: 8 }}>⚠️ {l.error}</div>}
