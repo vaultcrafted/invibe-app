@@ -109,7 +109,6 @@ export default function SyncLog() {
       <Topbar showBack={false} showAvatar={true} />
       <div style={{ padding: '14px 16px 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ fontSize: 20, fontWeight: 800 }}>Log sincronizzazioni</div>
-        <button onClick={load} style={{ marginLeft: 'auto', background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Aggiorna</button>
       </div>
       <div style={{ padding: '0 16px 6px', fontSize: 12, color: 'var(--text-secondary)' }}>Cosa fanno gli script ogni notte (FILE CM, prebooking, rooming).</div>
 
