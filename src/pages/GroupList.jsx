@@ -123,16 +123,14 @@ function GroupCard({ group, onClick }) {
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
   const initials = getInitials(group.capogruppo_display)
-  const prebEsc = isPrebookedEsc(group)
   return (
-    <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer', borderLeft: prebEsc ? '3px solid #D97706' : undefined, background: prebEsc ? 'linear-gradient(90deg, #FFFBEB 0%, var(--bg-primary) 22%)' : undefined }} onClick={onClick}>
+    <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer' }} onClick={onClick}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {capogruppoCode(group.capogruppo_code) && <span className="code-chip">{capogruppoCode(group.capogruppo_code)}</span>}
             <span style={{ fontSize: 14, fontWeight: 600 }}>{group.capogruppo_display}</span>
-            {prebEsc && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#FEF3C7', color: '#B45309', border: '0.5px solid #FCD9A5', whiteSpace: 'nowrap' }}>🎟️ Escursioni prenotate {Number(group.prebook.escursioni)}</span>}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
             {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
@@ -144,7 +142,7 @@ function GroupCard({ group, onClick }) {
           const pb = prebookKeyForService(sv.id) === 'escursioni' && prebookedCount(group, sv) > 0
           return (
             <span key={sv.id} className={`flag-chip ${isServiceOn(group, sv) ? 'on' : ''}`} style={pb ? { background: '#FEF3C7', color: '#B45309', borderColor: '#FCD9A5' } : undefined}>
-              <span className="dot" style={pb ? { background: '#D97706' } : undefined} />{pb ? '🎟️ ' : ''}{sv.label}
+              <span className="dot" style={pb ? { background: '#D97706' } : undefined} />{sv.label}
             </span>
           )
         })}
