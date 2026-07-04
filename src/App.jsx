@@ -17,6 +17,7 @@ import StaffList from './pages/StaffList'
 import StaffProfile from './pages/StaffProfile'
 import WeeklyVote from './pages/WeeklyVote'
 import StaffInfo from './pages/StaffInfo'
+import SyncLog from './pages/SyncLog'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -49,6 +50,7 @@ function AppShell() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Destinations /></ProtectedRoute>} />
           <Route path="/mie-info" element={<ProtectedRoute><StaffInfo /></ProtectedRoute>} />
+          <Route path="/log" element={<ProtectedRoute><SyncLog /></ProtectedRoute>} />
           <Route path="/destination/:destId" element={<ProtectedRoute><ShiftSelect /></ProtectedRoute>} />
           <Route path="/shift/:destId/:shiftNum" element={<ProtectedRoute><GroupList /></ProtectedRoute>} />
           <Route path="/group/:groupId" element={<ProtectedRoute><GroupDetail /></ProtectedRoute>} />

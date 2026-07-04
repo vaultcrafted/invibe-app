@@ -50,14 +50,23 @@ const NAV_ITEMS = [
       </svg>
     )
   },
+  {
+    id: 'log', label: 'Log', path: '/log', fullAccessOnly: true,
+    icon: (active) => (
+      <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+        <path d="M4 4h16v16H4z" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2" strokeLinejoin="round"/>
+        <path d="M8 9h8M8 13h8M8 17h5" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+    )
+  },
 ]
 
 export default function Navigation() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin } = useAuth()
+  const { isAdmin, isFullAccess } = useAuth()
 
-  const visibleItems = NAV_ITEMS.filter(item => !item.adminOnly || isAdmin)
+  const visibleItems = NAV_ITEMS.filter(item => (!item.adminOnly || isAdmin) && (!item.fullAccessOnly || isFullAccess))
 
   function isActive(item) {
     if (item.path === '/') return location.pathname === '/'
