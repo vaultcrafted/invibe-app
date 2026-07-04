@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { subscribe } from '../lib/syncQueue'
 
 export default function SyncIndicator() {
-  const [state, setState] = useState({ pending: 0, online: true, syncing: false })
+  const [state, setState] = useState({ pending: 0, online: true, syncing: false, total: 0, done: 0, percent: 100 })
   const [justSynced, setJustSynced] = useState(false)
+  const [animPct, setAnimPct] = useState(0)
   const prevPending = useRef(0)
   const timer = useRef(null)
+  const anim = useRef(null)
 
   useEffect(() => {
     const unsub = subscribe(st => {
@@ -23,6 +25,20 @@ export default function SyncIndicator() {
 
   const { pending, online, syncing, total, done, percent } = state
 
+  // Percentuale animata quando c'è una sola azione (scrittura atomica: simulo l'avanzamento 0→100)
+  useEffect(() => {
+    clearInterval(anim.current)
+    if (online && pending > 0 && total <= 1) {
+      setAnimPct(8)
+      anim.current = setInterval(() => {
+        setAnimPct(p => (p < 90 ? p + Math.max(2, Math.round((92 - p) / 6)) : p))
+      }, 60)
+    } else if (pending === 0) {
+      setAnimPct(100)
+    }
+    return () => clearInterval(anim.current)
+  }, [online, pending, total])
+
   // Niente da mostrare se: online, niente in coda, e nessuna conferma in corso
   if (online && pending === 0 && !justSynced) return null
 
@@ -32,13 +48,14 @@ export default function SyncIndicator() {
     label = pending > 0 ? `Offline · ${pending} da sincronizzare` : 'Offline'
   } else if (pending > 0) {
     bg = '#DBEAFE'; color = '#1E40AF'; border = '#BFDBFE'
-    label = total > 1 ? `Sincronizzo ${done}/${total} · ${percent}%` : 'Sincronizzo…'
+    label = total > 1 ? `Sincronizzo ${done}/${total} · ${percent}%` : `Sincronizzo… ${animPct}%`
   } else {
     bg = '#DCFCE7'; color = '#166534'; border = '#BBF7D0'
     label = 'Tutto sincronizzato'
   }
 
-  const showBar = online && pending > 0 && total > 1
+  const barPct = total > 1 ? percent : animPct
+  const showBar = online && pending > 0
 
   return (
     <div style={{
@@ -64,7 +81,7 @@ export default function SyncIndicator() {
       </div>
       {showBar && (
         <div style={{ width: '100%', height: 5, borderRadius: 999, background: color + '22', overflow: 'hidden' }}>
-          <div style={{ width: percent + '%', height: '100%', borderRadius: 999, background: color, transition: 'width .25s ease' }} />
+          <div style={{ width: barPct + '%', height: '100%', borderRadius: 999, background: color, transition: 'width .2s ease' }} />
         </div>
       )}
       <style>{`@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
