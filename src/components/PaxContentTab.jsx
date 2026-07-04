@@ -180,48 +180,6 @@ function Programmi({ meta, col, onLog, allowedShifts }) {
     onLog?.('programma', 'rimosso', { destination: meta, shift_num: turno, dettaglio: `${metaName} ${turno}` })
   }
 
-  const formCard = (
-        <div className="card" style={{ border: '1px solid ' + col }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{editId ? 'Modifica punto' : "Nuovo punto d'interesse"}</div>
-          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
-            {POI_CAT.map(c => (
-              <button key={c} onClick={() => setForm(f => ({ ...f, categoria: c }))} style={{
-                padding: '6px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                background: form.categoria === c ? col : 'var(--bg-secondary)', color: form.categoria === c ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (form.categoria === c ? col : 'var(--border)')
-              }}>{CAT_EMOJI[c]} {c}</button>
-            ))}
-          </div>
-          <input style={{ ...input, marginBottom: 8 }} placeholder="Nome" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
-          <input style={{ ...input, marginBottom: 8 }} placeholder="Descrizione breve" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-            <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} />
-            <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
-          </div>
-
-          {/* Foto (galleria) */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7, color: 'var(--text-secondary)' }}>Foto {form.foto?.length ? `(${form.foto.length})` : ''}</div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {(form.foto || []).map(path => (
-                <div key={path} style={{ position: 'relative', width: 76, height: 76, borderRadius: 10, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
-                  <img src={fotoUrl(path)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                  <button onClick={() => removeFoto(path)} style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                </div>
-              ))}
-              <label style={{ width: 76, height: 76, borderRadius: 10, border: '1px dashed var(--border-mid)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 11, background: 'var(--bg-secondary)' }}>
-                {uploading ? '…' : <><span style={{ fontSize: 20, lineHeight: 1 }}>＋</span>Foto</>}
-                <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { uploadFotos(e.target.files); e.target.value = '' }} />
-              </label>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-primary" onClick={save} disabled={busy || !form.nome.trim()} style={{ opacity: busy || !form.nome.trim() ? 0.6 : 1 }}>Salva</button>
-            <button onClick={cancelForm} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 10, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Annulla</button>
-          </div>
-        </div>
-  )
-
   return (
     <>
       {/* progresso meta */}
@@ -368,6 +326,48 @@ function Poi({ meta, col, onLog }) {
     await supabase.from('pax_poi').update({ attivo: !p.attivo }).eq('id', p.id)
     onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${p.nome} → ${!p.attivo ? 'visibile' : 'nascosto'}` }); load()
   }
+
+  const formCard = (
+        <div className="card" style={{ border: '1px solid ' + col }}>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{editId ? 'Modifica punto' : "Nuovo punto d'interesse"}</div>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
+            {POI_CAT.map(c => (
+              <button key={c} onClick={() => setForm(f => ({ ...f, categoria: c }))} style={{
+                padding: '6px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                background: form.categoria === c ? col : 'var(--bg-secondary)', color: form.categoria === c ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (form.categoria === c ? col : 'var(--border)')
+              }}>{CAT_EMOJI[c]} {c}</button>
+            ))}
+          </div>
+          <input style={{ ...input, marginBottom: 8 }} placeholder="Nome" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
+          <input style={{ ...input, marginBottom: 8 }} placeholder="Descrizione breve" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
+            <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} />
+            <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
+          </div>
+
+          {/* Foto (galleria) */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7, color: 'var(--text-secondary)' }}>Foto {form.foto?.length ? `(${form.foto.length})` : ''}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(form.foto || []).map(path => (
+                <div key={path} style={{ position: 'relative', width: 76, height: 76, borderRadius: 10, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
+                  <img src={fotoUrl(path)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <button onClick={() => removeFoto(path)} style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
+              ))}
+              <label style={{ width: 76, height: 76, borderRadius: 10, border: '1px dashed var(--border-mid)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 11, background: 'var(--bg-secondary)' }}>
+                {uploading ? '…' : <><span style={{ fontSize: 20, lineHeight: 1 }}>＋</span>Foto</>}
+                <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { uploadFotos(e.target.files); e.target.value = '' }} />
+              </label>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-primary" onClick={save} disabled={busy || !form.nome.trim()} style={{ opacity: busy || !form.nome.trim() ? 0.6 : 1 }}>Salva</button>
+            <button onClick={cancelForm} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 10, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Annulla</button>
+          </div>
+        </div>
+  )
 
   return (
     <>
