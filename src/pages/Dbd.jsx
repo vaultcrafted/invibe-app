@@ -166,7 +166,7 @@ export default function Dbd() {
             {selectedShift ? `${selectedShift.destName} · ${shiftLabel(selectedShift.destination, selectedShift.shift_num)}` : 'DBD'}
           </div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>
-            {content?.day_label ? `Day ${selectedDay - 1} — ${content.day_label}` : `Day ${selectedDay - 1}`}
+            {content?.day_label ? `DAY ${selectedDay - 1} — ${content.day_label}` : `DAY ${selectedDay - 1}`}
           </div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
             <Calendar size={11} />
@@ -197,7 +197,7 @@ export default function Dbd() {
               fontWeight: active ? 700 : 500,
               outline: today && !active ? `2px solid ${color}` : 'none',
             }}>
-              <span style={{ fontSize: 9, opacity: 0.75 }}>Day</span>
+              <span style={{ fontSize: 9, opacity: 0.75 }}>DAY</span>
               <span style={{ fontSize: 14 }}>{d - 1}</span>
             </button>
           )

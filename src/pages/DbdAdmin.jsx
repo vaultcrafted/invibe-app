@@ -159,7 +159,7 @@ export default function DbdAdmin() {
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1,
             fontWeight: d === dayNum ? 700 : 500,
           }}>
-            <span style={{ fontSize: 9, opacity: 0.75 }}>Day</span>
+            <span style={{ fontSize: 9, opacity: 0.75 }}>DAY</span>
             <span style={{ fontSize: 14 }}>{d - 1}</span>
           </button>
         ))}
@@ -185,14 +185,14 @@ export default function DbdAdmin() {
       {/* Textarea contenuto */}
       <div style={{ padding: '12px 16px 0' }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-          Programma Day {dayNum - 1}
+          Programma DAY {dayNum - 1}
           {shiftNum === 0 && <span style={{ color: 'var(--iv-blue)', marginLeft: 6, fontSize: 10 }}>— vale per tutti i turni</span>}
           {shiftNum > 0 && <span style={{ color: color, marginLeft: 6, fontSize: 10 }}>— solo {shiftLabel(destination, shiftNum)}</span>}
         </div>
         <textarea
           value={content}
           onChange={e => setContent(e.target.value)}
-          placeholder={'Incolla qui il programma del Day ' + (dayNum - 1) + '...\n\nEs:\n10:00: sveglia staff\n10:30: riunione in spiaggia\n...'}
+          placeholder={'Incolla qui il programma del DAY ' + (dayNum - 1) + '...\n\nEs:\n10:00: sveglia staff\n10:30: riunione in spiaggia\n...'}
           style={{
             width: '100%', minHeight: 320, padding: 14, borderRadius: 12, fontSize: 13, lineHeight: 1.6,
             background: 'var(--bg-secondary)', border: '1.5px solid var(--border)',
