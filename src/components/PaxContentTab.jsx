@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS } from '../lib/constants'
 
 const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallipoli: '#DC2626', sardegna: '#7C3AED' }
-const POI_CAT = ['Alloggi', 'Spiagge', 'Locali', 'Market', 'Ristoranti', 'Farmacia', 'Ospedale', 'Altro']
-const CAT_EMOJI = { Alloggi: '🏠', Spiagge: '🏖️', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Farmacia: '💊', Ospedale: '🏥', Altro: '📍' }
+const POI_CAT = ['Alloggi', 'Spiagge', 'Locali', 'Market', 'Ristoranti', 'Farmacia', 'Ospedale', 'Numeri utili', 'Altro']
+const CAT_EMOJI = { Alloggi: '🏠', Spiagge: '🏖️', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Farmacia: '💊', Ospedale: '🏥', 'Numeri utili': '📞', Altro: '📍' }
 
 const input = { width: '100%', padding: '11px 13px', borderRadius: 10, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }
 
@@ -80,12 +80,48 @@ export default function PaxContentTab({ scope }) {
 
   return (
     <div style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Segmented value={section} onChange={setSection} options={[['programmi', 'Programmi'], ['poi', "Punti d'interesse"], ['numeri', 'Numeri'], ['log', 'Log']]} />
-      {section !== 'log' && <MetaChips meta={meta} setMeta={setMeta} allowedMetas={scopeMetas} />}
+      <SectionNav value={section} onChange={setSection} />
+      {section !== 'log' && (
+        <div>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 2px 8px' }}>Meta</div>
+          <MetaChips meta={meta} setMeta={setMeta} allowedMetas={scopeMetas} />
+        </div>
+      )}
       {section === 'programmi' && <Programmi meta={meta} col={col} onLog={onLog} allowedShifts={metaShifts} />}
       {section === 'poi' && <Poi meta={meta} col={col} onLog={onLog} />}
-      {section === 'numeri' && <Numeri meta={meta} col={col} onLog={onLog} />}
       {section === 'log' && <LogSection />}
+    </div>
+  )
+}
+
+function SectionNav({ value, onChange }) {
+  const items = [
+    ['programmi', 'Programmi', 'Cerca il PDF del day by day', (
+      <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/><path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M9 13h6M9 17h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+    )],
+    ['poi', "Punti d'interesse", 'Alloggi, locali, market, numeri', (
+      <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="2"/></svg>
+    )],
+    ['log', 'Log', 'Storico modifiche', (
+      <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/><path d="M8 9h8M8 13h8M8 17h5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+    )],
+  ]
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 9 }}>
+      {items.map(([id, label, sub, icon]) => {
+        const on = value === id
+        return (
+          <button key={id} onClick={() => onChange(id)} style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: '15px 8px 13px', borderRadius: 16, cursor: 'pointer', textAlign: 'center',
+            background: on ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+            border: '0.5px solid ' + (on ? 'var(--iv-blue)' : 'var(--border)'),
+            boxShadow: on ? '0 6px 18px rgba(30,107,241,0.28)' : 'none', transition: 'all .15s',
+          }}>
+            {icon}
+            <div style={{ fontSize: 12.5, fontWeight: 700, lineHeight: 1.1 }}>{label}</div>
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -162,17 +198,22 @@ function Programmi({ meta, col, onLog, allowedShifts }) {
         </div>
       </div>
 
-      {/* turni con pallino di stato */}
-      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+      {/* turni: griglia con stato caricato/mancante */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {shifts.map(s => {
           const on = turno === s.num, ok = hasPdf(s.num)
           return (
             <button key={s.num} onClick={() => setTurno(s.num)} style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '7px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
-              background: on ? col : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (on ? col : 'var(--border)')
+              display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5, padding: '11px 12px', borderRadius: 13, cursor: 'pointer', textAlign: 'left',
+              background: on ? col : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-primary)',
+              border: '1px solid ' + (on ? col : (ok ? 'var(--success)' : 'var(--border)')),
+              boxShadow: on ? `0 5px 14px ${col}44` : 'none', transition: 'all .15s',
             }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: ok ? (on ? '#fff' : 'var(--success)') : (on ? 'rgba(255,255,255,.4)' : 'var(--border-mid)') }} />
-              {metaName} {s.num}
+              <span style={{ fontSize: 14, fontWeight: 800 }}>{metaName} {s.num}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10.5, fontWeight: 700 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: ok ? (on ? '#fff' : 'var(--success)') : (on ? 'rgba(255,255,255,.5)' : 'var(--border-mid)') }} />
+                <span style={{ color: on ? 'rgba(255,255,255,.9)' : (ok ? 'var(--success)' : 'var(--text-tertiary)') }}>{ok ? 'Caricato' : 'Mancante'}</span>
+              </span>
             </button>
           )
         })}
