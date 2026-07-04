@@ -154,7 +154,7 @@ export default function SyncLog() {
       </div>
 
       {/* Filtro script */}
-      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '6px 16px 10px', scrollbarWidth: 'none' }}>
+      <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '6px 16px 10px', scrollbarWidth: 'none', flexShrink: 0 }}>
         {[['all', 'Tutti', '#0f172a'], ...Object.entries(SCRIPTS).map(([k, v]) => [k, v.label, v.color])].map(([k, lbl, c]) => {
           const on = filter === k
           return (
