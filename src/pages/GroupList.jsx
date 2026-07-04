@@ -61,8 +61,12 @@ export default function GroupList() {
     .filter(g => {
       if (!svcFilter) return true
       if (svcFilter === 'prebook_esc') return isPrebookedEsc(g)
-      const sv = getServices(destId).find(s => s.id === svcFilter)
-      return sv ? isServiceOn(g, sv) : true
+      const negate = svcFilter.startsWith('no:')
+      const svId = svcFilter.replace(/^(has:|no:)/, '')
+      const sv = getServices(destId).find(s => s.id === svId)
+      if (!sv) return true
+      const has = isServiceOn(g, sv)
+      return negate ? !has : has
     })
     .sort((a, b) => {
       const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
@@ -99,9 +103,16 @@ export default function GroupList() {
           >
             <option value="">Filtra per servizio — tutti i gruppi</option>
             <option value="prebook_esc">Escursioni prenotate (prebooking)</option>
-            {getServices(destId).map(sv => (
-              <option key={sv.id} value={sv.id}>{sv.label}</option>
-            ))}
+            <optgroup label="Chi HA preso">
+              {getServices(destId).map(sv => (
+                <option key={'has_' + sv.id} value={'has:' + sv.id}>{sv.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Chi NON ha preso">
+              {getServices(destId).map(sv => (
+                <option key={'no_' + sv.id} value={'no:' + sv.id}>Senza {sv.label}</option>
+              ))}
+            </optgroup>
           </select>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
             <path d="M6 9l6 6 6-6" stroke={svcFilter ? 'var(--iv-blue)' : 'var(--text-tertiary)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
