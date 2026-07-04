@@ -212,12 +212,15 @@ function GroupCard({ group, onClick }) {
       </div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {groupServices(group).map(sv => {
-          const paid = (group[sv.id] || 0) > 0            // pagato in meta (toggle attivo) → giallo
-          const prebooked = prebookedCount(group, sv) > 0  // prenotato in prebooking → blu
-          const on = paid || prebooked
+          const paid = (group[sv.id] || 0) > 0             // pagato in meta (toggle attivo)
+          const prebooked = prebookedCount(group, sv) > 0
+          const isEsc = prebookKeyForService(sv.id) === 'escursioni'
+          const yellow = paid || (isEsc && prebooked)      // escursioni prenotate = già pagate → giallo
+          const blue = !yellow && prebooked                // prenotato non ancora pagato (es. SSP) → blu
+          const on = yellow || blue
           return (
-            <span key={sv.id} className={`flag-chip ${on ? 'on' : ''}`} style={paid ? { background: '#FEF3C7', color: '#B45309', borderColor: '#FCD9A5' } : undefined}>
-              <span className="dot" style={paid ? { background: '#D97706' } : undefined} />{sv.label}
+            <span key={sv.id} className={`flag-chip ${on ? 'on' : ''}`} style={yellow ? { background: '#FEF3C7', color: '#B45309', borderColor: '#FCD9A5' } : undefined}>
+              <span className="dot" style={yellow ? { background: '#D97706' } : undefined} />{sv.label}
             </span>
           )
         })}
