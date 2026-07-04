@@ -2,11 +2,18 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode, prebookKeyForService } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
+function prebookedCount(g, sv) {
+  const k = prebookKeyForService(sv.id)
+  return k && g.prebook && g.prebook[k] != null ? Number(g.prebook[k]) : 0
+}
 function isServiceOn(g, sv) {
-  return (g[sv.id] || 0) > 0
+  return (g[sv.id] || 0) > 0 || prebookedCount(g, sv) > 0
+}
+function isPrebookedEsc(g) {
+  return g.prebook && g.prebook.escursioni != null && Number(g.prebook.escursioni) > 0
 }
 function groupServices(g) {
   return getServices(g.destination)
@@ -18,6 +25,7 @@ export default function GroupList() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [svcFilter, setSvcFilter] = useState(null)   // id servizio da filtrare, o 'prebook_esc'
 
   const dest = DESTINATIONS.find(d => d.id === destId)
   const shift = SHIFTS[destId]?.find(s => s.num === parseInt(shiftNum))
@@ -50,6 +58,12 @@ export default function GroupList() {
       const q = search.toLowerCase()
       return g.capogruppo_display?.toLowerCase().includes(q) || String(g.capogruppo_code || '').toLowerCase().includes(q)
     })
+    .filter(g => {
+      if (!svcFilter) return true
+      if (svcFilter === 'prebook_esc') return isPrebookedEsc(g)
+      const sv = getServices(destId).find(s => s.id === svcFilter)
+      return sv ? isServiceOn(g, sv) : true
+    })
     .sort((a, b) => {
       const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
       const nb = parseInt(capogruppoCode(b.capogruppo_code)) || Infinity
@@ -69,7 +83,17 @@ export default function GroupList() {
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
         {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
-      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi</div>
+      <div style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '2px 16px 8px', scrollbarWidth: 'none' }}>
+        <button onClick={() => setSvcFilter(f => f === 'prebook_esc' ? null : 'prebook_esc')} style={chipStyle(svcFilter === 'prebook_esc', '#B45309', '#FEF3C7')}>
+          🎟️ Escursioni prebooking
+        </button>
+        {getServices(destId).map(sv => (
+          <button key={sv.id} onClick={() => setSvcFilter(f => f === sv.id ? null : sv.id)} style={chipStyle(svcFilter === sv.id, 'var(--iv-blue)', 'var(--iv-blue-light)')}>
+            {sv.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi{svcFilter ? ' · filtro attivo' : ''}</div>
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
@@ -85,19 +109,30 @@ export default function GroupList() {
   )
 }
 
+function chipStyle(active, color, bgActive) {
+  return {
+    padding: '6px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0,
+    background: active ? bgActive : 'var(--bg-secondary)',
+    color: active ? color : 'var(--text-secondary)',
+    border: '0.5px solid ' + (active ? color : 'var(--border)'),
+  }
+}
+
 function GroupCard({ group, onClick }) {
   const participants = group.participants || []
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
   const initials = getInitials(group.capogruppo_display)
+  const prebEsc = isPrebookedEsc(group)
   return (
-    <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer' }} onClick={onClick}>
+    <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer', borderLeft: prebEsc ? '3px solid #D97706' : undefined, background: prebEsc ? 'linear-gradient(90deg, #FFFBEB 0%, var(--bg-primary) 22%)' : undefined }} onClick={onClick}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
         <div className="initials" style={{ width: 36, height: 36, fontSize: 12 }}>{initials}</div>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
             {capogruppoCode(group.capogruppo_code) && <span className="code-chip">{capogruppoCode(group.capogruppo_code)}</span>}
             <span style={{ fontSize: 14, fontWeight: 600 }}>{group.capogruppo_display}</span>
+            {prebEsc && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: '#FEF3C7', color: '#B45309', border: '0.5px solid #FCD9A5', whiteSpace: 'nowrap' }}>🎟️ Escursioni prenotate {Number(group.prebook.escursioni)}</span>}
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
             {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
@@ -105,11 +140,14 @@ function GroupCard({ group, onClick }) {
         </div>
       </div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-        {groupServices(group).map(sv => (
-          <span key={sv.id} className={`flag-chip ${isServiceOn(group, sv) ? 'on' : ''}`}>
-            <span className="dot" />{sv.label}
-          </span>
-        ))}
+        {groupServices(group).map(sv => {
+          const pb = prebookKeyForService(sv.id) === 'escursioni' && prebookedCount(group, sv) > 0
+          return (
+            <span key={sv.id} className={`flag-chip ${isServiceOn(group, sv) ? 'on' : ''}`} style={pb ? { background: '#FEF3C7', color: '#B45309', borderColor: '#FCD9A5' } : undefined}>
+              <span className="dot" style={pb ? { background: '#D97706' } : undefined} />{pb ? '🎟️ ' : ''}{sv.label}
+            </span>
+          )
+        })}
       </div>
       {group.alloggio && <div className="alloggio-tag">🏠 {group.alloggio}</div>}
     </button>
