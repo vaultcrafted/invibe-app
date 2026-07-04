@@ -230,6 +230,7 @@ function Poi({ meta, col, onLog }) {
   const [form, setForm] = useState(empty)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [editId, setEditId] = useState(null)
 
   useEffect(() => { load() }, [meta])
   async function load() {
@@ -237,11 +238,23 @@ function Poi({ meta, col, onLog }) {
     const { data } = await supabase.from('pax_poi').select('*').eq('destination', meta).order('ordine', { ascending: true })
     setList(data || []); setLoading(false)
   }
-  async function add() {
+  function startEdit(p) {
+    setForm({ categoria: p.categoria, nome: p.nome || '', descrizione: p.descrizione || '', maps_url: p.maps_url || '', telefono: p.telefono || '' })
+    setEditId(p.id); setOpen(true)
+  }
+  function cancelForm() { setForm(empty); setEditId(null); setOpen(false) }
+  async function save() {
     if (!form.nome.trim()) return
     setBusy(true)
-    await supabase.from('pax_poi').insert({ destination: meta, categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null, ordine: list.length, attivo: true })
-    setBusy(false); onLog?.('poi', 'aggiunto', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` }); setForm(empty); setOpen(false); load()
+    const payload = { categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null }
+    if (editId) {
+      await supabase.from('pax_poi').update(payload).eq('id', editId)
+      onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` })
+    } else {
+      await supabase.from('pax_poi').insert({ destination: meta, ...payload, ordine: list.length, attivo: true })
+      onLog?.('poi', 'aggiunto', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` })
+    }
+    setBusy(false); cancelForm(); load()
   }
   async function del(id) {
     const p = list.find(x => x.id === id)
@@ -256,12 +269,12 @@ function Poi({ meta, col, onLog }) {
   return (
     <>
       {!open && (
-        <button className="btn-primary" onClick={() => setOpen(true)} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7 }}>＋ Aggiungi punto</button>
+        <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setOpen(true) }} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7 }}>＋ Aggiungi punto</button>
       )}
 
       {open && (
         <div className="card" style={{ border: '1px solid ' + col }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Nuovo punto d'interesse</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{editId ? 'Modifica punto' : "Nuovo punto d'interesse"}</div>
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 10 }}>
             {POI_CAT.map(c => (
               <button key={c} onClick={() => setForm(f => ({ ...f, categoria: c }))} style={{
@@ -277,8 +290,8 @@ function Poi({ meta, col, onLog }) {
             <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-primary" onClick={add} disabled={busy || !form.nome.trim()} style={{ opacity: busy || !form.nome.trim() ? 0.6 : 1 }}>Salva</button>
-            <button onClick={() => { setOpen(false); setForm(empty) }} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 10, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Annulla</button>
+            <button className="btn-primary" onClick={save} disabled={busy || !form.nome.trim()} style={{ opacity: busy || !form.nome.trim() ? 0.6 : 1 }}>Salva</button>
+            <button onClick={cancelForm} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 10, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Annulla</button>
           </div>
         </div>
       )}
@@ -294,6 +307,9 @@ function Poi({ meta, col, onLog }) {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{p.nome}</div>
                 {p.descrizione && <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.descrizione}</div>}
               </div>
+              <button onClick={() => startEdit(p)} title="Modifica" style={{ background: 'none', border: 'none', color: col, cursor: 'pointer', flexShrink: 0, padding: 4, display: 'flex' }}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
               <button onClick={() => toggle(p)} title={p.attivo ? 'Visibile' : 'Nascosto'} style={{ width: 40, height: 23, borderRadius: 20, border: 'none', cursor: 'pointer', background: p.attivo ? 'var(--success)' : 'var(--border-mid)', position: 'relative', flexShrink: 0 }}>
                 <span style={{ position: 'absolute', top: 2.5, left: p.attivo ? 20 : 2.5, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
               </button>
