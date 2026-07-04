@@ -226,10 +226,11 @@ function Programmi({ meta, col, onLog, allowedShifts }) {
 function Poi({ meta, col, onLog }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
-  const empty = { categoria: 'Spiagge', nome: '', descrizione: '', maps_url: '', telefono: '' }
+  const empty = { categoria: 'Spiagge', nome: '', descrizione: '', maps_url: '', telefono: '', foto: [] }
   const [form, setForm] = useState(empty)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [editId, setEditId] = useState(null)
 
   useEffect(() => { load() }, [meta])
@@ -239,14 +240,33 @@ function Poi({ meta, col, onLog }) {
     setList(data || []); setLoading(false)
   }
   function startEdit(p) {
-    setForm({ categoria: p.categoria, nome: p.nome || '', descrizione: p.descrizione || '', maps_url: p.maps_url || '', telefono: p.telefono || '' })
+    setForm({ categoria: p.categoria, nome: p.nome || '', descrizione: p.descrizione || '', maps_url: p.maps_url || '', telefono: p.telefono || '', foto: Array.isArray(p.foto) ? p.foto : [] })
     setEditId(p.id); setOpen(true)
   }
   function cancelForm() { setForm(empty); setEditId(null); setOpen(false) }
+
+  async function uploadFotos(files) {
+    if (!files || !files.length) return
+    setUploading(true)
+    const added = []
+    for (const file of Array.from(files)) {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `${meta}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`
+      const { error } = await supabase.storage.from('poi-foto').upload(path, file, { upsert: false, contentType: file.type })
+      if (!error) added.push(path)
+    }
+    setForm(f => ({ ...f, foto: [...(f.foto || []), ...added] }))
+    setUploading(false)
+  }
+  async function removeFoto(path) {
+    setForm(f => ({ ...f, foto: (f.foto || []).filter(x => x !== path) }))
+    supabase.storage.from('poi-foto').remove([path])
+  }
+  const fotoUrl = (path) => supabase.storage.from('poi-foto').getPublicUrl(path).data.publicUrl
   async function save() {
     if (!form.nome.trim()) return
     setBusy(true)
-    const payload = { categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null }
+    const payload = { categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null, foto: form.foto || [] }
     if (editId) {
       await supabase.from('pax_poi').update(payload).eq('id', editId)
       onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` })
@@ -289,6 +309,24 @@ function Poi({ meta, col, onLog }) {
             <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} />
             <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
           </div>
+
+          {/* Foto (galleria) */}
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 7, color: 'var(--text-secondary)' }}>Foto {form.foto?.length ? `(${form.foto.length})` : ''}</div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {(form.foto || []).map(path => (
+                <div key={path} style={{ position: 'relative', width: 76, height: 76, borderRadius: 10, overflow: 'hidden', border: '0.5px solid var(--border)' }}>
+                  <img src={fotoUrl(path)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  <button onClick={() => removeFoto(path)} style={{ position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 13, lineHeight: 1, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
+              ))}
+              <label style={{ width: 76, height: 76, borderRadius: 10, border: '1px dashed var(--border-mid)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 3, cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 11, background: 'var(--bg-secondary)' }}>
+                {uploading ? '…' : <><span style={{ fontSize: 20, lineHeight: 1 }}>＋</span>Foto</>}
+                <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { uploadFotos(e.target.files); e.target.value = '' }} />
+              </label>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-primary" onClick={save} disabled={busy || !form.nome.trim()} style={{ opacity: busy || !form.nome.trim() ? 0.6 : 1 }}>Salva</button>
             <button onClick={cancelForm} style={{ background: 'var(--bg-tertiary)', border: 'none', borderRadius: 10, padding: '0 16px', fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>Annulla</button>

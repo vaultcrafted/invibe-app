@@ -224,6 +224,8 @@ function poiCoords(url) {
 function PoiSheet({ p, color, onClose }) {
   const coords = poiCoords(p.maps_url)
   const [imgOk, setImgOk] = useState(true)
+  const foto = Array.isArray(p.foto) ? p.foto : []
+  const fotoUrl = (path) => supabase.storage.from('poi-foto').getPublicUrl(path).data.publicUrl
   const mapImg = coords
     ? `https://staticmap.openstreetmap.de/staticmap.php?center=${coords[0]},${coords[1]}&zoom=15&size=640x300&markers=${coords[0]},${coords[1]},red-pushpin`
     : null
@@ -231,6 +233,15 @@ function PoiSheet({ p, color, onClose }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'flex-end', animation: 'fadeIn .15s ease' }}>
       <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxHeight: '86vh', overflowY: 'auto', background: 'var(--bg-primary)', borderTopLeftRadius: 24, borderTopRightRadius: 24, boxShadow: '0 -8px 30px rgba(0,0,0,0.2)', animation: 'sheetUp .24s cubic-bezier(0.22,1,0.36,1)' }}>
         <div style={{ width: 40, height: 4, borderRadius: 4, background: 'var(--border-mid)', margin: '10px auto 4px' }} />
+
+        {/* Galleria foto */}
+        {foto.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 16px 0', scrollSnapType: 'x mandatory', scrollbarWidth: 'none' }}>
+            {foto.map((path, i) => (
+              <img key={i} src={fotoUrl(path)} alt="" style={{ height: 190, minWidth: foto.length > 1 ? '82%' : '100%', width: foto.length > 1 ? '82%' : '100%', objectFit: 'cover', borderRadius: 16, scrollSnapAlign: 'center', border: '0.5px solid var(--border)' }} />
+            ))}
+          </div>
+        )}
 
         {/* Mini-mappa statica (se ci sono le coordinate) */}
         {mapImg && imgOk ? (
