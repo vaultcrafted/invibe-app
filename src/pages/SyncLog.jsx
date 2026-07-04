@@ -26,10 +26,17 @@ export default function SyncLog() {
   const [loading, setLoading] = useState(true)
   const [openId, setOpenId] = useState(null)
   const [filter, setFilter] = useState('all')
+  const [endpoints, setEndpoints] = useState({})   // script -> {url, token}
+  const [running, setRunning] = useState({})        // script -> bool
+  const [note, setNote] = useState(null)            // messaggio esito
 
   useEffect(() => {
     if (!isFullAccess) { navigate('/'); return }
     load()
+    supabase.from('sync_endpoints').select('*').then(({ data }) => {
+      const map = {}; (data || []).forEach(r => { map[r.script] = { url: r.url, token: r.token } })
+      setEndpoints(map)
+    })
   }, [])
 
   async function load() {
@@ -37,6 +44,34 @@ export default function SyncLog() {
     const { data } = await supabase.from('sync_logs').select('*').order('finished_at', { ascending: false }).limit(200)
     setLogs(data || [])
     setLoading(false)
+  }
+
+  async function runNow(script) {
+    const ep = endpoints[script]
+    if (!ep) { setNote({ t: 'err', m: 'Endpoint non configurato per ' + script + '. Vedi sync_endpoints.sql.' }); return }
+    setNote(null)
+    setRunning(r => ({ ...r, [script]: true }))
+    const t0 = new Date().toISOString()
+    // fa partire lo script (no-cors: non possiamo leggere la risposta, ma lo script parte)
+    try {
+      await fetch(`${ep.url}?job=${encodeURIComponent(script)}&token=${encodeURIComponent(ep.token)}`, { mode: 'no-cors' })
+    } catch (e) { /* no-cors: errore atteso, ignora */ }
+    // aspetta che compaia una nuova riga di log per questo script (fino a ~90s)
+    let found = null
+    for (let i = 0; i < 30 && !found; i++) {
+      await new Promise(r => setTimeout(r, 3000))
+      const { data } = await supabase.from('sync_logs').select('*')
+        .eq('script', script).gt('finished_at', t0).order('finished_at', { ascending: false }).limit(1)
+      if (data && data.length) found = data[0]
+    }
+    setRunning(r => ({ ...r, [script]: false }))
+    if (found) {
+      setNote({ t: found.status === 'error' ? 'err' : 'ok', m: `${scriptInfo(script).label}: ${found.summary}` })
+      load()
+    } else {
+      setNote({ t: 'wait', m: `Comando inviato a ${scriptInfo(script).label}. Se non compare a breve, premi Aggiorna.` })
+      load()
+    }
   }
 
   const filtered = logs.filter(l => filter === 'all' || l.script === filter)
@@ -58,6 +93,39 @@ export default function SyncLog() {
         <button onClick={load} style={{ marginLeft: 'auto', background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '7px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', cursor: 'pointer' }}>↻ Aggiorna</button>
       </div>
       <div style={{ padding: '0 16px 6px', fontSize: 12, color: 'var(--text-secondary)' }}>Cosa fanno gli script ogni notte (FILE CM, prebooking, rooming).</div>
+
+      {/* Sincronizza ora (on-demand) */}
+      <div style={{ padding: '4px 16px 8px' }}>
+        <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 14, padding: '12px 14px' }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 7 }}>⚡ Sincronizza ora</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {Object.entries(SCRIPTS).map(([k, v]) => {
+              const busy = running[k]
+              const configured = !!endpoints[k]
+              return (
+                <button key={k} onClick={() => runNow(k)} disabled={busy || !configured}
+                  title={configured ? '' : 'Endpoint non configurato'}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 11, fontSize: 12.5, fontWeight: 700,
+                    cursor: busy || !configured ? 'default' : 'pointer',
+                    background: busy ? v.color + '22' : (configured ? v.color : 'var(--bg-tertiary)'),
+                    color: busy ? v.color : (configured ? '#fff' : 'var(--text-tertiary)'),
+                    border: 'none', opacity: !configured ? 0.6 : 1,
+                  }}>
+                  <span>{v.emoji}</span>
+                  {busy ? 'Sincronizzo…' : v.label}
+                </button>
+              )
+            })}
+          </div>
+          {note && (
+            <div style={{ marginTop: 10, fontSize: 12.5, fontWeight: 600, color: note.t === 'err' ? '#DC2626' : note.t === 'wait' ? '#B45309' : '#16A34A' }}>{note.m}</div>
+          )}
+          {Object.keys(endpoints).length === 0 && (
+            <div style={{ marginTop: 9, fontSize: 11.5, color: 'var(--text-tertiary)' }}>Per attivare i pulsanti: pubblica gli script come Web App e compila <b>sync_endpoints</b> (vedi istruzioni).</div>
+          )}
+        </div>
+      </div>
 
       {/* Filtro script */}
       <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '6px 16px 10px', scrollbarWidth: 'none' }}>
