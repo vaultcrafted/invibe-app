@@ -28,6 +28,7 @@ export default function SyncLog() {
   const [filter, setFilter] = useState('all')
   const [endpoints, setEndpoints] = useState({})   // script -> {url, token}
   const [running, setRunning] = useState({})        // script -> bool
+  const [progress, setProgress] = useState({})       // script -> percentuale animata
   const [note, setNote] = useState(null)            // messaggio esito
 
   useEffect(() => {
@@ -51,6 +52,14 @@ export default function SyncLog() {
     if (!ep) { setNote({ t: 'err', m: 'Endpoint non configurato per ' + script + '. Vedi sync_endpoints.sql.' }); return }
     setNote(null)
     setRunning(r => ({ ...r, [script]: true }))
+    setProgress(p => ({ ...p, [script]: 5 }))
+    // avanzamento animato mentre attendiamo (sale verso il 90%)
+    const anim = setInterval(() => {
+      setProgress(p => {
+        const cur = p[script] || 0
+        return { ...p, [script]: cur < 90 ? cur + Math.max(1, Math.round((92 - cur) / 12)) : cur }
+      })
+    }, 700)
     const t0 = new Date().toISOString()
     // fa partire lo script (no-cors: non possiamo leggere la risposta, ma lo script parte)
     try {
@@ -64,6 +73,9 @@ export default function SyncLog() {
         .eq('script', script).gt('finished_at', t0).order('finished_at', { ascending: false }).limit(1)
       if (data && data.length) found = data[0]
     }
+    clearInterval(anim)
+    setProgress(p => ({ ...p, [script]: 100 }))
+    setTimeout(() => setProgress(p => ({ ...p, [script]: 0 })), 800)
     setRunning(r => ({ ...r, [script]: false }))
     if (found) {
       setNote({ t: found.status === 'error' ? 'err' : 'ok', m: `${scriptInfo(script).label}: ${found.summary}` })
@@ -101,19 +113,26 @@ export default function SyncLog() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {Object.entries(SCRIPTS).map(([k, v]) => {
               const busy = running[k]
+              const pct = progress[k] || 0
               const configured = !!endpoints[k]
               return (
                 <button key={k} onClick={() => runNow(k)} disabled={busy || !configured}
                   title={configured ? '' : 'Endpoint non configurato'}
                   style={{
+                    position: 'relative', overflow: 'hidden',
                     display: 'inline-flex', alignItems: 'center', gap: 7, padding: '9px 14px', borderRadius: 11, fontSize: 12.5, fontWeight: 700,
                     cursor: busy || !configured ? 'default' : 'pointer',
                     background: busy ? v.color + '22' : (configured ? v.color : 'var(--bg-tertiary)'),
                     color: busy ? v.color : (configured ? '#fff' : 'var(--text-tertiary)'),
-                    border: 'none', opacity: !configured ? 0.6 : 1,
+                    border: 'none', opacity: !configured ? 0.6 : 1, minWidth: busy ? 150 : 0,
                   }}>
-                  <span>{v.emoji}</span>
-                  {busy ? 'Sincronizzo…' : v.label}
+                  {busy && (
+                    <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: pct + '%', background: v.color + '33', transition: 'width .5s ease' }} />
+                  )}
+                  <span style={{ position: 'relative', zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                    <span>{v.emoji}</span>
+                    {busy ? `Sincronizzo… ${pct}%` : v.label}
+                  </span>
                 </button>
               )
             })}
