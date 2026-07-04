@@ -172,7 +172,7 @@ export default function Dbd() {
           </div>
         </div>
         {isAdmin && (
-          <button onClick={() => navigate('/dbd-admin')} style={{ padding: '7px 13px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
+          <button onClick={() => navigate(`/dbd-admin?dest=${selectedShift.destination}&shift=${selectedShift.shift_num}&day=${selectedDay}`)} style={{ padding: '7px 13px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer' }}>
             ✏️ Modifica
           </button>
         )}

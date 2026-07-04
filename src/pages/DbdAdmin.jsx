@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
@@ -16,11 +16,20 @@ const DAY_LABELS = ['Venerdì', 'Sabato', 'Domenica', 'Lunedì', 'Martedì', 'Me
 export default function DbdAdmin() {
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
 
-  const [destination, setDestination] = useState('corfu')
-  const [shiftNum, setShiftNum] = useState(0) // 0 = tutti i turni
-  const [dayNum, setDayNum] = useState(1)
-  const [dayLabel, setDayLabel] = useState(DAY_LABELS[0])
+  // Se arrivo dal DBD con ?dest=..&shift=..&day=.. apro già sul turno giusto.
+  const pDest = searchParams.get('dest')
+  const pShift = searchParams.get('shift')
+  const pDay = searchParams.get('day')
+  const initDest = DESTINATIONS.some(d => d.id === pDest) ? pDest : 'corfu'
+  const initShift = pShift != null && !isNaN(parseInt(pShift)) ? parseInt(pShift) : 0
+  const initDay = pDay != null && !isNaN(parseInt(pDay)) ? Math.max(1, Math.min(parseInt(pDay), 9)) : 1
+
+  const [destination, setDestination] = useState(initDest)
+  const [shiftNum, setShiftNum] = useState(initShift) // 0 = tutti i turni
+  const [dayNum, setDayNum] = useState(initDay)
+  const [dayLabel, setDayLabel] = useState(DAY_LABELS[initDay - 1] || DAY_LABELS[0])
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
