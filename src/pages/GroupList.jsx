@@ -50,6 +50,12 @@ export default function GroupList() {
       const q = search.toLowerCase()
       return g.capogruppo_display?.toLowerCase().includes(q) || String(g.capogruppo_code || '').toLowerCase().includes(q)
     })
+    .sort((a, b) => {
+      const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
+      const nb = parseInt(capogruppoCode(b.capogruppo_code)) || Infinity
+      if (na !== nb) return na - nb
+      return (a.capogruppo_display || '').localeCompare(b.capogruppo_display || '')
+    })
 
   if (!dest || !shift) return <div className="loading-screen"><p>Turno non trovato.</p></div>
 
