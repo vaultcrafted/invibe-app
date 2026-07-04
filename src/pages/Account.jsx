@@ -58,11 +58,12 @@ export default function Account() {
         <div style={{ position: 'relative', display: 'inline-block', marginBottom: 12 }}>
           <div style={{
             width: 80, height: 80, borderRadius: '50%',
-            background: ruoloColor, border: '3px solid #fff',
+            background: '#fff', border: '3px solid #fff',
             boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 26, fontWeight: 700, color: '#fff', margin: '0 auto'
-          }}>{initials}</div>
+            overflow: 'hidden', margin: '0 auto'
+          }}>
+            <img src="/profile-icon.png" alt="Account" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          </div>
           <div style={{ position: 'absolute', bottom: 2, right: 2, width: 14, height: 14, borderRadius: '50%', background: '#22c55e', border: '2px solid #fff' }} />
         </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>{profile?.nome} {profile?.cognome}</div>
