@@ -83,15 +83,30 @@ export default function GroupList() {
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
         {search && <button onClick={() => setSearch('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
-      <div style={{ display: 'flex', gap: 7, overflowX: 'auto', padding: '2px 16px 8px', scrollbarWidth: 'none' }}>
-        <button onClick={() => setSvcFilter(f => f === 'prebook_esc' ? null : 'prebook_esc')} style={chipStyle(svcFilter === 'prebook_esc', '#B45309', '#FEF3C7')}>
-          🎟️ Escursioni prebooking
-        </button>
-        {getServices(destId).map(sv => (
-          <button key={sv.id} onClick={() => setSvcFilter(f => f === sv.id ? null : sv.id)} style={chipStyle(svcFilter === sv.id, 'var(--iv-blue)', 'var(--iv-blue-light)')}>
-            {sv.label}
-          </button>
-        ))}
+      <div style={{ padding: '2px 16px 8px' }}>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={svcFilter || ''}
+            onChange={e => setSvcFilter(e.target.value || null)}
+            style={{
+              width: '100%', appearance: 'none', WebkitAppearance: 'none',
+              padding: '11px 38px 11px 14px', borderRadius: 12,
+              border: '0.5px solid ' + (svcFilter ? 'var(--iv-blue)' : 'var(--border)'),
+              background: svcFilter ? 'var(--iv-blue-light)' : 'var(--bg-secondary)',
+              color: svcFilter ? 'var(--iv-blue)' : 'var(--text-secondary)',
+              fontSize: 14, fontWeight: 600, cursor: 'pointer', outline: 'none',
+            }}
+          >
+            <option value="">Filtra per servizio — tutti i gruppi</option>
+            <option value="prebook_esc">🎟️ Escursioni prenotate (prebooking)</option>
+            {getServices(destId).map(sv => (
+              <option key={sv.id} value={sv.id}>{sv.label}</option>
+            ))}
+          </select>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+            <path d="M6 9l6 6 6-6" stroke={svcFilter ? 'var(--iv-blue)' : 'var(--text-tertiary)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
       </div>
       <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi{svcFilter ? ' · filtro attivo' : ''}</div>
       {loading ? (
