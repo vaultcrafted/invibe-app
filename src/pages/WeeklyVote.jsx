@@ -45,7 +45,8 @@ export default function WeeklyVote() {
   useEffect(() => {
     supabase.from('staff_profiles').select('*').order('cognome').then(({ data }) => {
       const filtered = (data || []).filter(s =>
-        (s.assigned_shifts || []).some(a => a.destination === destId && a.shift_num === parseInt(shiftNum))
+        s.attivo !== false
+        && (s.assigned_shifts || []).some(a => a.destination === destId && a.shift_num === parseInt(shiftNum))
         && s.id !== profile?.id
         && (!s.ruolo || !s.ruolo.toUpperCase().includes('UFFICIO'))
       )

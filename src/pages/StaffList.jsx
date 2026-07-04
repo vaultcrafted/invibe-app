@@ -142,7 +142,7 @@ export default function StaffList() {
 
   useEffect(() => {
     supabase.from('staff_profiles').select('*').order('cognome').then(({ data }) => {
-      setStaff(data || [])
+      setStaff((data || []).filter(s => s.attivo !== false))
       setLoading(false)
     })
   }, [])
