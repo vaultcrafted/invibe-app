@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { DESTINATIONS, SHIFTS } from '../lib/constants'
 
 const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallipoli: '#DC2626', sardegna: '#7C3AED' }
-const POI_CAT = ['Alloggi', 'Spiagge', 'Locali', 'Market', 'Ristoranti', 'Farmacia', 'Ospedale', 'Numeri utili', 'Altro']
-const CAT_EMOJI = { Alloggi: '🏠', Spiagge: '🏖️', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Farmacia: '💊', Ospedale: '🏥', 'Numeri utili': '📞', Altro: '📍' }
+const POI_CAT = ['Alloggi', 'Spiagge', 'Locali', 'Market', 'Ristoranti', 'Farmacia', 'Ospedale', 'Altro']
+const CAT_EMOJI = { Alloggi: '🏠', Spiagge: '🏖️', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Farmacia: '💊', Ospedale: '🏥', Altro: '📍' }
 
 const input = { width: '100%', padding: '11px 13px', borderRadius: 10, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }
 
