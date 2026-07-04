@@ -110,7 +110,7 @@ export default function StaffInfo() {
         </div>
       )}
 
-      <div style={{ padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {loading ? (
           <div style={{ padding: 30, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : (
@@ -138,8 +138,8 @@ export default function StaffInfo() {
             {/* Mappe alloggi */}
             <Section icon={<Home size={16} color={color} />} title="Mappe alloggi" color={color}>
               {alloggi.length === 0 ? <Empty text="Nessun alloggio inserito." /> : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {alloggi.map(p => <PoiRow key={p.id} p={p} color={color} />)}
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {alloggi.map((p, i) => <PoiRow key={p.id} p={p} color={color} last={i === alloggi.length - 1} />)}
                 </div>
               )}
             </Section>
@@ -147,8 +147,8 @@ export default function StaffInfo() {
             {/* Locali & Market */}
             <Section icon={<Music size={16} color={color} />} title="Locali & Market" color={color}>
               {localiMarket.length === 0 ? <Empty text="Nessun locale o market inserito." /> : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {localiMarket.map(p => <PoiRow key={p.id} p={p} color={color} />)}
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                  {localiMarket.map((p, i) => <PoiRow key={p.id} p={p} color={color} last={i === localiMarket.length - 1} />)}
                 </div>
               )}
             </Section>
@@ -169,12 +169,11 @@ export default function StaffInfo() {
               ) : rooming.length === 0 ? (
                 <Empty text="Rooming non ancora inserito per questo turno." />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
                   {rooming.map((a, i) => (
-                    <div key={i} className="card" style={{ padding: '12px 14px' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color, display: 'flex', alignItems: 'center', gap: 6 }}>🏠 {a.nome}</div>
-                      <div style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 4, lineHeight: 1.5 }}>{a.persone}</div>
-                      {a.note && <div style={{ fontSize: 11, color: '#D97706', marginTop: 4, fontWeight: 600 }}>⚠️ {a.note}</div>}
+                    <div key={i} style={{ padding: '9px 12px', borderBottom: i === rooming.length - 1 ? 'none' : '0.5px solid var(--border)' }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color, display: 'flex', alignItems: 'center', gap: 5 }}>🏠 {a.nome}{a.note && <span style={{ fontSize: 10.5, color: '#D97706', fontWeight: 600 }}>· ⚠️ {a.note}</span>}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-primary)', marginTop: 2, lineHeight: 1.4 }}>{a.persone}</div>
                     </div>
                   ))}
                 </div>
@@ -199,27 +198,24 @@ function Section({ icon, title, color, children }) {
   )
 }
 
-function PoiRow({ p, color }) {
+function PoiRow({ p, color, last }) {
   return (
-    <div className="card" style={{ padding: '12px 14px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{CAT_EMOJI[p.categoria] || '📍'}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{p.categoria}</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{p.nome}</div>
-          {p.descrizione && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.descrizione}</div>}
-        </div>
-        {p.telefono && (
-          <a href={`tel:${p.telefono}`} style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Phone size={16} color="var(--text-secondary)" />
-          </a>
-        )}
-        {p.maps_url && (
-          <a href={p.maps_url} target="_blank" rel="noreferrer" style={{ width: 36, height: 36, borderRadius: 10, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <MapPin size={16} color="#fff" />
-          </a>
-        )}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: last ? 'none' : '0.5px solid var(--border)' }}>
+      <div style={{ width: 30, height: 30, borderRadius: 9, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>{CAT_EMOJI[p.categoria] || '📍'}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.nome}</div>
+        {p.descrizione && <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.descrizione}</div>}
       </div>
+      {p.telefono && (
+        <a href={`tel:${p.telefono}`} style={{ width: 32, height: 32, borderRadius: 9, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <Phone size={15} color="var(--text-secondary)" />
+        </a>
+      )}
+      {p.maps_url && (
+        <a href={p.maps_url} target="_blank" rel="noreferrer" style={{ width: 32, height: 32, borderRadius: 9, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <MapPin size={15} color="#fff" />
+        </a>
+      )}
     </div>
   )
 }
