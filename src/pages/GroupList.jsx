@@ -61,7 +61,8 @@ export default function GroupList() {
     })
     .filter(g => {
       if (!svcFilter) return true
-      if (svcFilter === 'prebook_esc') return isPrebookedEsc(g)
+      if (svcFilter === 'prebook_esc') return g.prebook && Number(g.prebook.escursioni) > 0
+      if (svcFilter === 'prebook_ssp') return g.prebook && Number(g.prebook.ssp) > 0
       const negate = svcFilter.startsWith('no:')
       const svId = svcFilter.replace(/^(has:|no:)/, '')
       const sv = getServices(destId).find(s => s.id === svId)
@@ -128,6 +129,7 @@ export default function GroupList() {
 function filterLabel(v, destId) {
   if (!v) return 'Filtra per servizio'
   if (v === 'prebook_esc') return 'Escursioni prebooking'
+  if (v === 'prebook_ssp') return 'SSP prebooking'
   const id = v.replace(/^(has:|no:)/, '')
   const sv = getServices(destId).find(s => s.id === id)
   const name = sv ? sv.label : id
@@ -169,10 +171,11 @@ function FilterSheet({ destId, current, onPick, onClose }) {
         }}>Tutti i gruppi</button>
 
         <Group title="Prenotazioni">
-          <Pill value="prebook_esc" label="Escursioni prebooking" tone="amber" />
+          <Pill value="prebook_esc" label="Escursioni prebooking" tone="blue" />
+          <Pill value="prebook_ssp" label="SSP prebooking" tone="blue" />
         </Group>
-        <Group title="Chi ha preso">
-          {svcList.map(sv => <Pill key={'h' + sv.id} value={'has:' + sv.id} label={sv.label} tone="blue" />)}
+        <Group title="Chi ha preso (pagato)">
+          {svcList.map(sv => <Pill key={'h' + sv.id} value={'has:' + sv.id} label={sv.label} tone="amber" />)}
         </Group>
         <Group title="Chi non ha preso">
           {svcList.map(sv => <Pill key={'n' + sv.id} value={'no:' + sv.id} label={'Senza ' + sv.label} tone="red" />)}
