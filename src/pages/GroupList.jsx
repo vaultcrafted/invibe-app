@@ -98,7 +98,7 @@ export default function GroupList() {
             }}
           >
             <option value="">Filtra per servizio — tutti i gruppi</option>
-            <option value="prebook_esc">🎟️ Escursioni prenotate (prebooking)</option>
+            <option value="prebook_esc">Escursioni prenotate (prebooking)</option>
             {getServices(destId).map(sv => (
               <option key={sv.id} value={sv.id}>{sv.label}</option>
             ))}
