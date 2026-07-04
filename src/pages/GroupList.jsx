@@ -12,6 +12,12 @@ function prebookedCount(g, sv) {
 function isServiceOn(g, sv) {
   return (g[sv.id] || 0) > 0 || prebookedCount(g, sv) > 0
 }
+// "Pagato" = giallo nella card: pagato in meta, oppure escursioni prenotate (già pagate).
+function isPaid(g, sv) {
+  const paidMeta = (g[sv.id] || 0) > 0
+  const isEsc = prebookKeyForService(sv.id) === 'escursioni'
+  return paidMeta || (isEsc && prebookedCount(g, sv) > 0)
+}
 function isPrebookedEsc(g) {
   return g.prebook && g.prebook.escursioni != null && Number(g.prebook.escursioni) > 0
 }
@@ -67,8 +73,7 @@ export default function GroupList() {
       const svId = svcFilter.replace(/^(has:|no:)/, '')
       const sv = getServices(destId).find(s => s.id === svId)
       if (!sv) return true
-      const has = isServiceOn(g, sv)
-      return negate ? !has : has
+      return negate ? !isServiceOn(g, sv) : isPaid(g, sv)
     })
     .sort((a, b) => {
       const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
