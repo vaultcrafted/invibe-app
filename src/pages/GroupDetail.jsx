@@ -81,6 +81,14 @@ export default function GroupDetail() {
     })
   }
 
+  // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
+  async function saveEscConf() {
+    const preb = (group.prebook && group.prebook.escursioni) || 0
+    const v = Math.max(0, Math.min(group.escursioni_conf != null ? group.escursioni_conf : preb, preb))
+    setGroup(prev => ({ ...prev, escursioni_conf: v }))
+    enqueueUpdate('groups', { id: groupId }, { escursioni_conf: v }, { dedupKey: `groups:${groupId}:escursioni_conf` })
+  }
+
   async function toggleQtaService(serviceId) {
     const current = group[serviceId] || 0
     const newQty = current > 0 ? 0 : participants.filter(p => p.attivo !== false).length
@@ -196,12 +204,17 @@ export default function GroupDetail() {
                   const pbKey = prebookKeyForService(sv.id)
                   const prebooked = pbKey && group.prebook && group.prebook[pbKey] != null ? Number(group.prebook[pbKey]) : null
                   const short = prebooked != null && qty < prebooked
+                  const isEsc = pbKey === 'escursioni'
+                  const prebEsc = isEsc ? (prebooked || 0) : 0
+                  const lockedEsc = prebEsc > 0                       // escursioni già acquistate in prebooking
+                  const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
+                  const shownActive = lockedEsc ? true : active
                   return (
                     <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                       {/* Label */}
-                      <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => toggleQtaService(sv.id)}>
+                      <div style={{ flex: 1, cursor: lockedEsc ? 'default' : 'pointer' }} onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: active ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: shownActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</span>
                           {prebooked != null && (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
                               background: short ? '#FEF3C7' : 'var(--bg-secondary)',
@@ -212,22 +225,33 @@ export default function GroupDetail() {
                           )}
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                          €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
+                          {lockedEsc
+                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>Già pagate in prebooking</span>
+                            : <>€{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span></>}
                           {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
                         </div>
                       </div>
                       {/* Numero modificabile */}
-                      <input
-                        type="number"
-                        min="0"
-                        value={qty}
-                        onChange={e => updateQtaService(sv.id, e.target.value)}
-                        onBlur={() => saveQtaService(sv.id)}
-                        style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
-                      />
+                      {lockedEsc ? (
+                        <input
+                          type="number" min="0" max={prebEsc}
+                          value={confQty}
+                          onChange={e => setGroup(prev => ({ ...prev, escursioni_conf: Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, prebEsc)) }))}
+                          onBlur={saveEscConf}
+                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                        />
+                      ) : (
+                        <input
+                          type="number" min="0"
+                          value={qty}
+                          onChange={e => updateQtaService(sv.id, e.target.value)}
+                          onBlur={() => saveQtaService(sv.id)}
+                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                        />
+                      )}
                       {/* Toggle */}
-                      <div onClick={() => toggleQtaService(sv.id)} style={{ width: 46, height: 26, borderRadius: 13, background: active ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}>
-                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: active ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
+                      <div onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }} title={lockedEsc ? 'Già acquistate in prebooking' : ''} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: lockedEsc ? 'not-allowed' : 'pointer', opacity: lockedEsc ? 0.85 : 1, transition: 'background 0.2s' }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                     </div>
                   )
