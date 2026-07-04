@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import Topbar from '../components/Topbar'
-import { FileText, MapPin, Home, Music, ShoppingCart, BedDouble, ExternalLink, Phone } from 'lucide-react'
+import { FileText, MapPin, Home, Music, BedDouble, ExternalLink, Phone, Pencil, Plus, X } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -12,7 +12,7 @@ const DEST_COLORS = {
 const CAT_EMOJI = { Alloggi: '🏠', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Spiagge: '🏖️', Farmacia: '💊', Ospedale: '🏥', Altro: '📍' }
 
 export default function StaffInfo() {
-  const { profile, isFullAccess } = useAuth()
+  const { profile, isFullAccess, canEditCassa } = useAuth()
 
   const turni = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -26,6 +26,9 @@ export default function StaffInfo() {
   const [sel, setSel] = useState(turniObj[0] || null)
   const [programma, setProgramma] = useState(null)
   const [poi, setPoi] = useState([])
+  const [rooming, setRooming] = useState([])   // alloggi del turno
+  const [editRooming, setEditRooming] = useState(false)
+  const [savingRooming, setSavingRooming] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -33,13 +36,16 @@ export default function StaffInfo() {
     let alive = true
     async function load() {
       setLoading(true)
-      const [{ data: prog }, { data: pts }] = await Promise.all([
+      const [{ data: prog }, { data: pts }, { data: room }] = await Promise.all([
         supabase.from('pax_programmi').select('*').eq('destination', sel.destination).eq('shift_num', sel.shift_num).maybeSingle(),
         supabase.from('pax_poi').select('*').eq('destination', sel.destination).eq('attivo', true).order('ordine', { ascending: true }),
+        supabase.from('staff_rooming').select('alloggi').eq('destination', sel.destination).eq('shift_num', sel.shift_num).maybeSingle(),
       ])
       if (!alive) return
       setProgramma(prog || null)
       setPoi(pts || [])
+      setRooming(room?.alloggi || [])
+      setEditRooming(false)
       setLoading(false)
     }
     load()
@@ -53,6 +59,17 @@ export default function StaffInfo() {
   const localiMarket = poi.filter(p => p.categoria === 'Locali' || p.categoria === 'Market')
 
   const color = sel?.color || 'var(--iv-blue)'
+
+  async function saveRooming(newAlloggi) {
+    setSavingRooming(true)
+    await supabase.from('staff_rooming').upsert(
+      { destination: sel.destination, shift_num: sel.shift_num, alloggi: newAlloggi, updated_at: new Date().toISOString() },
+      { onConflict: 'destination,shift_num' }
+    )
+    setRooming(newAlloggi)
+    setSavingRooming(false)
+    setEditRooming(false)
+  }
 
   if (turniObj.length === 0) {
     return (
@@ -137,12 +154,32 @@ export default function StaffInfo() {
             </Section>
 
             {/* Rooming staff */}
-            <Section icon={<BedDouble size={16} color={color} />} title="Rooming staff" color={color}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px', borderRadius: 14, background: 'var(--bg-secondary)', border: '0.5px dashed var(--border)' }}>
-                <BedDouble size={20} color="var(--text-tertiary)" />
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Disponibile a breve — il rooming dello staff verrà pubblicato qui.</div>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9 }}>
+                <BedDouble size={16} color={color} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Rooming staff</span>
+                {canEditCassa && !editRooming && (
+                  <button onClick={() => setEditRooming(true)} style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5, background: color + '15', color, border: '0.5px solid ' + color + '44', borderRadius: 8, padding: '4px 10px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    <Pencil size={12} /> Modifica
+                  </button>
+                )}
               </div>
-            </Section>
+              {editRooming ? (
+                <RoomingEditor initial={rooming} color={color} saving={savingRooming} onSave={saveRooming} onCancel={() => setEditRooming(false)} />
+              ) : rooming.length === 0 ? (
+                <Empty text="Rooming non ancora inserito per questo turno." />
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {rooming.map((a, i) => (
+                    <div key={i} className="card" style={{ padding: '12px 14px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color, display: 'flex', alignItems: 'center', gap: 6 }}>🏠 {a.nome}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-primary)', marginTop: 4, lineHeight: 1.5 }}>{a.persone}</div>
+                      {a.note && <div style={{ fontSize: 11, color: '#D97706', marginTop: 4, fontWeight: 600 }}>⚠️ {a.note}</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -189,4 +226,36 @@ function PoiRow({ p, color }) {
 
 function Empty({ text }) {
   return <div style={{ fontSize: 13, color: 'var(--text-tertiary)', padding: '14px 16px', borderRadius: 12, background: 'var(--bg-secondary)', border: '0.5px solid var(--border)' }}>{text}</div>
+}
+
+function RoomingEditor({ initial, color, saving, onSave, onCancel }) {
+  const [list, setList] = useState(() => (initial || []).map((a, i) => ({ id: a.id || 'a' + i, nome: a.nome || '', persone: a.persone || '', note: a.note || '' })))
+  const upd = (i, k, v) => setList(l => l.map((a, j) => j === i ? { ...a, [k]: v } : a))
+  const add = () => setList(l => [...l, { id: 'a' + Date.now(), nome: '', persone: '', note: '' }])
+  const del = (i) => setList(l => l.filter((_, j) => j !== i))
+  const inp = { width: '100%', padding: '9px 11px', borderRadius: 9, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 13, color: 'var(--text-primary)', outline: 'none' }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {list.map((a, i) => (
+        <div key={a.id} className="card" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input style={{ ...inp, fontWeight: 700 }} placeholder="Nome alloggio (es. 6 ionian)" value={a.nome} onChange={e => upd(i, 'nome', e.target.value)} />
+            <button onClick={() => del(i)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', flexShrink: 0, padding: 4 }}><X size={18} /></button>
+          </div>
+          <textarea style={{ ...inp, resize: 'vertical', minHeight: 56, lineHeight: 1.5 }} placeholder="Persone (scrivi i nomi separati da virgola)" value={a.persone} onChange={e => upd(i, 'persone', e.target.value)} />
+          <input style={inp} placeholder="Nota (facoltativa)" value={a.note} onChange={e => upd(i, 'note', e.target.value)} />
+        </div>
+      ))}
+      <button onClick={add} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, background: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '0.5px solid var(--border)', borderRadius: 9, padding: '8px 14px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+        <Plus size={15} /> Aggiungi alloggio
+      </button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
+        <button onClick={() => onSave(list.filter(a => a.nome.trim() || a.persone.trim()))} disabled={saving}
+          style={{ flex: 1, padding: '12px', borderRadius: 11, border: 'none', background: color, color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving ? 0.6 : 1 }}>
+          {saving ? 'Salvo...' : 'Salva rooming'}
+        </button>
+        <button onClick={onCancel} style={{ padding: '12px 18px', borderRadius: 11, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', color: 'var(--text-secondary)', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>Annulla</button>
+      </div>
+    </div>
+  )
 }
