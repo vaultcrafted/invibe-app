@@ -21,7 +21,7 @@ export default function SyncIndicator() {
     return () => { unsub(); clearTimeout(timer.current) }
   }, [])
 
-  const { pending, online, syncing } = state
+  const { pending, online, syncing, total, done, percent } = state
 
   // Niente da mostrare se: online, niente in coda, e nessuna conferma in corso
   if (online && pending === 0 && !justSynced) return null
@@ -32,32 +32,41 @@ export default function SyncIndicator() {
     label = pending > 0 ? `Offline · ${pending} da sincronizzare` : 'Offline'
   } else if (pending > 0) {
     bg = '#DBEAFE'; color = '#1E40AF'; border = '#BFDBFE'
-    label = syncing ? `Sincronizzo… ${pending}` : `${pending} in attesa`
+    label = total > 1 ? `Sincronizzo ${done}/${total} · ${percent}%` : 'Sincronizzo…'
   } else {
     bg = '#DCFCE7'; color = '#166534'; border = '#BBF7D0'
     label = 'Tutto sincronizzato'
   }
+
+  const showBar = online && pending > 0 && total > 1
 
   return (
     <div style={{
       position: 'fixed', zIndex: 150,
       bottom: 'calc(76px + env(safe-area-inset-bottom))',
       left: '50%', transform: 'translateX(-50%)',
-      display: 'flex', alignItems: 'center', gap: 8,
-      padding: '7px 14px', borderRadius: 999,
+      display: 'flex', flexDirection: 'column', gap: 6,
+      padding: showBar ? '9px 16px 11px' : '7px 14px', borderRadius: showBar ? 14 : 999,
       background: bg, color, border: '0.5px solid ' + border,
-      fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+      fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', minWidth: showBar ? 190 : 0,
       boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
       pointerEvents: 'none',
     }}>
-      {(!online || syncing) && (
-        <span style={{
-          width: 8, height: 8, borderRadius: '50%',
-          background: color,
-          animation: 'syncPulse 1.1s ease-in-out infinite',
-        }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+        {(!online || syncing) && (
+          <span style={{
+            width: 8, height: 8, borderRadius: '50%',
+            background: color,
+            animation: 'syncPulse 1.1s ease-in-out infinite',
+          }} />
+        )}
+        {label}
+      </div>
+      {showBar && (
+        <div style={{ width: '100%', height: 5, borderRadius: 999, background: color + '22', overflow: 'hidden' }}>
+          <div style={{ width: percent + '%', height: '100%', borderRadius: 999, background: color, transition: 'width .25s ease' }} />
+        </div>
       )}
-      {label}
       <style>{`@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
     </div>
   )

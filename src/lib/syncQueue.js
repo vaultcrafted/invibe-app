@@ -10,12 +10,14 @@ import { syncToSheet } from './sheetsSync'
 const KEY = 'invibe_sync_queue_v1'
 const listeners = new Set()
 let flushing = false
+let batchTotal = 0   // picco della coda nel lotto corrente (per la percentuale)
 
 function load() {
   try { return JSON.parse(localStorage.getItem(KEY) || '[]') } catch { return [] }
 }
 function persist(q) {
   try { localStorage.setItem(KEY, JSON.stringify(q)) } catch (e) { /* quota */ }
+  batchTotal = q.length === 0 ? 0 : Math.max(batchTotal, q.length)
   notify()
 }
 function notify() {
@@ -25,7 +27,15 @@ function notify() {
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }
 
 export function getState() {
-  return { pending: load().length, online: typeof navigator !== 'undefined' ? navigator.onLine : true, syncing: flushing }
+  const pending = load().length
+  return {
+    pending,
+    total: batchTotal,
+    done: Math.max(0, batchTotal - pending),
+    percent: batchTotal > 0 ? Math.round(((batchTotal - pending) / batchTotal) * 100) : 100,
+    online: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    syncing: flushing,
+  }
 }
 export function subscribe(cb) {
   listeners.add(cb)
