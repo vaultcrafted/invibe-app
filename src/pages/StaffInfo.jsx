@@ -95,14 +95,14 @@ export default function StaffInfo() {
         </div>
       </div>
 
-      {/* Selettore turno (se più di uno) */}
+      {/* Selettore turno (se più di uno) — resta fisso in alto mentre si scorre */}
       {turniObj.length > 1 && (
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '14px 16px 4px' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-primary)', borderBottom: '0.5px solid var(--border)', display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 16px', scrollbarWidth: 'none' }}>
           {turniObj.map((t, i) => {
             const on = sel && t.destination === sel.destination && t.shift_num === sel.shift_num
             return (
               <button key={i} onClick={() => setSel(t)} style={{
-                padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
                 background: on ? t.color : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
                 border: '0.5px solid ' + (on ? t.color : 'var(--border)'),
               }}>{t.destName} · {shiftLabel(t.destination, t.shift_num)}</button>
