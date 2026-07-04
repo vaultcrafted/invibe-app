@@ -85,31 +85,29 @@ export default function StaffInfo() {
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
 
-      {/* Hero */}
-      <div style={{ padding: '4px 16px 0' }}>
-        <div style={{ borderRadius: 18, padding: '20px 20px 18px', background: `linear-gradient(135deg, ${color} 0%, ${color}cc 100%)`, color: '#fff' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.9, textTransform: 'uppercase', letterSpacing: '0.06em' }}>La mia settimana</div>
-          <div style={{ fontSize: 26, fontWeight: 800, marginTop: 4, lineHeight: 1.05 }}>
-            {sel ? `${sel.destName}` : ''} <span style={{ opacity: 0.85 }}>· {sel ? shiftLabel(sel.destination, sel.shift_num) : ''}</span>
+      {/* Header sticky: titolo + selettore turni */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-primary)', borderBottom: '0.5px solid var(--border)' }}>
+        <div style={{ padding: '12px 16px 4px' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>La mia settimana</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color, lineHeight: 1.1, marginTop: 1 }}>
+            {sel ? `${sel.destName} · ${shiftLabel(sel.destination, sel.shift_num)}` : ''}
           </div>
         </div>
+        {turniObj.length > 1 && (
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '8px 16px 12px', scrollbarWidth: 'none' }}>
+            {turniObj.map((t, i) => {
+              const on = sel && t.destination === sel.destination && t.shift_num === sel.shift_num
+              return (
+                <button key={i} onClick={() => setSel(t)} style={{
+                  padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  background: on ? t.color : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+                  border: '0.5px solid ' + (on ? t.color : 'var(--border)'),
+                }}>{t.destName} · {shiftLabel(t.destination, t.shift_num)}</button>
+              )
+            })}
+          </div>
+        )}
       </div>
-
-      {/* Selettore turno (se più di uno) — resta fisso in alto mentre si scorre */}
-      {turniObj.length > 1 && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-primary)', borderBottom: '0.5px solid var(--border)', display: 'flex', gap: 8, overflowX: 'auto', padding: '12px 16px', scrollbarWidth: 'none' }}>
-          {turniObj.map((t, i) => {
-            const on = sel && t.destination === sel.destination && t.shift_num === sel.shift_num
-            return (
-              <button key={i} onClick={() => setSel(t)} style={{
-                padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
-                background: on ? t.color : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
-                border: '0.5px solid ' + (on ? t.color : 'var(--border)'),
-              }}>{t.destName} · {shiftLabel(t.destination, t.shift_num)}</button>
-            )
-          })}
-        </div>
-      )}
 
       <div style={{ padding: '14px 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {loading ? (
