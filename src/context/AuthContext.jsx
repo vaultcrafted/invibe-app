@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { SHIFTS } from '../lib/constants'
 
 const AuthContext = createContext(null)
 
@@ -57,13 +58,31 @@ export function AuthProvider({ children }) {
   const isACM = /\bACM\b/.test(ru)
   // Accesso globale (tutto sbloccato): solo ufficio e supervisor.
   const isFullAccess = isUfficio || isSupervisor
-  // Inserimento movimenti in cassa: ufficio, supervisor, CM (non ACM).
-  const canEditCassa = isFullAccess || isCM
+
+  // Referente meta: gestisce TUTTI i turni di una singola meta (non le altre).
+  const refMeta = profile?.referente_meta || null
+  const isReferente = !!refMeta
+
+  // Turni effettivamente accessibili: quelli assegnati + (se referente) tutti i turni della sua meta.
+  const rawShifts = profile?.assigned_shifts || []
+  let effShifts = rawShifts
+  if (isReferente && SHIFTS[refMeta]) {
+    const seen = new Set(rawShifts.map(s => `${s.destination}__${s.shift_num}`))
+    effShifts = rawShifts.slice()
+    SHIFTS[refMeta].forEach(s => {
+      const k = `${refMeta}__${s.num}`
+      if (!seen.has(k)) effShifts.push({ destination: refMeta, shift_num: s.num, ruolo: 'REFERENTE' })
+    })
+  }
+  const effProfile = profile ? { ...profile, assigned_shifts: effShifts } : profile
+
+  // Inserimento movimenti in cassa: ufficio, supervisor, CM, referente meta (non ACM).
+  const canEditCassa = isFullAccess || isCM || isReferente
   // Import Excel (sovrascrive tutto il DB): solo accesso globale.
   const canImport = isFullAccess
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signOut, isAdmin, isFullAccess, isCM, isACM, canEditCassa, canImport, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile: effProfile, loading, signIn, signOut, isAdmin, isFullAccess, isReferente, refMeta, isCM, isACM, canEditCassa, canImport, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )

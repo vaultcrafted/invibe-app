@@ -64,9 +64,13 @@ const NAV_ITEMS = [
 export default function Navigation() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin, isFullAccess } = useAuth()
+  const { isAdmin, isFullAccess, canEditCassa } = useAuth()
 
-  const visibleItems = NAV_ITEMS.filter(item => (!item.adminOnly || isAdmin) && (!item.fullAccessOnly || isFullAccess))
+  const visibleItems = NAV_ITEMS.filter(item => {
+    if (item.fullAccessOnly && !isFullAccess) return false
+    if (item.adminOnly) return isAdmin || (item.id === 'cassa' && canEditCassa)
+    return true
+  })
 
   function isActive(item) {
     if (item.path === '/') return location.pathname === '/'
