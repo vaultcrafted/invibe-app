@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService } from '../lib/constants'
 import { enqueueUpdate } from '../lib/syncQueue'
+import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
 // Icone servizi custom
@@ -97,6 +98,23 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, newQty)],
     })
+    // Se spengo il servizio, tolgo anche il metodo di pagamento associato
+    if (newQty === 0 && group.servizi_metodo && group.servizi_metodo[serviceId]) {
+      const next = { ...group.servizi_metodo }; delete next[serviceId]
+      setGroup(prev => ({ ...prev, servizi_metodo: next }))
+      enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    }
+  }
+
+  // Metodo con cui è stato pagato il servizio (bonifico / vivawallet / scalapay / cash).
+  // Ritap sullo stesso metodo = deseleziona.
+  function setMetodo(serviceId, metodo) {
+    const cur = group.servizi_metodo || {}
+    const next = { ...cur }
+    if (cur[serviceId] === metodo) delete next[serviceId]
+    else next[serviceId] = metodo
+    setGroup(prev => ({ ...prev, servizi_metodo: next }))
+    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
   }
 
   async function toggleParticipantActive(participantId) {
@@ -210,7 +228,8 @@ export default function GroupDetail() {
                   const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
                   const shownActive = lockedEsc ? true : active
                   return (
-                    <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
                       {/* Label */}
                       <div style={{ flex: 1, cursor: lockedEsc ? 'default' : 'pointer' }} onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -253,6 +272,20 @@ export default function GroupDetail() {
                       <div onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }} title={lockedEsc ? 'Già acquistate in prebooking' : ''} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: lockedEsc ? 'not-allowed' : 'pointer', opacity: lockedEsc ? 0.85 : 1, transition: 'background 0.2s' }}>
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
+                      </div>
+                      {/* Metodo di pagamento — compare solo quando il servizio è attivo */}
+                      {shownActive && !lockedEsc && (
+                        <div style={{ padding: '0 18px 14px 18px', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
+                          {METODI.map(mt => {
+                            const on = (group.servizi_metodo || {})[sv.id] === mt
+                            const c = METODO_COLORS[mt] || '#64748B'
+                            return (
+                              <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 }) : SERVICES.map((sv, i) => {
