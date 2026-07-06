@@ -1299,13 +1299,17 @@ function CassaTab() {
   )
 }
 
+const METODI = ['Cash', 'Bonifico', 'Scalapay', 'Wivawallet']
+const METODO_COLORS = { Cash: '#16A34A', Bonifico: '#1E6BF1', Scalapay: '#7C3AED', Wivawallet: '#D97706' }
+
 function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const { canEditCassa } = useAuth()
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
+  const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
+  const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
 
   const dest = DESTINATIONS.find(d => d.id === destination)
@@ -1322,7 +1326,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   }
 
   function openForm() {
-    setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10) })
+    setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
     setSaveError(null)
     setShowForm(true)
   }
@@ -1336,7 +1340,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
       destination, shift_num: shiftNum, data: form.data,
       tipo: form.tipo,
       categoria: form.categoria, importo: amount,
-      descrizione: form.descrizione || null, inserito_da: 'Ufficio',
+      descrizione: form.descrizione || null, inserito_da: 'Ufficio', metodo: form.metodo || 'Cash',
     })
     setSaving(false)
     if (error) { setSaveError(error.message); return }
@@ -1348,8 +1352,9 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     load()
   }
 
-  const totEntrate = movimenti.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
-  const totUscite = movimenti.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
+  const movVisibili = movimenti.filter(m => filtroMetodo === 'Tutti' || (m.metodo || 'Cash') === filtroMetodo)
+  const totEntrate = movVisibili.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
+  const totUscite = movVisibili.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1380,19 +1385,38 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         </button>
       )}
 
+      {/* Filtro metodo di pagamento */}
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {['Tutti', ...METODI].map(mt => {
+          const on = filtroMetodo === mt
+          const c = mt === 'Tutti' ? 'var(--iv-blue)' : METODO_COLORS[mt]
+          return (
+            <button key={mt} onClick={() => setFiltroMetodo(mt)} style={{
+              padding: '6px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (on ? c : 'var(--border)'),
+            }}>{mt}</button>
+          )
+        })}
+      </div>
+
       <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        ) : movimenti.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento per questo turno</div>
-        ) : movimenti.map((m, i) => {
+        ) : movVisibili.length === 0 ? (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento{filtroMetodo !== 'Tutti' ? ' con ' + filtroMetodo : ' per questo turno'}</div>
+        ) : movVisibili.map((m, i) => {
           const isEntrata = m.tipo === 'entrata'
           const dataFmt = new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+          const mMet = m.metodo || 'Cash'
           return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
               {isEntrata ? <ArrowDownCircle size={18} color="#16A34A" style={{ flexShrink: 0 }} /> : <ArrowUpCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{m.categoria}</div>
+                <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  {m.categoria}
+                  <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 20, background: (METODO_COLORS[mMet] || '#64748B') + '18', color: METODO_COLORS[mMet] || '#64748B' }}>{mMet}</span>
+                </div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                   {dataFmt}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
                 </div>
@@ -1437,6 +1461,22 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 4 }}>
                   {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Metodo di pagamento</label>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
+                  {METODI.map(mt => {
+                    const on = form.metodo === mt
+                    const c = METODO_COLORS[mt]
+                    return (
+                      <button key={mt} type="button" onClick={() => setForm(f => ({ ...f, metodo: mt }))} style={{
+                        flex: '1 1 auto', padding: '9px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 700, cursor: 'pointer',
+                        background: on ? c : 'transparent', color: on ? '#fff' : 'var(--text-secondary)',
+                        border: '1.5px solid ' + (on ? c : 'var(--border)'),
+                      }}>{mt}</button>
+                    )
+                  })}
+                </div>
               </div>
               <div>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Descrizione (opzionale)</label>
