@@ -13,6 +13,8 @@ const DEST_COLORS = {
 
 // Esportata per l'inserimento movimenti nel pannello Admin.
 export const CATEGORIE = ['SSP', 'Tassa di soggiorno', 'Escursioni', 'Cauzione', 'Paleo', 'Montecristo', 'Pazuzu', 'Mojito', 'Pranzo Laviron', 'Spesa staff', 'Rimborsi', 'Altro']
+export const METODI = ['Cash', 'Bonifico', 'Scalapay', 'Wivawallet']
+export const METODO_COLORS = { Cash: '#16A34A', Bonifico: '#1E6BF1', Scalapay: '#7C3AED', Wivawallet: '#D97706' }
 
 // Cassa nel menù = SOLA LETTURA (recap veloce). I movimenti si aggiungono dal pannello Admin.
 export default function Cassa() {
@@ -29,6 +31,7 @@ export default function Cassa() {
   // dettaglio turno (lettura)
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
 
   const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -183,8 +186,9 @@ export default function Cassa() {
   }
 
   // ================= DETTAGLIO TURNO (lettura) =================
-  const totaleEntrate = movimenti.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
-  const totaleUscite = movimenti.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
+  const movVisibili = movimenti.filter(m => filtroMetodo === 'Tutti' || (m.metodo || 'Cash') === filtroMetodo)
+  const totaleEntrate = movVisibili.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
+  const totaleUscite = movVisibili.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
   const saldo = totaleEntrate - totaleUscite
   const color = selectedShift?.color || 'var(--iv-blue)'
 
@@ -216,22 +220,41 @@ export default function Cassa() {
         </div>
       </div>
 
+      {/* Filtro metodo di pagamento */}
+      <div style={{ padding: '0 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {['Tutti', ...METODI].map(mt => {
+          const on = filtroMetodo === mt
+          const c = mt === 'Tutti' ? 'var(--iv-blue)' : METODO_COLORS[mt]
+          return (
+            <button key={mt} onClick={() => setFiltroMetodo(mt)} style={{
+              padding: '6px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (on ? c : 'var(--border)'),
+            }}>{mt}</button>
+          )
+        })}
+      </div>
+
       {/* Lista movimenti (lettura) */}
       <div style={{ padding: '4px 16px 32px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
-        ) : movimenti.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento registrato</div>
+        ) : movVisibili.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento{filtroMetodo !== 'Tutti' ? ' con ' + filtroMetodo : ' registrato'}</div>
         ) : (
           <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
-            {movimenti.map((m, i) => {
+            {movVisibili.map((m, i) => {
               const isEntrata = m.tipo === 'entrata'
               const dataFmt = new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+              const mMet = m.metodo || 'Cash'
               return (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < movimenti.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderBottom: i < movVisibili.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
                   {isEntrata ? <ArrowDownCircle size={18} color="#16A34A" style={{ flexShrink: 0 }} /> : <ArrowUpCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{m.categoria}</div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                      {m.categoria}
+                      <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 20, background: (METODO_COLORS[mMet] || '#64748B') + '18', color: METODO_COLORS[mMet] || '#64748B' }}>{mMet}</span>
+                    </div>
                     <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                       {dataFmt}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
                     </div>
