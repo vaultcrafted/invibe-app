@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService } from '../lib/constants'
-import { enqueueUpdate } from '../lib/syncQueue'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService } from '../lib/constants'
+import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
+import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
@@ -36,6 +37,7 @@ const ServiceIcons = {
 export default function GroupDetail() {
   const { groupId } = useParams()
   const navigate = useNavigate()
+  const { canEditCassa, profile } = useAuth()
   const [group, setGroup] = useState(null)
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -80,6 +82,9 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, qty)],
     })
+    // Se il servizio ha già un metodo, aggiorno l'importo dell'entrata in cassa (qty 0 -> la rimuove)
+    const metodo = (group.servizi_metodo || {})[serviceId]
+    if (metodo) syncCassaEntrata(serviceId, metodo, qty)
   }
 
   // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
@@ -98,11 +103,18 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, newQty)],
     })
-    // Se spengo il servizio, tolgo anche il metodo di pagamento associato
-    if (newQty === 0 && group.servizi_metodo && group.servizi_metodo[serviceId]) {
-      const next = { ...group.servizi_metodo }; delete next[serviceId]
-      setGroup(prev => ({ ...prev, servizi_metodo: next }))
-      enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    if (newQty === 0) {
+      // Spengo il servizio: tolgo il metodo e l'eventuale entrata auto in cassa
+      if (group.servizi_metodo && group.servizi_metodo[serviceId]) {
+        const next = { ...group.servizi_metodo }; delete next[serviceId]
+        setGroup(prev => ({ ...prev, servizi_metodo: next }))
+        enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+      }
+      syncCassaEntrata(serviceId, undefined, 0)
+    } else {
+      // Accendo: se c'era già un metodo memorizzato, ricreo l'entrata sulla nuova quantità
+      const metodo = (group.servizi_metodo || {})[serviceId]
+      if (metodo) syncCassaEntrata(serviceId, metodo, newQty)
     }
   }
 
@@ -115,6 +127,36 @@ export default function GroupDetail() {
     else next[serviceId] = metodo
     setGroup(prev => ({ ...prev, servizi_metodo: next }))
     enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    // Entrata automatica in cassa col metodo scelto (undefined = deselezionato -> rimuove)
+    syncCassaEntrata(serviceId, next[serviceId], group[serviceId] || 0)
+  }
+
+  // Crea/aggiorna/rimuove l'entrata AUTOMATICA in cassa per un servizio del gruppo.
+  // È idempotente: cancella sempre l'eventuale riga auto precedente e la riscrive.
+  // metodo assente o importo 0 -> nessuna riga (solo cancellazione).
+  function syncCassaEntrata(serviceId, metodo, qty) {
+    if (!canEditCassa) return   // solo chi può gestire la cassa genera movimenti
+    const svc = getServices(group.destination).find(s => s.id === serviceId)
+    if (!svc) return
+    // rimuovo sempre l'eventuale entrata auto precedente per questo (gruppo, servizio)
+    enqueueDelete('cassa_movimenti', { group_id: groupId, servizio_id: serviceId, auto: true })
+    const importo = svc.prezzo * (qty || 0)
+    if (metodo && importo > 0) {
+      enqueueInsert('cassa_movimenti', {
+        destination: group.destination,
+        shift_num: group.shift_num,
+        data: new Date().toISOString().slice(0, 10),
+        tipo: 'entrata',
+        categoria: cassaCategoriaForService(serviceId, svc.label),
+        importo,
+        metodo,
+        descrizione: `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim(),
+        inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
+        group_id: groupId,
+        servizio_id: serviceId,
+        auto: true,
+      })
+    }
   }
 
   async function toggleParticipantActive(participantId) {
@@ -137,6 +179,8 @@ export default function GroupDetail() {
           dedupKey: `groups:${groupId}:${sv.id}`,
           sheet: [sheetPayload(sv.id, newNPax)],
         })
+        const metodo = (group.servizi_metodo || {})[sv.id]
+        if (metodo) syncCassaEntrata(sv.id, metodo, newNPax)
       }
     })
   }

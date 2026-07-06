@@ -208,6 +208,19 @@ export function prebookKeyForService(id) {
   return null
 }
 
+// Categoria Cassa per l'entrata automatica generata dal servizio.
+// Allinea i casi comuni alle categorie già esistenti; per gli altri usa la label del servizio.
+const SERVICE_CASSA_CATEGORIA = {
+  pkg_escursioni: 'Escursioni', qta_escursioni: 'Escursioni', zan_escursioni: 'Escursioni', gal_escursioni: 'Escursioni', sar_escursioni: 'Escursioni',
+  pkg_ssp: 'SSP', qta_ssp: 'SSP', sar_ssp: 'SSP', pag_ssp_cash: 'SSP', pag_ssp_bonifico: 'SSP',
+  tassa_soggiorno: 'Tassa di soggiorno', qta_tassa_soggiorno: 'Tassa di soggiorno', zan_tassa_soggiorno: 'Tassa di soggiorno', gal_tassa_soggiorno: 'Tassa di soggiorno', sar_tassa_soggiorno: 'Tassa di soggiorno', pag_tassa_soggiorno: 'Tassa di soggiorno',
+  cauzione: 'Cauzione',
+  qta_pazuzu: 'Pazuzu', qta_barche_paleo: 'Paleo', qta_montecristo: 'Montecristo', qta_mojito2: 'Mojito', qta_pranzo_laviron: 'Pranzo Laviron',
+}
+export function cassaCategoriaForService(id, label) {
+  return SERVICE_CASSA_CATEGORIA[id] || label || 'Altro'
+}
+
 export function calcAge(birthDate) {
   if (!birthDate) return null
   const today = new Date()
