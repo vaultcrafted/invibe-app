@@ -1312,6 +1312,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
   const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
+  const [triedSave, setTriedSave] = useState(false)
 
   const dest = DESTINATIONS.find(d => d.id === destination)
 
@@ -1329,12 +1330,15 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   function openForm() {
     setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
     setSaveError(null)
+    setTriedSave(false)
     setShowForm(true)
   }
 
   async function handleSave() {
+    setTriedSave(true)
     const amount = parseFloat(form.importo)
-    if (!amount || amount <= 0) return
+    // Obbligatori: importo (>0), categoria, metodo, data. Descrizione facoltativa.
+    if (!amount || amount <= 0 || !form.categoria || !form.metodo || !form.data) return
     setSaving(true)
     setSaveError(null)
     const { error } = await supabase.from('cassa_movimenti').insert({
@@ -1467,20 +1471,20 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                 </button>
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Importo (€)</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Importo (€) <span style={{ color: '#DC2626' }}>*</span></label>
                 <input type="number" min="0" step="0.01" placeholder="0.00" value={form.importo} onChange={e => setForm(f => ({ ...f, importo: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 18, fontWeight: 700, marginTop: 4, color: form.tipo === 'entrata' ? '#16A34A' : '#DC2626' }} />
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + (!form.importo ? '#DC2626' : 'var(--border)'), fontSize: 18, fontWeight: 700, marginTop: 4, color: form.tipo === 'entrata' ? '#16A34A' : '#DC2626' }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria <span style={{ color: '#DC2626' }}>*</span></label>
                 <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 4 }}>
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + (!form.categoria ? '#DC2626' : 'var(--border)'), fontSize: 14, marginTop: 4 }}>
                   {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Metodo di pagamento</label>
-                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Metodo di pagamento <span style={{ color: '#DC2626' }}>*</span></label>
+                <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginTop: 6, ...(!form.metodo ? { padding: 6, border: '1px solid #DC2626', borderRadius: 12 } : {}) }}>
                   {METODI.map(mt => {
                     const on = form.metodo === mt
                     const c = METODO_COLORS[mt]
@@ -1500,17 +1504,22 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, marginTop: 4 }} />
               </div>
               <div>
-                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Data</label>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Data <span style={{ color: '#DC2626' }}>*</span></label>
                 <input type="date" value={form.data} onChange={e => setForm(f => ({ ...f, data: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 13, marginTop: 4 }} />
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + (!form.data ? '#DC2626' : 'var(--border)'), fontSize: 13, marginTop: 4 }} />
               </div>
+              {triedSave && (!form.importo || parseFloat(form.importo) <= 0 || !form.categoria || !form.metodo || !form.data) && (
+                <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #DC262633', color: '#DC2626', fontSize: 12, fontWeight: 600 }}>
+                  Compila tutti i campi obbligatori (contrassegnati con *).
+                </div>
+              )}
               {saveError && (
                 <div style={{ padding: '10px 12px', borderRadius: 10, background: '#FEF2F2', border: '1px solid #DC262633', color: '#DC2626', fontSize: 12 }}>
                   Errore nel salvataggio: {saveError}
                 </div>
               )}
-              <button onClick={handleSave} disabled={saving || !form.importo}
-                style={{ marginTop: 6, padding: '13px', borderRadius: 12, border: 'none', background: form.tipo === 'entrata' ? '#16A34A' : '#DC2626', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving || !form.importo ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <button onClick={handleSave} disabled={saving || !form.importo || parseFloat(form.importo) <= 0 || !form.categoria || !form.metodo || !form.data}
+                style={{ marginTop: 6, padding: '13px', borderRadius: 12, border: 'none', background: form.tipo === 'entrata' ? '#16A34A' : '#DC2626', color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', opacity: saving || !form.importo || parseFloat(form.importo) <= 0 || !form.categoria || !form.metodo || !form.data ? 0.6 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <Plus size={16} /> {saving ? 'Salvo...' : 'Aggiungi movimento'}
               </button>
             </div>
