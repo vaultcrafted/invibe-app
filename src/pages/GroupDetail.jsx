@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService } from '../lib/constants'
 import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
+import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2 } from 'lucide-react'
@@ -134,27 +135,75 @@ export default function GroupDetail() {
   // Crea/aggiorna/rimuove l'entrata AUTOMATICA in cassa per un servizio del gruppo.
   // È idempotente: cancella sempre l'eventuale riga auto precedente e la riscrive.
   // metodo assente o importo 0 -> nessuna riga (solo cancellazione).
-  function syncCassaEntrata(serviceId, metodo, qty) {
+  // Oltre a Supabase, tiene allineato il foglio di rendicontazione:
+  //  - manda 'elimina' della VECCHIA riga (con i suoi valori reali, letti dal DB)
+  //  - manda 'add' della NUOVA riga
+  // Così l'elimina sul foglio combacia sempre (match per importo+descrizione),
+  // anche quando cambia la quantità (quindi l'importo).
+  async function syncCassaEntrata(serviceId, metodo, qty) {
     if (!canEditCassa) return   // solo chi può gestire la cassa genera movimenti
     const svc = getServices(group.destination).find(s => s.id === serviceId)
     if (!svc) return
-    // rimuovo sempre l'eventuale entrata auto precedente per questo (gruppo, servizio)
+
+    // 1. Leggo l'eventuale entrata auto ESISTENTE: mi servono i suoi valori reali
+    //    (importo/metodo/descrizione già scritti anche sul foglio) per poterla rimuovere.
+    let existing = null
+    try {
+      const { data: rows } = await supabase
+        .from('cassa_movimenti')
+        .select('importo, metodo, descrizione, categoria, tipo, data')
+        .match({ group_id: groupId, servizio_id: serviceId, auto: true })
+      existing = rows && rows[0]
+    } catch (e) { /* offline o errore: procedo comunque, il foglio è best-effort */ }
+
+    // 2. Rimuovo la vecchia riga da Supabase (coda offline)
     enqueueDelete('cassa_movimenti', { group_id: groupId, servizio_id: serviceId, auto: true })
+
+    // 3. Rimuovo la vecchia riga dal FOGLIO usando i valori reali del vecchio movimento
+    if (existing && Number(existing.importo) > 0) {
+      sendCassaToSheet({
+        destination: group.destination,
+        shift_num: group.shift_num,
+        azione: 'elimina',
+        tipoMov: existing.tipo || 'entrata',
+        importo: existing.importo,
+        descrizione: existing.descrizione || '',
+        categoria: existing.categoria || '',
+        metodo: existing.metodo || 'Cash',
+        data: existing.data || '',
+      })
+    }
+
+    // 4. Scrivo la nuova riga (Supabase + foglio), solo se c'è metodo e importo > 0
     const importo = svc.prezzo * (qty || 0)
     if (metodo && importo > 0) {
+      const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
+      const categoria = cassaCategoriaForService(serviceId, svc.label)
+      const data = new Date().toISOString().slice(0, 10)
       enqueueInsert('cassa_movimenti', {
         destination: group.destination,
         shift_num: group.shift_num,
-        data: new Date().toISOString().slice(0, 10),
+        data,
         tipo: 'entrata',
-        categoria: cassaCategoriaForService(serviceId, svc.label),
+        categoria,
         importo,
         metodo,
-        descrizione: `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim(),
+        descrizione,
         inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
         group_id: groupId,
         servizio_id: serviceId,
         auto: true,
+      })
+      sendCassaToSheet({
+        destination: group.destination,
+        shift_num: group.shift_num,
+        azione: 'add',
+        tipoMov: 'entrata',
+        importo,
+        descrizione,
+        categoria,
+        metodo,
+        data,
       })
     }
   }
