@@ -91,7 +91,7 @@ export default function GroupList() {
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
-      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span></div>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -109,7 +109,6 @@ export default function GroupList() {
           {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
       </div>
-      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi{svcFilter ? ' · filtro attivo' : ''}</div>
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
