@@ -1423,6 +1423,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         ) : movVisibili.map((m, i) => {
           const isEntrata = m.tipo === 'entrata'
           const dataFmt = new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
+          const oraFmt = m.created_at ? new Date(m.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) : null
           const mMet = m.metodo || 'Cash'
           return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
@@ -1433,7 +1434,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                   <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 20, background: (METODO_COLORS[mMet] || '#64748B') + '18', color: METODO_COLORS[mMet] || '#64748B' }}>{mMet}</span>
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                  {dataFmt}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
+                  {dataFmt}{oraFmt ? ` · ${oraFmt}` : ''}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
                 </div>
               </div>
               <div style={{ fontSize: 14, fontWeight: 700, color: isEntrata ? '#16A34A' : '#DC2626', flexShrink: 0 }}>
