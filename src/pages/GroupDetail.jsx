@@ -38,7 +38,7 @@ const ServiceIcons = {
 export default function GroupDetail() {
   const { groupId } = useParams()
   const navigate = useNavigate()
-  const { canEditCassa, profile } = useAuth()
+  const { canEditCassa, canEditServizi, profile } = useAuth()
   const [group, setGroup] = useState(null)
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +64,7 @@ export default function GroupDetail() {
   }
 
   async function toggleService(serviceId) {
+    if (!canEditServizi) return
     const newVal = !group[serviceId]
     setGroup(prev => ({ ...prev, [serviceId]: newVal }))
     enqueueUpdate('groups', { id: groupId }, { [serviceId]: newVal }, {
@@ -78,6 +79,7 @@ export default function GroupDetail() {
   }
 
   async function saveQtaService(serviceId) {
+    if (!canEditServizi) return
     const qty = group[serviceId] || 0
     enqueueUpdate('groups', { id: groupId }, { [serviceId]: qty }, {
       dedupKey: `groups:${groupId}:${serviceId}`,
@@ -97,6 +99,7 @@ export default function GroupDetail() {
   }
 
   async function toggleQtaService(serviceId) {
+    if (!canEditServizi) return
     const current = group[serviceId] || 0
     const newQty = current > 0 ? 0 : participants.filter(p => p.attivo !== false).length
     setGroup(prev => ({ ...prev, [serviceId]: newQty }))
@@ -122,6 +125,7 @@ export default function GroupDetail() {
   // Metodo con cui è stato pagato il servizio (bonifico / vivawallet / scalapay / cash).
   // Ritap sullo stesso metodo = deseleziona.
   function setMetodo(serviceId, metodo) {
+    if (!canEditServizi) return
     const cur = group.servizi_metodo || {}
     const next = { ...cur }
     if (cur[serviceId] === metodo) delete next[serviceId]
@@ -209,6 +213,7 @@ export default function GroupDetail() {
   }
 
   async function toggleParticipantActive(participantId) {
+    if (!canEditServizi) return
     const oldNPax = participants.filter(p => p.attivo !== false).length
     const updated = participants.map(p => p.id === participantId ? { ...p, attivo: p.attivo === false } : p)
     setParticipants(updated)
@@ -323,11 +328,12 @@ export default function GroupDetail() {
                   const svMetodo = (group.servizi_metodo || {})[sv.id]
                   // Acceso ma senza metodo -> va segnalato (esclude le escursioni già pagate in prebooking)
                   const needsMetodo = shownActive && !lockedEsc && !svMetodo
+                  const locked = lockedEsc || !canEditServizi   // sola lettura per chi non può modificare
                   return (
                     <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none', ...(needsMetodo ? { borderLeft: '3px solid #DC2626', background: '#FEF2F2' } : {}) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
                       {/* Label */}
-                      <div style={{ flex: 1, cursor: lockedEsc ? 'default' : 'pointer' }} onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }}>
+                      <div style={{ flex: 1, cursor: locked ? 'default' : 'pointer' }} onClick={() => { if (!locked) toggleQtaService(sv.id) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: shownActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</span>
                           {needsMetodo && <AlertTriangle size={15} color="#DC2626" style={{ flexShrink: 0 }} />}
@@ -360,18 +366,19 @@ export default function GroupDetail() {
                         <input
                           type="number" min="0"
                           value={qty}
+                          disabled={!canEditServizi}
                           onChange={e => updateQtaService(sv.id, e.target.value)}
                           onBlur={() => saveQtaService(sv.id)}
-                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
                         />
                       )}
                       {/* Toggle */}
-                      <div onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }} title={lockedEsc ? 'Già acquistate in prebooking' : ''} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: lockedEsc ? 'not-allowed' : 'pointer', opacity: lockedEsc ? 0.85 : 1, transition: 'background 0.2s' }}>
+                      <div onClick={() => { if (!locked) toggleQtaService(sv.id) }} title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare i servizi' : (lockedEsc ? 'Già acquistate in prebooking' : '')} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.85 : 1, transition: 'background 0.2s' }}>
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                       </div>
                       {/* Metodo di pagamento — compare solo quando il servizio è attivo */}
-                      {shownActive && !lockedEsc && (
+                      {shownActive && !lockedEsc && canEditServizi && (
                         <div style={{ padding: '0 18px 14px 18px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
@@ -528,9 +535,9 @@ export default function GroupDetail() {
                         {p.sesso}
                       </div>
                       <div
-                        onClick={() => toggleParticipantActive(p.id)}
-                        style={{ width: 40, height: 22, borderRadius: 11, background: isActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: 'pointer', transition: 'background 0.2s' }}
-                        title={isActive ? 'Segna come non partecipante' : 'Riattiva partecipante'}
+                        onClick={() => { if (canEditServizi) toggleParticipantActive(p.id) }}
+                        style={{ width: 40, height: 22, borderRadius: 11, background: isActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: canEditServizi ? 'pointer' : 'not-allowed', opacity: canEditServizi ? 1 : 0.85, transition: 'background 0.2s' }}
+                        title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare le presenze' : (isActive ? 'Segna come non partecipante' : 'Riattiva partecipante')}
                       >
                         <div style={{ width: 16, height: 16, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: isActive ? 21 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>

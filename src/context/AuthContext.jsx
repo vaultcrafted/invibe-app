@@ -78,11 +78,14 @@ export function AuthProvider({ children }) {
 
   // Inserimento movimenti in cassa: ufficio, supervisor, CM, referente meta (non ACM).
   const canEditCassa = isFullAccess || isCM || isReferente
+  // Modifica servizi dei gruppi e presenza pax: stessa regola (ufficio, supervisor, CM, referente).
+  // ACM, CA e tutti gli altri ruoli possono solo visualizzare.
+  const canEditServizi = isFullAccess || isCM || isReferente
   // Import Excel (sovrascrive tutto il DB): solo accesso globale.
   const canImport = isFullAccess
 
   return (
-    <AuthContext.Provider value={{ user, profile: effProfile, loading, signIn, signOut, isAdmin, isFullAccess, isReferente, refMeta, isCM, isACM, canEditCassa, canImport, fetchProfile }}>
+    <AuthContext.Provider value={{ user, profile: effProfile, loading, signIn, signOut, isAdmin, isFullAccess, isReferente, refMeta, isCM, isACM, canEditCassa, canEditServizi, canImport, fetchProfile }}>
       {children}
     </AuthContext.Provider>
   )
