@@ -159,6 +159,14 @@ export default function StaffProfile() {
           <AttestatoRow staffId={staffId} field="att_blsd" label="BLSD" current={staff.att_blsd} isAdmin={isAdmin} onUpdate={fetchStaff} isLast={true} />
         </div>
 
+        {/* Libretto assicurativo — solo admin */}
+        {isAdmin && (
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Libretto assicurativo</div>
+          <AttestatoRow staffId={staffId} field="att_libretto_assicurativo" label="Libretto assicurativo" current={staff.att_libretto_assicurativo} isAdmin={isAdmin} onUpdate={fetchStaff} isLast={true} />
+        </div>
+        )}
+
         {/* Gestione account — solo admin */}
         {isAdmin && (
         <div className="card">
