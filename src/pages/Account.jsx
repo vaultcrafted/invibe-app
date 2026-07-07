@@ -127,6 +127,12 @@ export default function Account() {
           <AttestatoDownload label="BLSD" url={attestati.blsd} isLast={true} />
         </div>
 
+        {/* Libretto assicurativo */}
+        <div className="card">
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Libretto assicurativo</div>
+          <AttestatoDownload label="Libretto assicurativo" url={attestati.att_libretto_assicurativo} isLast={true} />
+        </div>
+
         {/* Logout */}
         <button onClick={handleLogout} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '13px', borderRadius: 10, background: 'var(--danger-light)', color: 'var(--danger)', fontSize: 14, fontWeight: 600, width: '100%', border: '0.5px solid #FECACA' }}>
           <LogOut size={16} /> Esci dall'account
