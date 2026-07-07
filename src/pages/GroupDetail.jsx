@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService } from '../lib/constants'
-import { enqueueUpdate } from '../lib/syncQueue'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService } from '../lib/constants'
+import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
+import { useAuth } from '../context/AuthContext'
+import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2 } from 'lucide-react'
 
 // Icone servizi custom
@@ -35,6 +37,7 @@ const ServiceIcons = {
 export default function GroupDetail() {
   const { groupId } = useParams()
   const navigate = useNavigate()
+  const { canEditCassa, profile } = useAuth()
   const [group, setGroup] = useState(null)
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -79,6 +82,9 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, qty)],
     })
+    // Se il servizio ha già un metodo, aggiorno l'importo dell'entrata in cassa (qty 0 -> la rimuove)
+    const metodo = (group.servizi_metodo || {})[serviceId]
+    if (metodo) syncCassaEntrata(serviceId, metodo, qty)
   }
 
   // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
@@ -97,6 +103,60 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, newQty)],
     })
+    if (newQty === 0) {
+      // Spengo il servizio: tolgo il metodo e l'eventuale entrata auto in cassa
+      if (group.servizi_metodo && group.servizi_metodo[serviceId]) {
+        const next = { ...group.servizi_metodo }; delete next[serviceId]
+        setGroup(prev => ({ ...prev, servizi_metodo: next }))
+        enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+      }
+      syncCassaEntrata(serviceId, undefined, 0)
+    } else {
+      // Accendo: se c'era già un metodo memorizzato, ricreo l'entrata sulla nuova quantità
+      const metodo = (group.servizi_metodo || {})[serviceId]
+      if (metodo) syncCassaEntrata(serviceId, metodo, newQty)
+    }
+  }
+
+  // Metodo con cui è stato pagato il servizio (bonifico / vivawallet / scalapay / cash).
+  // Ritap sullo stesso metodo = deseleziona.
+  function setMetodo(serviceId, metodo) {
+    const cur = group.servizi_metodo || {}
+    const next = { ...cur }
+    if (cur[serviceId] === metodo) delete next[serviceId]
+    else next[serviceId] = metodo
+    setGroup(prev => ({ ...prev, servizi_metodo: next }))
+    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    // Entrata automatica in cassa col metodo scelto (undefined = deselezionato -> rimuove)
+    syncCassaEntrata(serviceId, next[serviceId], group[serviceId] || 0)
+  }
+
+  // Crea/aggiorna/rimuove l'entrata AUTOMATICA in cassa per un servizio del gruppo.
+  // È idempotente: cancella sempre l'eventuale riga auto precedente e la riscrive.
+  // metodo assente o importo 0 -> nessuna riga (solo cancellazione).
+  function syncCassaEntrata(serviceId, metodo, qty) {
+    if (!canEditCassa) return   // solo chi può gestire la cassa genera movimenti
+    const svc = getServices(group.destination).find(s => s.id === serviceId)
+    if (!svc) return
+    // rimuovo sempre l'eventuale entrata auto precedente per questo (gruppo, servizio)
+    enqueueDelete('cassa_movimenti', { group_id: groupId, servizio_id: serviceId, auto: true })
+    const importo = svc.prezzo * (qty || 0)
+    if (metodo && importo > 0) {
+      enqueueInsert('cassa_movimenti', {
+        destination: group.destination,
+        shift_num: group.shift_num,
+        data: new Date().toISOString().slice(0, 10),
+        tipo: 'entrata',
+        categoria: cassaCategoriaForService(serviceId, svc.label),
+        importo,
+        metodo,
+        descrizione: `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim(),
+        inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
+        group_id: groupId,
+        servizio_id: serviceId,
+        auto: true,
+      })
+    }
   }
 
   async function toggleParticipantActive(participantId) {
@@ -119,6 +179,8 @@ export default function GroupDetail() {
           dedupKey: `groups:${groupId}:${sv.id}`,
           sheet: [sheetPayload(sv.id, newNPax)],
         })
+        const metodo = (group.servizi_metodo || {})[sv.id]
+        if (metodo) syncCassaEntrata(sv.id, metodo, newNPax)
       }
     })
   }
@@ -210,7 +272,8 @@ export default function GroupDetail() {
                   const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
                   const shownActive = lockedEsc ? true : active
                   return (
-                    <div key={sv.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px', borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
                       {/* Label */}
                       <div style={{ flex: 1, cursor: lockedEsc ? 'default' : 'pointer' }} onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -253,6 +316,20 @@ export default function GroupDetail() {
                       <div onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }} title={lockedEsc ? 'Già acquistate in prebooking' : ''} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: lockedEsc ? 'not-allowed' : 'pointer', opacity: lockedEsc ? 0.85 : 1, transition: 'background 0.2s' }}>
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
+                      </div>
+                      {/* Metodo di pagamento — compare solo quando il servizio è attivo */}
+                      {shownActive && !lockedEsc && (
+                        <div style={{ padding: '0 18px 14px 18px', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
+                          {METODI.map(mt => {
+                            const on = (group.servizi_metodo || {})[sv.id] === mt
+                            const c = METODO_COLORS[mt] || '#64748B'
+                            return (
+                              <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   )
                 }) : SERVICES.map((sv, i) => {
