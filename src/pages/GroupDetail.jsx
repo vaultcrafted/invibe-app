@@ -6,7 +6,7 @@ import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
 import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
-import { ChevronLeft, Edit2 } from 'lucide-react'
+import { ChevronLeft, Edit2, AlertTriangle } from 'lucide-react'
 
 // Icone servizi custom
 const ServiceIcons = {
@@ -320,13 +320,17 @@ export default function GroupDetail() {
                   const lockedEsc = prebEsc > 0                       // escursioni già acquistate in prebooking
                   const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
                   const shownActive = lockedEsc ? true : active
+                  const svMetodo = (group.servizi_metodo || {})[sv.id]
+                  // Acceso ma senza metodo -> va segnalato (esclude le escursioni già pagate in prebooking)
+                  const needsMetodo = shownActive && !lockedEsc && !svMetodo
                   return (
-                    <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none' }}>
+                    <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none', ...(needsMetodo ? { borderLeft: '3px solid #DC2626', background: '#FEF2F2' } : {}) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
                       {/* Label */}
                       <div style={{ flex: 1, cursor: lockedEsc ? 'default' : 'pointer' }} onClick={() => { if (!lockedEsc) toggleQtaService(sv.id) }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: shownActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{sv.label}</span>
+                          {needsMetodo && <AlertTriangle size={15} color="#DC2626" style={{ flexShrink: 0 }} />}
                           {prebooked != null && (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
                               background: short ? '#FEF3C7' : 'var(--bg-secondary)',
@@ -368,15 +372,23 @@ export default function GroupDetail() {
                       </div>
                       {/* Metodo di pagamento — compare solo quando il servizio è attivo */}
                       {shownActive && !lockedEsc && (
-                        <div style={{ padding: '0 18px 14px 18px', display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
-                          {METODI.map(mt => {
-                            const on = (group.servizi_metodo || {})[sv.id] === mt
-                            const c = METODO_COLORS[mt] || '#64748B'
-                            return (
-                              <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
-                            )
-                          })}
+                        <div style={{ padding: '0 18px 14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
+                            {METODI.map(mt => {
+                              const on = (group.servizi_metodo || {})[sv.id] === mt
+                              const c = METODO_COLORS[mt] || '#64748B'
+                              return (
+                                <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
+                              )
+                            })}
+                          </div>
+                          {needsMetodo && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '7px 10px', borderRadius: 8, background: '#FEE2E2', color: '#991B1B', fontSize: 11.5, fontWeight: 600 }}>
+                              <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                              Seleziona il metodo di pagamento, altrimenti il servizio non finisce in cassa né in rendicontazione.
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
