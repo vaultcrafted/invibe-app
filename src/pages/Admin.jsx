@@ -4,6 +4,7 @@ import PaxContentTab from '../components/PaxContentTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
+import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
 import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode } from '../lib/constants'
 
@@ -1344,11 +1345,25 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     })
     setSaving(false)
     if (error) { setSaveError(error.message); return }
+    // invia il movimento al foglio di rendicontazione (fire-and-forget)
+    sendCassaToSheet({
+      destination, shift_num: shiftNum, azione: 'add',
+      tipoMov: form.tipo, importo: amount, descrizione: form.descrizione || '',
+      categoria: form.categoria || '', metodo: form.metodo || 'Cash', data: form.data,
+    })
     setShowForm(false); load()
   }
 
   async function handleDelete(id) {
+    const m = movimenti.find(x => x.id === id)
     await supabase.from('cassa_movimenti').delete().eq('id', id)
+    if (m) {
+      sendCassaToSheet({
+        destination, shift_num: shiftNum, azione: 'elimina',
+        tipoMov: m.tipo, importo: m.importo, descrizione: m.descrizione || '',
+        categoria: m.categoria || '', metodo: m.metodo || 'Cash', data: m.data,
+      })
+    }
     load()
   }
 
