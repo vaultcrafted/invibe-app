@@ -58,6 +58,8 @@ export default function GroupList() {
   }
 
   const totalPeople = groups.reduce((s, g) => s + (g.participants?.length || 0), 0)
+  const totalMales = groups.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'M').length || 0), 0)
+  const totalFemales = groups.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'F').length || 0), 0)
 
   const filtered = groups
     .filter(g => {
@@ -88,7 +90,7 @@ export default function GroupList() {
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
-      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti</div>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {totalPeople} partecipanti · <span className="dot-m">{totalMales}M</span> <span className="dot-f">{totalFemales}F</span></div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
