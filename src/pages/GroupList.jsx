@@ -108,7 +108,7 @@ export default function GroupList() {
           {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
       </div>
-      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi{svcFilter ? ' · filtro attivo' : ''}</div>
+      <div style={{ padding: '0 16px 4px', fontSize: 11, color: 'var(--text-secondary)' }}>{filtered.length} gruppi · {filtered.reduce((s, g) => s + (g.participants?.length || 0), 0)} persone{svcFilter ? ' · filtro attivo' : ''}</div>
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
