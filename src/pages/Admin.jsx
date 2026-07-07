@@ -1367,6 +1367,18 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         tipoMov: m.tipo, importo: m.importo, descrizione: m.descrizione || '',
         categoria: m.categoria || '', metodo: m.metodo || 'Cash', data: m.data,
       })
+      // Se il movimento era AUTOMATICO (nato dal toggle di un servizio del gruppo),
+      // spengo quel servizio nella scheda del capogruppo: quantità a 0 + rimuovo il metodo.
+      if (m.auto && m.group_id && m.servizio_id) {
+        try {
+          const { data: g } = await supabase.from('groups').select('servizi_metodo').eq('id', m.group_id).maybeSingle()
+          const nextMetodo = { ...((g && g.servizi_metodo) || {}) }
+          delete nextMetodo[m.servizio_id]
+          await supabase.from('groups').update({ [m.servizio_id]: 0, servizi_metodo: nextMetodo }).eq('id', m.group_id)
+        } catch (e) {
+          console.error('Spegnimento toggle servizio fallito:', e)
+        }
+      }
     }
     load()
   }
