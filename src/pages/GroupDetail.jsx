@@ -92,6 +92,7 @@ export default function GroupDetail() {
 
   // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
   async function saveEscConf() {
+    if (!canEditServizi) return
     const preb = (group.prebook && group.prebook.escursioni) || 0
     const v = Math.max(0, Math.min(group.escursioni_conf != null ? group.escursioni_conf : preb, preb))
     setGroup(prev => ({ ...prev, escursioni_conf: v }))
@@ -241,6 +242,7 @@ export default function GroupDetail() {
 
   async function updateField(field, value) { setGroup(prev => ({ ...prev, [field]: value })) }
   async function saveField(field) {
+    if (!canEditServizi) return
     enqueueUpdate('groups', { id: groupId }, { [field]: group[field] }, {
       dedupKey: `groups:${groupId}:${field}`,
     })
@@ -358,9 +360,10 @@ export default function GroupDetail() {
                         <input
                           type="number" min="0" max={prebEsc}
                           value={confQty}
+                          disabled={!canEditServizi}
                           onChange={e => setGroup(prev => ({ ...prev, escursioni_conf: Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, prebEsc)) }))}
                           onBlur={saveEscConf}
-                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600 }}
+                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
                         />
                       ) : (
                         <input
@@ -462,9 +465,9 @@ export default function GroupDetail() {
                   <button onClick={() => saveField('alloggio')} style={{ alignSelf: 'flex-end', padding: '8px 20px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Salva</button>
                 </div>
               ) : (
-                <div onClick={() => setEditingAlloggio(true)} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <span style={{ fontSize: 14, color: group.alloggio ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: group.alloggio ? 500 : 400, fontStyle: group.alloggio ? 'normal' : 'italic', flex: 1 }}>{group.alloggio || 'Aggiungi alloggio'}</span>
-                  <Edit2 size={14} color="var(--text-tertiary)" style={{ flexShrink: 0 }} />
+                <div onClick={() => { if (canEditServizi) setEditingAlloggio(true) }} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: canEditServizi ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 14, color: group.alloggio ? 'var(--text-primary)' : 'var(--text-tertiary)', fontWeight: group.alloggio ? 500 : 400, fontStyle: group.alloggio ? 'normal' : 'italic', flex: 1 }}>{group.alloggio || (canEditServizi ? 'Aggiungi alloggio' : '—')}</span>
+                  {canEditServizi && <Edit2 size={14} color="var(--text-tertiary)" style={{ flexShrink: 0 }} />}
                 </div>
               )}
             </div>
@@ -480,9 +483,9 @@ export default function GroupDetail() {
                   <button onClick={() => saveField('note')} style={{ alignSelf: 'flex-end', padding: '8px 20px', background: 'var(--iv-blue)', color: '#fff', borderRadius: 10, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Salva</button>
                 </div>
               ) : (
-                <div onClick={() => setEditingNote(true)} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minHeight: 60 }}>
+                <div onClick={() => { if (canEditServizi) setEditingNote(true) }} style={{ padding: '12px 16px', background: 'var(--bg-secondary)', borderRadius: 12, border: '0.5px solid var(--border)', cursor: canEditServizi ? 'pointer' : 'default', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, minHeight: 60 }}>
                   <span style={{ fontSize: 14, color: group.note ? 'var(--text-primary)' : 'var(--text-tertiary)', lineHeight: 1.5, flex: 1 }}>{group.note || 'Nessuna nota'}</span>
-                  <Edit2 size={14} color="var(--text-tertiary)" style={{ flexShrink: 0, marginTop: 2 }} />
+                  {canEditServizi && <Edit2 size={14} color="var(--text-tertiary)" style={{ flexShrink: 0, marginTop: 2 }} />}
                 </div>
               )}
             </div>
