@@ -334,6 +334,7 @@ export default function Admin() {
 
   return (
     <div className="page">
+      <div className="sticky-header">
       <Topbar showBack={true} showAvatar={false} />
       <div className="tabs">
         {canImport && <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>}
@@ -343,6 +344,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
         <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
+      </div>
       </div>
 
       {canImport && tab === 'import' && (

@@ -355,6 +355,7 @@ a { text-decoration: none; color: inherit; }
   overflow-x: auto;              /* la barra scorre dentro sé stessa */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;         /* nasconde la scrollbar (Firefox) */
+  background: var(--bg-primary);
 }
 .tabs::-webkit-scrollbar { display: none; }  /* nasconde la scrollbar (Safari/Chrome) */
 .tab {
@@ -365,6 +366,14 @@ a { text-decoration: none; color: inherit; }
   flex-shrink: 0;                /* non si schiacciano */
 }
 .tab.active { color: var(--iv-blue); border-bottom-color: var(--iv-blue); }
+
+/* Header (topbar + tabs) che resta fisso in cima mentre il contenuto scorre */
+.sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg-primary);
+}
 .stat-box { background: var(--bg-secondary); border-radius: var(--radius-sm); padding: 11px 13px; }
 .stat-label { font-size: 11px; color: var(--text-secondary); }
 .stat-val { font-size: 20px; font-weight: 600; color: var(--text-primary); margin-top: 2px; }
