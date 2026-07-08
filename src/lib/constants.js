@@ -115,6 +115,26 @@ export function getServices(destination) {
   return SERVICES
 }
 
+// Voci comuni della cassa, valide per tutte le mete (oltre ai servizi).
+export const CATEGORIE_COMUNI = ['Cauzione', 'Spesa staff', 'Rimborsi', 'Altro']
+
+// Categorie della cassa in base alla meta: i servizi di quella meta + le voci comuni.
+// Per Pag i servizi sdoppiati cash/bonifico (es. "SSP (cash)"/"SSP (bonifico)")
+// vengono uniti in un'unica categoria pulita ("SSP", "Boat", "Vida").
+export function getCategorie(destination) {
+  const servizi = getServices(destination)
+    .map(s => s.label.replace(/\s*\((?:cash|bonifico)\)\s*$/i, '').trim()) // "SSP (cash)" -> "SSP"
+  const uniche = []
+  for (const label of servizi) {
+    if (!uniche.includes(label)) uniche.push(label)
+  }
+  // aggiungo le voci comuni evitando doppioni (es. Cauzione se già presente tra i servizi)
+  for (const c of CATEGORIE_COMUNI) {
+    if (!uniche.includes(c)) uniche.push(c)
+  }
+  return uniche
+}
+
 // Nome esatto della colonna nel foglio Google Sheets di rendicontazione, per ogni servizio
 // (il confronto nel foglio ignora maiuscole/spazi, ma le PAROLE devono combaciare)
 export const SHEET_SERVIZIO_MAP = {

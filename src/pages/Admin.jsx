@@ -10,7 +10,7 @@ import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_C
 
 // Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
 const ALL_SERVICE_IDS = [...new Set(DESTINATIONS.flatMap(d => getServices(d.id).map(s => s.id)))]
-import { CATEGORIE } from './Cassa'
+import { getCategorie } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 export default function Admin() {
@@ -1307,12 +1307,13 @@ const METODO_COLORS = { Cash: '#16A34A', Bonifico: '#1E6BF1', Scalapay: '#7C3AED
 
 function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const { canEditCassa } = useAuth()
+  const categorie = getCategorie(destination)   // categorie in base alla meta del turno
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
-  const [form, setForm] = useState({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
+  const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
   const [triedSave, setTriedSave] = useState(false)
 
@@ -1330,7 +1331,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   }
 
   function openForm() {
-    setForm({ tipo: 'entrata', categoria: CATEGORIE[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
+    setForm({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
     setSaveError(null)
     setTriedSave(false)
     setShowForm(true)
@@ -1493,7 +1494,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria <span style={{ color: '#DC2626' }}>*</span></label>
                 <select value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid ' + (!form.categoria ? '#DC2626' : 'var(--border)'), fontSize: 14, marginTop: 4 }}>
-                  {CATEGORIE.map(c => <option key={c} value={c}>{c}</option>)}
+                  {categorie.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
