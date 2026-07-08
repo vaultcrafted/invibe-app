@@ -118,20 +118,27 @@ export function getServices(destination) {
 // Voci comuni della cassa, valide per tutte le mete (oltre ai servizi).
 export const CATEGORIE_COMUNI = ['Cauzione', 'Spesa staff', 'Rimborsi', 'Altro']
 
-// Categorie della cassa in base alla meta: i servizi di quella meta + le voci comuni.
+// Voci di spesa extra specifiche per meta (oltre ai servizi e alle comuni).
+// Vengono inserite prima delle voci comuni.
+export const CATEGORIE_EXTRA = {
+  corfu: ['Benzina'],
+  sardegna: ['Benzina'],
+  gallipoli: ['Benzina', 'Rupe delle stelle'],
+  pag: ['Benzina', 'Bolt', 'Pizza'],
+  // zante: nessun extra
+}
+
+// Categorie della cassa in base alla meta: i servizi di quella meta + gli extra meta + le voci comuni.
 // Per Pag i servizi sdoppiati cash/bonifico (es. "SSP (cash)"/"SSP (bonifico)")
 // vengono uniti in un'unica categoria pulita ("SSP", "Boat", "Vida").
 export function getCategorie(destination) {
   const servizi = getServices(destination)
     .map(s => s.label.replace(/\s*\((?:cash|bonifico)\)\s*$/i, '').trim()) // "SSP (cash)" -> "SSP"
   const uniche = []
-  for (const label of servizi) {
-    if (!uniche.includes(label)) uniche.push(label)
-  }
-  // aggiungo le voci comuni evitando doppioni (es. Cauzione se già presente tra i servizi)
-  for (const c of CATEGORIE_COMUNI) {
-    if (!uniche.includes(c)) uniche.push(c)
-  }
+  const add = (label) => { if (label && !uniche.includes(label)) uniche.push(label) }
+  servizi.forEach(add)
+  ;(CATEGORIE_EXTRA[destination] || []).forEach(add)  // extra specifici della meta
+  CATEGORIE_COMUNI.forEach(add)                        // voci comuni a tutte le mete
   return uniche
 }
 
