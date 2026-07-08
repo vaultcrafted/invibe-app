@@ -115,31 +115,44 @@ export function getServices(destination) {
   return SERVICES
 }
 
-// Voci comuni della cassa, valide per tutte le mete (oltre ai servizi).
-export const CATEGORIE_COMUNI = ['Cauzione', 'Spesa staff', 'Rimborsi', 'Altro']
-
-// Voci di spesa extra specifiche per meta (oltre ai servizi e alle comuni).
-// Vengono inserite prima delle voci comuni.
-export const CATEGORIE_EXTRA = {
-  corfu: ['Benzina'],
-  sardegna: ['Benzina'],
-  gallipoli: ['Benzina', 'Rupe delle stelle'],
-  pag: ['Benzina', 'Bolt', 'Pizza'],
-  // zante: nessun extra
+// ============================================================
+// CATEGORIE CASSA — liste DEFINITIVE per meta.
+// I doppioni entrata/uscita sono uniti in un'unica voce: la direzione
+// (Entrata/Uscita) si sceglie col selettore in cima al form movimento.
+// ============================================================
+export const CATEGORIE_META = {
+  corfu: [
+    'Tassa di soggiorno', 'Cauzione', 'SSP', 'Paleo', 'Montecristo', 'Pazuzu',
+    'Sunrise pool party', 'Mojito extra', 'Pranzo delicious', 'Cena delicious',
+    'Transfer aeroporto', 'Parcheggio', 'Benzina', 'Rimborso spesa', 'Rimborsi',
+    'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
+  ],
+  gallipoli: [
+    'Tassa di soggiorno', 'Cauzione', 'Praja', 'Vega', 'Rupe delle stelle', 'Boat Party',
+    'Spesa', 'Benzina', 'Rimborsi', 'Guardia di sicurezza',
+    'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
+  ],
+  zante: [
+    'Tassa di soggiorno', 'Cauzione', 'BBQ', 'Prepay LIT', 'Boat Party', 'CEBU',
+    'Tavoli/bottiglie', 'Bodyguard Boat', 'Rimborso wifi', 'Rimborso spesa',
+    'Benzina', 'Rimborsi', 'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
+  ],
+  sardegna: [
+    'Tassa di soggiorno', 'Cauzione', 'Escursioni in meta', 'SSP',
+    'Pacchetto serate', 'Pacchetto saltafila', 'Transfer aeroporto',
+    'Spesa', 'Benzina', 'Rimborsi', 'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
+  ],
+  pag: [
+    'Tassa di soggiorno', 'Cauzione', 'SSP', 'SSP EXTRA', 'Boat', 'Boat EXTRA',
+    'Vida', 'Vida EXTRA', 'Pizza', 'Pizza + Papaya', 'Mamacita',
+    'Benzina', 'Bolt', 'Rimborso spesa', 'Rimborsi',
+    'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
+  ],
 }
 
-// Categorie della cassa in base alla meta: i servizi di quella meta + gli extra meta + le voci comuni.
-// Per Pag i servizi sdoppiati cash/bonifico (es. "SSP (cash)"/"SSP (bonifico)")
-// vengono uniti in un'unica categoria pulita ("SSP", "Boat", "Vida").
+// Categorie della cassa in base alla meta del turno.
 export function getCategorie(destination) {
-  const servizi = getServices(destination)
-    .map(s => s.label.replace(/\s*\((?:cash|bonifico)\)\s*$/i, '').trim()) // "SSP (cash)" -> "SSP"
-  const uniche = []
-  const add = (label) => { if (label && !uniche.includes(label)) uniche.push(label) }
-  servizi.forEach(add)
-  ;(CATEGORIE_EXTRA[destination] || []).forEach(add)  // extra specifici della meta
-  CATEGORIE_COMUNI.forEach(add)                        // voci comuni a tutte le mete
-  return uniche
+  return CATEGORIE_META[destination] || CATEGORIE_META.corfu
 }
 
 // Nome esatto della colonna nel foglio Google Sheets di rendicontazione, per ogni servizio
