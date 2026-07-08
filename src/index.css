@@ -33,6 +33,7 @@
 html, body, #root {
   height: 100vh; /* fallback browser vecchi */
   height: 100dvh; /* altezza viewport dinamica: la nav arriva al fondo reale */
+  overflow-x: hidden; /* niente scroll orizzontale: i margini restano fissi */
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   font-size: 16px;
   color: var(--text-primary);
@@ -137,6 +138,9 @@ a { text-decoration: none; color: inherit; }
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden; /* i contenuti larghi non spostano la pagina */
+  width: 100%;
+  max-width: 100%;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
 
@@ -348,11 +352,17 @@ a { text-decoration: none; color: inherit; }
 .tabs {
   display: flex; border-bottom: 0.5px solid var(--border);
   padding: 0 16px;
+  overflow-x: auto;              /* la barra scorre dentro sé stessa */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;         /* nasconde la scrollbar (Firefox) */
 }
+.tabs::-webkit-scrollbar { display: none; }  /* nasconde la scrollbar (Safari/Chrome) */
 .tab {
   font-size: 13px; font-weight: 500; padding: 11px 14px;
   color: var(--text-secondary); border-bottom: 2px solid transparent;
   margin-bottom: -0.5px; cursor: pointer; transition: color 0.15s;
+  white-space: nowrap;           /* le tab non vanno a capo */
+  flex-shrink: 0;                /* non si schiacciano */
 }
 .tab.active { color: var(--iv-blue); border-bottom-color: var(--iv-blue); }
 .stat-box { background: var(--bg-secondary); border-radius: var(--radius-sm); padding: 11px 13px; }
