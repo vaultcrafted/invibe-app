@@ -54,31 +54,31 @@ export const SERVICES = [
 // Tutti i servizi di Corfù, stessa modalità: toggle (tutto il gruppo) + numero modificabile (quantità libera)
 export const SERVICES_CORFU = [
   { id: 'qta_escursioni', label: 'Escursioni', prezzo: 45 },
-  { id: 'qta_ssp', label: 'SSP', prezzo: 50 },
-  { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 35 },
-  { id: 'qta_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'qta_ssp', label: 'SSP', prezzo: 40 },
+  { id: 'qta_pazuzu', label: 'Solo Pazuzu', prezzo: 30 },
+  { id: 'qta_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 15 },
   { id: 'qta_barche_paleo', label: 'Barche Paleo', prezzo: 20 },
   { id: 'qta_montecristo', label: 'Montecristo', prezzo: 20 },
   { id: 'qta_mojito2', label: 'Mojito 2', prezzo: 10 },
   { id: 'qta_pool_sunrise', label: 'Solo Pool Sunrise', prezzo: 10 },
-  { id: 'qta_pranzo_laviron', label: 'Pranzo Laviron', prezzo: 10 },
+  { id: 'qta_pranzo_laviron', label: 'Pranzo Lavrion', prezzo: 10 },
 ]
 
 // Servizi "in meta" per Zante / Gallipoli / Sardegna (a quantità, come Corfù).
 // Allineati 1:1 agli header dei fogli rendicontazione.
 export const SERVICES_ZANTE = [
   { id: 'zan_escursioni', label: 'Escursioni', prezzo: 45 },
-  { id: 'zan_boat', label: 'Boat', prezzo: 40 },
-  { id: 'zan_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
+  { id: 'zan_boat', label: 'SSP', prezzo: 45 },   // id interno invariato (era Boat), ora è SSP
+  { id: 'zan_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 15 },
   { id: 'zan_cebu', label: 'Cebu', prezzo: 15 },
   { id: 'zan_bbq', label: 'BBQ', prezzo: 15 },
 ]
 
 export const SERVICES_GALLIPOLI = [
   { id: 'gal_escursioni', label: 'Escursioni', prezzo: 50 },
-  { id: 'gal_boat_party', label: 'Boat Party', prezzo: 40 },
+  { id: 'gal_boat_party', label: 'SSP', prezzo: 35 },   // id interno invariato (era Boat Party), ora è SSP
   { id: 'gal_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
-  { id: 'gal_vega', label: 'Vega', prezzo: 25 },
+  { id: 'gal_vega', label: 'Vega', prezzo: 20 },        // G4/G5 = 25 (override per turno)
   { id: 'gal_dinner_elegant', label: 'Dinner Elegant', prezzo: 30 },
   { id: 'gal_praja', label: 'Praja', prezzo: 25 },
 ]
@@ -93,7 +93,7 @@ export const SERVICES_SARDEGNA = [
 
 // Pag: SSP / Boat / Vida sono sdoppiati cash/bonifico (campi separati)
 export const SERVICES_PAG = [
-  { id: 'pag_navetta', label: 'Navetta', prezzo: 55 },
+  { id: 'pag_navetta', label: 'Navetta', prezzo: 50 },
   { id: 'pag_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 15 },
   { id: 'pag_ssp_cash', label: 'SSP (cash)', prezzo: 55 },
   { id: 'pag_ssp_bonifico', label: 'SSP (bonifico)', prezzo: 55 },
@@ -103,16 +103,30 @@ export const SERVICES_PAG = [
   { id: 'pag_vida_bonifico', label: 'Vida (bonifico)', prezzo: 15 },
   { id: 'pag_vida_sun', label: 'Vida Sun', prezzo: 11 },
   { id: 'pag_cantante_extra', label: 'Cantante extra', prezzo: 10 },
+  { id: 'pag_pizza', label: 'Pizza', prezzo: 20 },     // P1 = 25 (override per turno)
 ]
 
-// Lista servizi attiva per destinazione
-export function getServices(destination) {
-  if (destination === 'corfu') return SERVICES_CORFU
-  if (destination === 'zante') return SERVICES_ZANTE
-  if (destination === 'gallipoli') return SERVICES_GALLIPOLI
-  if (destination === 'sardegna') return SERVICES_SARDEGNA
-  if (destination === 'pag') return SERVICES_PAG
-  return SERVICES
+// Override prezzo per SINGOLO turno (quando un turno ha un prezzo diverso dalla meta).
+// Chiave = codice turno (C1, G4, P1...). Valore = { idServizio: nuovoPrezzo }.
+export const PRICE_OVERRIDES = {
+  G4: { gal_vega: 25 },
+  G5: { gal_vega: 25 },
+  P1: { pag_pizza: 25 },
+}
+
+// Lista servizi attiva per destinazione, con prezzi eventualmente sovrascritti per il turno.
+export function getServices(destination, shiftNum) {
+  const base = (destination === 'corfu') ? SERVICES_CORFU
+    : (destination === 'zante') ? SERVICES_ZANTE
+    : (destination === 'gallipoli') ? SERVICES_GALLIPOLI
+    : (destination === 'sardegna') ? SERVICES_SARDEGNA
+    : (destination === 'pag') ? SERVICES_PAG
+    : SERVICES
+  if (!shiftNum) return base
+  const code = (DEST_PREFIX[destination] || '') + shiftNum
+  const ov = PRICE_OVERRIDES[code]
+  if (!ov) return base
+  return base.map(s => (ov[s.id] != null ? { ...s, prezzo: ov[s.id] } : s))
 }
 
 // ============================================================
@@ -170,20 +184,20 @@ export const SHEET_SERVIZIO_MAP = {
   qta_montecristo: 'Montecristo',
   qta_mojito2: 'Mojito 2',
   qta_pool_sunrise: 'Solo Pool Sunrise',
-  qta_pranzo_laviron: 'Pranzo Laviron',
+  qta_pranzo_laviron: 'Pranzo Lavrion',
   // Zante
   zan_escursioni: 'Escursioni in meta',
-  zan_boat: 'Boat',
+  zan_boat: 'SSP',
   zan_tassa_soggiorno: 'Tassa di Soggiorno',
   zan_cebu: 'Cebu',
   zan_bbq: 'BBQ',
   // Gallipoli
   gal_escursioni: 'Escursioni in meta',
-  gal_boat_party: 'Boat Party in meta',
+  gal_boat_party: 'SSP in meta',
   gal_tassa_soggiorno: 'Tassa di Soggiorno',
   gal_vega: 'Vega',
   gal_dinner_elegant: 'Dinner Elegant',
-  gal_praja: 'Praja',
+  gal_praja: 'Praja extra',
   // Sardegna
   sar_escursioni: 'Escursioni in meta',
   sar_ssp: 'SSP',
@@ -201,6 +215,7 @@ export const SHEET_SERVIZIO_MAP = {
   pag_vida_bonifico: 'VIDA BONIFICO in meta',
   pag_vida_sun: 'VIDA SUN',
   pag_cantante_extra: 'Cantante extra',
+  pag_pizza: 'Pizza',
 }
 
 // Codice turno mandato al webhook (C1, Z3, G2, S2, P1...). L'Apps Script apre il file "{codice} 2026".

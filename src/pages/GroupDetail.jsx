@@ -147,7 +147,7 @@ export default function GroupDetail() {
   // anche quando cambia la quantità (quindi l'importo).
   async function syncCassaEntrata(serviceId, metodo, qty) {
     if (!canEditCassa) return   // solo chi può gestire la cassa genera movimenti
-    const svc = getServices(group.destination).find(s => s.id === serviceId)
+    const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
     if (!svc) return
 
     // 1. Leggo l'eventuale entrata auto ESISTENTE: mi servono i suoi valori reali
@@ -225,7 +225,7 @@ export default function GroupDetail() {
 
     const newNPax = updated.filter(p => p.attivo !== false).length
     // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
-    const svc = getServices(group.destination)
+    const svc = getServices(group.destination, group.shift_num)
     svc.forEach(sv => {
       const current = group[sv.id] || 0
       if (oldNPax > 0 && current === oldNPax) {
@@ -261,7 +261,7 @@ export default function GroupDetail() {
   const females = activeParticipants.filter(p => p.sesso === 'F').length
 
   const useQta = true
-  const services = getServices(group.destination)
+  const services = getServices(group.destination, group.shift_num)
   const riepilogoRows = useQta
     ? services.filter(sv => (group[sv.id] || 0) > 0).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: group[sv.id], totale: sv.prezzo * group[sv.id] }))
     : SERVICES.filter(sv => group[sv.id]).map(sv => ({ id: sv.id, label: sv.label, prezzoUnit: sv.prezzo, qty: nPax, totale: sv.prezzo * nPax }))
