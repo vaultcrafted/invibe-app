@@ -102,12 +102,12 @@ export default function GroupList() {
 
   // Conteggio del filtro: per i filtri su un servizio conta la QUANTITÀ effettiva
   // (prenotazioni/incassi reali), non la dimensione dei gruppi.
-  let filterCount = null, filterLabel = ''
-  if (svcFilter === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); filterLabel = 'prenotate' }
-  else if (svcFilter === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); filterLabel = 'prenotate' }
+  let filterCount = null, countLabel = ''
+  if (svcFilter === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); countLabel = 'prenotate' }
+  else if (svcFilter === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); countLabel = 'prenotate' }
   else if (svcFilter && svcFilter.startsWith('has:')) {
     const sv = getServices(destId).find(s => s.id === svcFilter.replace('has:', ''))
-    if (sv) { filterCount = filtered.reduce((s, g) => s + svQty(g, sv), 0); filterLabel = 'presi' }
+    if (sv) { filterCount = filtered.reduce((s, g) => s + svQty(g, sv), 0); countLabel = 'presi' }
   }
 
   return (
@@ -116,7 +116,7 @@ export default function GroupList() {
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {filterCount != null
-        ? <>{filterCount} {filterLabel}</>
+        ? <>{filterCount} {countLabel}</>
         : <>{fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span></>}{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
