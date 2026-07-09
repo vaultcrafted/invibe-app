@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode, prebookKeyForService, isPrebookingPagato } from '../lib/constants'
 
 // Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
 const ALL_SERVICE_IDS = [...new Set(DESTINATIONS.flatMap(d => getServices(d.id).map(s => s.id)))]
@@ -822,12 +822,24 @@ function IncassiTab({ data, loading }) {
   const isQty = viewMode === 'quantita'
 
   // Quantità di un servizio per un gruppo: SEMPRE la colonna a quantità (modello nuovo)
+  // true se il servizio, per quel gruppo, è pagato in prebooking (quindi NON è cassa in meta)
+  function isPrebPaid(g, sv) {
+    const pk = prebookKeyForService(sv.id)
+    return pk != null && isPrebookingPagato(sv.id, g.destination, g.shift_num)
+  }
   function svQty(g, sv) {
+    if (isPrebPaid(g, sv)) {
+      const pk = prebookKeyForService(sv.id)
+      if (pk === 'escursioni' && g.escursioni_conf != null) return Number(g.escursioni_conf) || 0
+      return (g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : 0
+    }
     return g[sv.id] || 0
   }
-  // Valore in € (quantità × prezzo)
+  // Valore in € (quantità × prezzo). I servizi pagati in prebooking valgono 0 €:
+  // i soldi sono già incassati fuori dalla meta, non vanno nella cassa.
   function svValue(g, sv) {
-    return sv.prezzo * svQty(g, sv)
+    if (isPrebPaid(g, sv)) return 0
+    return sv.prezzo * (g[sv.id] || 0)
   }
   // Cella mostrata: € o numero secondo la vista scelta
   function svCell(g, sv) {
@@ -916,6 +928,12 @@ function IncassiTab({ data, loading }) {
         </div>
       )}
 
+      {/* Legenda */}
+      <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>6</span> = già pagato in prebooking (conteggio, non €)</span>
+        <span>€ = incassato in meta (cassa)</span>
+      </div>
+
       {/* Tabella pivot */}
       <div className="incassi-table-wrap">
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
@@ -972,7 +990,12 @@ function IncassiTab({ data, loading }) {
                         <td style={tdLeftStyle}>{capogruppoCode(g.capogruppo_code) && <span className="code-chip" style={{ marginRight: 6 }}>{capogruppoCode(g.capogruppo_code)}</span>}{g.capogruppo_display}</td>
                         <td style={tdStyle}>{n}</td>
                         {SV && SV.map(sv => {
+                          const prebPaid = isPrebPaid(g, sv)
                           const val = svCell(g, sv)
+                          if (prebPaid) {
+                            // pagato in prebooking: conteggio BLU in vista quantità, 0 in vista euro
+                            return <td key={sv.id} style={{ ...tdStyle, color: isQty ? 'var(--iv-blue)' : 'var(--text-tertiary)', fontWeight: isQty && val > 0 ? 700 : 400 }}>{isQty ? (val > 0 ? val : '—') : '€0'}</td>
+                          }
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? (isQty ? val : `€${val}`) : '—'}</td>
                         })}
                         <td style={{ ...tdStyle, fontWeight: 700, color: tot > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>{tot > 0 ? (isQty ? tot : `€${tot}`) : '—'}</td>
