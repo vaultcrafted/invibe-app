@@ -89,8 +89,8 @@ export default function GroupList() {
 
   return (
     <div className="page">
-      <Topbar showBack={true} showAvatar={false} />
       <div className="sticky-header">
+      <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
