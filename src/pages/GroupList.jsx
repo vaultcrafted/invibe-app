@@ -87,12 +87,19 @@ export default function GroupList() {
   const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'M').length || 0), 0)
   const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'F').length || 0), 0)
 
+  // Per i filtri PREBOOKING conta la quantità realmente prenotata (dal file CM),
+  // non la dimensione dei gruppi (un gruppo da 17 può averne prenotate solo 15).
+  const prebookKey = svcFilter === 'prebook_esc' ? 'escursioni' : svcFilter === 'prebook_ssp' ? 'ssp' : null
+  const fPrebook = prebookKey ? filtered.reduce((s, g) => s + (Number(g.prebook?.[prebookKey]) || 0), 0) : 0
+
   return (
     <div className="page">
       <div className="sticky-header">
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
-      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>{svcFilter ? ' · filtro attivo' : ''}</div>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {prebookKey
+        ? <>{fPrebook} prenotate</>
+        : <>{fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span></>}{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
