@@ -82,7 +82,7 @@ export default function Admin() {
       while (true) {
         const { data: page, error } = await supabase
           .from('groups')
-          .select('id, capogruppo_code, capogruppo_display, destination, shift_num, ' + ALL_SERVICE_IDS.join(', '))
+          .select('id, capogruppo_code, capogruppo_display, destination, shift_num, prebook, escursioni_conf, ' + ALL_SERVICE_IDS.join(', '))
           .order('destination').order('shift_num').order('capogruppo_display')
           .range(gFrom, gFrom + pageSize - 1)
         if (error) { console.error(error); setIncassiData([]); return }
