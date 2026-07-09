@@ -108,25 +108,55 @@ export const SERVICES_PAG = [
 
 // Override prezzo per SINGOLO turno (quando un turno ha un prezzo diverso dalla meta).
 // Chiave = codice turno (C1, G4, P1...). Valore = { idServizio: nuovoPrezzo }.
+// Questi restano come FALLBACK di sicurezza se il DB non risponde.
 export const PRICE_OVERRIDES = {
   G4: { gal_vega: 25 },
   G5: { gal_vega: 25 },
   P1: { pag_pizza: 25 },
 }
 
-// Lista servizi attiva per destinazione, con prezzi eventualmente sovrascritti per il turno.
+// Prezzi caricati dal database (tabella servizi_prezzi). Se null, si usano i prezzi del codice.
+// Struttura: { base: { destination: { servizio_id: prezzo } }, ov: { turnoCode: { servizio_id: prezzo } } }
+let DB_PRICES = null
+export function setDbPrices(rows) {
+  if (!rows || !rows.length) { DB_PRICES = null; return }
+  const base = {}, ov = {}
+  for (const r of rows) {
+    const prezzo = Number(r.prezzo)
+    if (r.turno) {
+      if (!ov[r.turno]) ov[r.turno] = {}
+      ov[r.turno][r.servizio_id] = prezzo
+    } else {
+      if (!base[r.destination]) base[r.destination] = {}
+      base[r.destination][r.servizio_id] = prezzo
+    }
+  }
+  DB_PRICES = { base, ov }
+}
+
+// Lista servizi attiva per destinazione, con prezzi dal DB (fallback ai prezzi del codice)
+// e con eventuali eccezioni per turno.
 export function getServices(destination, shiftNum) {
-  const base = (destination === 'corfu') ? SERVICES_CORFU
+  const baseList = (destination === 'corfu') ? SERVICES_CORFU
     : (destination === 'zante') ? SERVICES_ZANTE
     : (destination === 'gallipoli') ? SERVICES_GALLIPOLI
     : (destination === 'sardegna') ? SERVICES_SARDEGNA
     : (destination === 'pag') ? SERVICES_PAG
     : SERVICES
-  if (!shiftNum) return base
-  const code = (DEST_PREFIX[destination] || '') + shiftNum
-  const ov = PRICE_OVERRIDES[code]
-  if (!ov) return base
-  return base.map(s => (ov[s.id] != null ? { ...s, prezzo: ov[s.id] } : s))
+  const code = shiftNum ? (DEST_PREFIX[destination] || '') + shiftNum : null
+  const dbBase = DB_PRICES && DB_PRICES.base[destination]
+  const dbOv = DB_PRICES && code && DB_PRICES.ov[code]
+  const codeOv = code && PRICE_OVERRIDES[code]
+  return baseList.map(s => {
+    // base effettiva: DB se presente, altrimenti codice
+    const effBase = (dbBase && dbBase[s.id] != null) ? dbBase[s.id] : s.prezzo
+    // override effettiva: DB se presente, altrimenti codice, altrimenti nessuna
+    let effOv = null
+    if (dbOv && dbOv[s.id] != null) effOv = dbOv[s.id]
+    else if (codeOv && codeOv[s.id] != null) effOv = codeOv[s.id]
+    const prezzo = (effOv != null) ? effOv : effBase
+    return prezzo === s.prezzo ? s : { ...s, prezzo }
+  })
 }
 
 // ============================================================

@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { SHIFTS } from '../lib/constants'
+import { SHIFTS, setDbPrices } from '../lib/constants'
 
 const AuthContext = createContext(null)
 
@@ -10,8 +10,9 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setUser(session?.user ?? null)
+      await loadPrices()   // carica i prezzi dal DB prima di mostrare l'app (fallback ai prezzi del codice)
       if (session?.user) fetchProfile(session.user.id)
       else setLoading(false)
     })
@@ -22,6 +23,14 @@ export function AuthProvider({ children }) {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Carica i prezzi dei servizi dal DB (tabella servizi_prezzi). Se fallisce, l'app usa i prezzi del codice.
+  async function loadPrices() {
+    try {
+      const { data } = await supabase.from('servizi_prezzi').select('destination, turno, servizio_id, prezzo')
+      if (data && data.length) setDbPrices(data)
+    } catch (e) { /* fallback silenzioso ai prezzi del codice */ }
+  }
 
   async function fetchProfile(userId) {
     const { data, error } = await supabase
