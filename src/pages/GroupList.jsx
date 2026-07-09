@@ -156,8 +156,8 @@ function FilterSheet({ destId, current, onPick, onClose }) {
   const svcList = getServices(destId)
   const Pill = ({ value, label, tone }) => {
     const active = current === value
-    const c = tone === 'amber' ? '#B45309' : tone === 'red' ? '#DC2626' : 'var(--iv-blue)'
-    const bg = tone === 'amber' ? '#FEF3C7' : tone === 'red' ? '#FEF2F2' : 'var(--iv-blue-light)'
+    const c = tone === 'green' ? '#15803D' : tone === 'red' ? '#B91C1C' : tone === 'grey' ? '#64748B' : 'var(--iv-blue)'
+    const bg = tone === 'green' ? '#DCFCE7' : tone === 'red' ? '#FEE2E2' : tone === 'grey' ? '#F1F5F9' : 'var(--iv-blue-light)'
     return (
       <button onClick={() => onPick(value)} style={{
         padding: '9px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
@@ -188,13 +188,13 @@ function FilterSheet({ destId, current, onPick, onClose }) {
 
         <Group title="Prenotazioni">
           <Pill value="prebook_esc" label="Escursioni prebooking" tone="blue" />
-          <Pill value="prebook_ssp" label="SSP prebooking" tone="blue" />
+          <Pill value="prebook_ssp" label="SSP prebooking" tone="red" />
         </Group>
         <Group title="Chi ha preso (pagato)">
-          {svcList.map(sv => <Pill key={'h' + sv.id} value={'has:' + sv.id} label={sv.label} tone="amber" />)}
+          {svcList.map(sv => <Pill key={'h' + sv.id} value={'has:' + sv.id} label={sv.label} tone="green" />)}
         </Group>
         <Group title="Chi non ha preso">
-          {svcList.map(sv => <Pill key={'n' + sv.id} value={'no:' + sv.id} label={'Senza ' + sv.label} tone="red" />)}
+          {svcList.map(sv => <Pill key={'n' + sv.id} value={'no:' + sv.id} label={'Senza ' + sv.label} tone="grey" />)}
         </Group>
       </div>
     </div>
