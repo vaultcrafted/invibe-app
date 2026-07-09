@@ -87,22 +87,36 @@ export default function GroupList() {
   const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'M').length || 0), 0)
   const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'F').length || 0), 0)
 
-  // Per i filtri PREBOOKING (e per "chi ha preso Escursioni/Navetta") conta la quantità
-  // realmente prenotata (dal file CM), non la dimensione dei gruppi.
-  let prebookKey = svcFilter === 'prebook_esc' ? 'escursioni' : svcFilter === 'prebook_ssp' ? 'ssp' : null
-  if (!prebookKey && svcFilter && svcFilter.startsWith('has:')) {
-    // le escursioni (e la Navetta di Pag) sono sempre prebooking: conto la quantità prenotata
-    if (prebookKeyForService(svcFilter.replace('has:', '')) === 'escursioni') prebookKey = 'escursioni'
+  // Quantità EFFETTIVA di un servizio per un gruppo:
+  // - se pagato in prebooking (escursioni sempre, SSP bonifico) -> quantità prenotata (o confermata per escursioni)
+  // - altrimenti -> quantità incassata in meta
+  const svQty = (g, sv) => {
+    const pk = prebookKeyForService(sv.id)
+    const prebooked = (pk && g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : null
+    if (prebooked != null && isPrebookingPagato(sv.id, g.destination, g.shift_num)) {
+      if (pk === 'escursioni' && g.escursioni_conf != null) return Number(g.escursioni_conf) || 0
+      return prebooked
+    }
+    return Number(g[sv.id]) || 0
   }
-  const fPrebook = prebookKey ? filtered.reduce((s, g) => s + (Number(g.prebook?.[prebookKey]) || 0), 0) : 0
+
+  // Conteggio del filtro: per i filtri su un servizio conta la QUANTITÀ effettiva
+  // (prenotazioni/incassi reali), non la dimensione dei gruppi.
+  let filterCount = null, filterLabel = ''
+  if (svcFilter === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); filterLabel = 'prenotate' }
+  else if (svcFilter === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); filterLabel = 'prenotate' }
+  else if (svcFilter && svcFilter.startsWith('has:')) {
+    const sv = getServices(destId).find(s => s.id === svcFilter.replace('has:', ''))
+    if (sv) { filterCount = filtered.reduce((s, g) => s + svQty(g, sv), 0); filterLabel = 'presi' }
+  }
 
   return (
     <div className="page">
       <div className="sticky-header">
       <Topbar showBack={true} showAvatar={false} />
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
-      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {prebookKey
-        ? <>{fPrebook} prenotate</>
+      <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {filterCount != null
+        ? <>{filterCount} {filterLabel}</>
         : <>{fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span></>}{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
