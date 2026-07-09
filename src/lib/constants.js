@@ -202,6 +202,7 @@ export function getCategorie(destination) {
 // Nome esatto della colonna nel foglio Google Sheets di rendicontazione, per ogni servizio
 // (il confronto nel foglio ignora maiuscole/spazi, ma le PAROLE devono combaciare)
 export const SHEET_SERVIZIO_MAP = {
+  num_pax: 'Pax',
   pkg_escursioni: 'Escursioni in meta',
   tassa_soggiorno: 'Tassa di Soggiorno',
   pkg_ssp: 'SSP',
