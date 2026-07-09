@@ -288,6 +288,14 @@ export default function GroupDetail() {
 
       <div style={{ padding: '20px 16px 120px', maxWidth: 900, margin: '0 auto' }}>
 
+        {/* Legenda colori */}
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 14, padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--iv-blue)' }} />Prebooking pagato</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16A34A' }} />Incassato</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#DC2626' }} />Da incassare</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#94A3B8' }} />Assente</span>
+        </div>
+
         {/* Layout desktop: 2 colonne, mobile: 1 colonna */}
         <style>{`
           .group-detail-grid { display: flex; flex-direction: column; gap: 20px; }
@@ -331,6 +339,13 @@ export default function GroupDetail() {
                   // Acceso ma senza metodo -> va segnalato (esclude le escursioni già pagate in prebooking)
                   const needsMetodo = shownActive && !lockedEsc && !svMetodo
                   const locked = lockedEsc || !canEditServizi   // sola lettura per chi non può modificare
+                  const paidMeta = (group[sv.id] || 0) > 0
+                  // Stato colorato del servizio (coerente con la legenda)
+                  let stato
+                  if (lockedEsc)       stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
+                  else if (paidMeta)   stato = { label: 'Incassato', c: '#15803D', bg: '#DCFCE7', bd: '#BBF7D0' }
+                  else if (prebooked)  stato = { label: 'Da incassare', c: '#B91C1C', bg: '#FEE2E2', bd: '#FECACA' }
+                  else                 stato = { label: 'Assente', c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' }
                   return (
                     <div key={sv.id} style={{ borderBottom: i < services.length - 1 ? '0.5px solid var(--border)' : 'none', ...(needsMetodo ? { borderLeft: '3px solid #DC2626', background: '#FEF2F2' } : {}) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
@@ -341,12 +356,13 @@ export default function GroupDetail() {
                           {needsMetodo && <AlertTriangle size={15} color="#DC2626" style={{ flexShrink: 0 }} />}
                           {prebooked != null && (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
-                              background: short ? '#FEF3C7' : 'var(--bg-secondary)',
-                              color: short ? '#92600A' : 'var(--text-secondary)',
-                              border: '0.5px solid ' + (short ? '#FCD9A5' : 'var(--border)') }}>
+                              background: isEsc ? 'var(--iv-blue-light)' : '#FEE2E2',
+                              color: isEsc ? 'var(--iv-blue)' : '#B91C1C',
+                              border: '0.5px solid ' + (isEsc ? 'var(--iv-blue-mid)' : '#FECACA') }}>
                               prenotate {prebooked}
                             </span>
                           )}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap', background: stato.bg, color: stato.c, border: '0.5px solid ' + stato.bd }}>{stato.label}</span>
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
                           {lockedEsc
