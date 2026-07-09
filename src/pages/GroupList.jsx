@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode, prebookKeyForService } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode, prebookKeyForService, isPrebookingPagato } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 function prebookedCount(g, sv) {
@@ -240,14 +240,14 @@ function GroupCard({ group, onClick }) {
         {groupServices(group).map(sv => {
           const paidMeta = (group[sv.id] || 0) > 0            // incassato in meta
           const prebooked = prebookedCount(group, sv) > 0     // prenotato in prebooking
-          const isEsc = prebookKeyForService(sv.id) === 'escursioni'
-          // Colori: blu = prebooking già pagato (escursioni), verde = incassato in meta,
-          //         rosso = prebooking da incassare (es. SSP), grigio = assente.
+          const prebPagato = isPrebookingPagato(sv.id, group.destination, group.shift_num)
+          // Colori: blu = prebooking già pagato (escursioni sempre, SSP turni bonifico),
+          //         verde = incassato in meta, rosso = prebooking da incassare (SSP cash), grigio = assente.
           let st
-          if (isEsc && prebooked) st = { background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', borderColor: 'var(--iv-blue-mid)' }
-          else if (paidMeta)      st = { background: '#DCFCE7', color: '#15803D', borderColor: '#BBF7D0' }
-          else if (prebooked)     st = { background: '#FEE2E2', color: '#B91C1C', borderColor: '#FECACA' }
-          else                    st = undefined   // assente -> chip grigio di base
+          if (prebooked && prebPagato) st = { background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', borderColor: 'var(--iv-blue-mid)' }
+          else if (paidMeta)           st = { background: '#DCFCE7', color: '#15803D', borderColor: '#BBF7D0' }
+          else if (prebooked)          st = { background: '#FEE2E2', color: '#B91C1C', borderColor: '#FECACA' }
+          else                         st = undefined   // assente -> chip grigio di base
           return (
             <span key={sv.id} className="flag-chip" style={st}>
               <span className="dot" />{sv.label}

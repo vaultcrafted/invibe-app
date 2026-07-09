@@ -288,9 +288,28 @@ export function capogruppoCode(code) {
 // Mappa un id servizio -> chiave "prenotato" (prebook). null se non tracciato.
 export function prebookKeyForService(id) {
   if (!id) return null
-  if (id.includes('ssp')) return 'ssp'
   if (id.includes('escursioni')) return 'escursioni'
+  if (id.includes('ssp') || id === 'gal_boat_party' || id === 'zan_boat') return 'ssp'
   return null
+}
+
+// Turni in cui l'SSP prenotato in prebooking è ANCHE già PAGATO in prebooking (bonifico)
+// -> nell'app si mostra come "Prebooking pagato" (blu). Negli altri turni l'SSP è
+// prenotato ma incassato in meta (cash) -> "Da incassare" (rosso).
+// Fonte: colonna A della dashboard. Le ESCURSIONI sono sempre pagate in prebooking (blu) ovunque.
+export const SSP_PREBOOKING_PAGATO = new Set([
+  'P3', 'P4', 'P6', 'Z1', 'Z3', 'Z5', 'G1', 'G2', 'G3', 'G4', 'G5'
+])
+
+// true se il servizio, per quel turno, è pagato in prebooking (da mostrare in blu).
+export function isPrebookingPagato(serviceId, destination, shiftNum) {
+  const key = prebookKeyForService(serviceId)
+  if (key === 'escursioni') return true                        // escursioni sempre pagate in prebooking
+  if (key === 'ssp') {
+    const code = (DEST_PREFIX[destination] || '') + shiftNum
+    return SSP_PREBOOKING_PAGATO.has(code)                     // SSP: solo turni "bonifico"
+  }
+  return false
 }
 
 // Categoria Cassa per l'entrata automatica generata dal servizio.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService } from '../lib/constants'
+import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService, isPrebookingPagato } from '../lib/constants'
 import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
 import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
@@ -340,9 +340,10 @@ export default function GroupDetail() {
                   const needsMetodo = shownActive && !lockedEsc && !svMetodo
                   const locked = lockedEsc || !canEditServizi   // sola lettura per chi non può modificare
                   const paidMeta = (group[sv.id] || 0) > 0
+                  const prebPagato = isPrebookingPagato(sv.id, group.destination, group.shift_num)
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
-                  if (lockedEsc)       stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
+                  if (prebooked && prebPagato) stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
                   else if (paidMeta)   stato = { label: 'Incassato', c: '#15803D', bg: '#DCFCE7', bd: '#BBF7D0' }
                   else if (prebooked)  stato = { label: 'Da incassare', c: '#B91C1C', bg: '#FEE2E2', bd: '#FECACA' }
                   else                 stato = { label: 'Assente', c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' }
@@ -356,9 +357,9 @@ export default function GroupDetail() {
                           {needsMetodo && <AlertTriangle size={15} color="#DC2626" style={{ flexShrink: 0 }} />}
                           {prebooked != null && (
                             <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap',
-                              background: isEsc ? 'var(--iv-blue-light)' : '#FEE2E2',
-                              color: isEsc ? 'var(--iv-blue)' : '#B91C1C',
-                              border: '0.5px solid ' + (isEsc ? 'var(--iv-blue-mid)' : '#FECACA') }}>
+                              background: prebPagato ? 'var(--iv-blue-light)' : '#FEE2E2',
+                              color: prebPagato ? 'var(--iv-blue)' : '#B91C1C',
+                              border: '0.5px solid ' + (prebPagato ? 'var(--iv-blue-mid)' : '#FECACA') }}>
                               prenotate {prebooked}
                             </span>
                           )}
