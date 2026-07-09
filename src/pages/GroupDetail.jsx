@@ -331,16 +331,19 @@ export default function GroupDetail() {
                   const prebooked = pbKey && group.prebook && group.prebook[pbKey] != null ? Number(group.prebook[pbKey]) : null
                   const short = prebooked != null && qty < prebooked
                   const isEsc = pbKey === 'escursioni'
-                  const prebEsc = isEsc ? (prebooked || 0) : 0
-                  const lockedEsc = prebEsc > 0                       // escursioni già acquistate in prebooking
-                  const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
-                  const shownActive = lockedEsc ? true : active
-                  const svMetodo = (group.servizi_metodo || {})[sv.id]
-                  // Acceso ma senza metodo -> va segnalato (esclude le escursioni già pagate in prebooking)
-                  const needsMetodo = shownActive && !lockedEsc && !svMetodo
-                  const locked = lockedEsc || !canEditServizi   // sola lettura per chi non può modificare
-                  const paidMeta = (group[sv.id] || 0) > 0
                   const prebPagato = isPrebookingPagato(sv.id, group.destination, group.shift_num)
+                  const prebEsc = isEsc ? (prebooked || 0) : 0
+                  const lockedEsc = prebEsc > 0                       // escursioni: bloccate, con conteggio confermabile
+                  // SSP (o altri) prenotati E pagati in prebooking (turni bonifico): bloccati e NON modificabili
+                  const lockedSspPreb = !isEsc && prebPagato && (prebooked || 0) > 0
+                  const lockedPrebook = lockedEsc || lockedSspPreb   // qualsiasi servizio pagato in prebooking
+                  const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
+                  const shownActive = lockedPrebook ? true : active
+                  const svMetodo = (group.servizi_metodo || {})[sv.id]
+                  // Acceso ma senza metodo -> va segnalato (esclude ciò che è già pagato in prebooking)
+                  const needsMetodo = shownActive && !lockedPrebook && !svMetodo
+                  const locked = lockedPrebook || !canEditServizi   // bloccato se pagato prebooking o sola lettura
+                  const paidMeta = (group[sv.id] || 0) > 0
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
                   if (prebooked && prebPagato) stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
@@ -366,8 +369,8 @@ export default function GroupDetail() {
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap', background: stato.bg, color: stato.c, border: '0.5px solid ' + stato.bd }}>{stato.label}</span>
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                          {lockedEsc
-                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>Già pagate in prebooking</span>
+                          {lockedPrebook
+                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>{lockedEsc ? 'Già pagate in prebooking' : 'Già pagato in prebooking'}</span>
                             : <>€{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span></>}
                           {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
                         </div>
@@ -382,6 +385,14 @@ export default function GroupDetail() {
                           onBlur={saveEscConf}
                           style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
                         />
+                      ) : lockedSspPreb ? (
+                        <input
+                          type="number"
+                          value={prebooked || 0}
+                          disabled readOnly
+                          title="Pagato in prebooking — non modificabile"
+                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: 0.6, background: 'var(--bg-secondary)', cursor: 'not-allowed' }}
+                        />
                       ) : (
                         <input
                           type="number" min="0"
@@ -393,12 +404,12 @@ export default function GroupDetail() {
                         />
                       )}
                       {/* Toggle */}
-                      <div onClick={() => { if (!locked) toggleQtaService(sv.id) }} title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare i servizi' : (lockedEsc ? 'Già acquistate in prebooking' : '')} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.85 : 1, transition: 'background 0.2s' }}>
+                      <div onClick={() => { if (!locked) toggleQtaService(sv.id) }} title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare i servizi' : (lockedPrebook ? 'Già pagato in prebooking (bloccato)' : '')} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.85 : 1, transition: 'background 0.2s' }}>
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                       </div>
-                      {/* Metodo di pagamento — compare solo quando il servizio è attivo */}
-                      {shownActive && !lockedEsc && canEditServizi && (
+                      {/* Metodo di pagamento — compare solo quando il servizio è attivo e NON già pagato in prebooking */}
+                      {shownActive && !lockedPrebook && canEditServizi && (
                         <div style={{ padding: '0 18px 14px 18px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                             <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
