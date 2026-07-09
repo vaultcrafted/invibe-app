@@ -8,6 +8,7 @@ const SCRIPTS = {
   cm_sync:  { label: 'FILE CM', color: '#1E6BF1', emoji: '📋' },
   prebook:  { label: 'Prebooking', color: '#D97706', emoji: '🎟️' },
   rooming:  { label: 'Rooming', color: '#7C3AED', emoji: '🛏️' },
+  prezzi:   { label: 'Prezzi', color: '#0D9488', emoji: '💶' },
 }
 const scriptInfo = (s) => SCRIPTS[s] || { label: s, color: '#64748B', emoji: '⚙️' }
 
@@ -110,7 +111,7 @@ export default function SyncLog() {
       <div style={{ padding: '14px 16px 4px', display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{ fontSize: 20, fontWeight: 800 }}>Log sincronizzazioni</div>
       </div>
-      <div style={{ padding: '0 16px 6px', fontSize: 12, color: 'var(--text-secondary)' }}>Cosa fanno gli script ogni notte (FILE CM, prebooking, rooming).</div>
+      <div style={{ padding: '0 16px 6px', fontSize: 12, color: 'var(--text-secondary)' }}>Cosa fanno gli script ogni notte (FILE CM, prebooking, rooming, prezzi).</div>
 
       {/* Sincronizza ora (on-demand) */}
       <div style={{ padding: '4px 16px 8px' }}>
