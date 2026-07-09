@@ -917,7 +917,7 @@ function IncassiTab({ data, loading }) {
       )}
 
       {/* Tabella pivot */}
-      <div style={{ overflow: 'auto', maxHeight: '70vh', borderRadius: 12, border: '0.5px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+      <div style={{ overflow: 'auto', maxHeight: '70vh', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', borderRadius: 12, border: '0.5px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
           <thead>
             <tr>
