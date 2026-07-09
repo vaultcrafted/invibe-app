@@ -830,7 +830,6 @@ function IncassiTab({ data, loading }) {
   function svQty(g, sv) {
     if (isPrebPaid(g, sv)) {
       const pk = prebookKeyForService(sv.id)
-      if (pk === 'escursioni' && g.escursioni_conf != null) return Number(g.escursioni_conf) || 0
       return (g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : 0
     }
     return g[sv.id] || 0
