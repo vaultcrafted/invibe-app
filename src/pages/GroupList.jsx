@@ -90,6 +90,7 @@ export default function GroupList() {
   return (
     <div className="page">
       <Topbar showBack={true} showAvatar={false} />
+      <div className="sticky-header">
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {fPeople} persone · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>{svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
@@ -109,12 +110,13 @@ export default function GroupList() {
           {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
       </div>
-      {/* Legenda colori — sticky, resta visibile mentre scorri */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-primary)', borderBottom: '0.5px solid var(--border)', padding: '7px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+      {/* Legenda colori */}
+      <div style={{ borderTop: '0.5px solid var(--border)', padding: '7px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--iv-blue)' }} />Prebooking pagato</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16A34A' }} />Incassato</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#DC2626' }} />Da incassare</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#94A3B8' }} />Assente</span>
+      </div>
       </div>
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
