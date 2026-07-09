@@ -21,7 +21,9 @@ export default function Destinations() {
 
   return (
     <div className="page">
-      <Topbar showBack={false} showAvatar={true} />
+      <div className="sticky-header">
+        <Topbar showBack={false} showAvatar={true} />
+      </div>
       <div style={{ padding: '16px 16px 4px', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Seleziona meta
       </div>
