@@ -25,7 +25,19 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff,woff2}'],
         navigateFallback: '/index.html',
+        cleanupOutdatedCaches: true,   // rimuove le versioni vecchie dell'app dalla cache
         runtimeCaching: [
+          {
+            // Pagina d'ingresso (navigazione): quando sei ONLINE prende sempre l'ultima
+            // versione (così i deploy si vedono subito); offline usa l'ultima salvata.
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'invibe-html',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 }
+            }
+          },
           {
             // App (codice, immagini, font): risponde subito dalla cache e aggiorna in background
             urlPattern: ({ url }) => url.origin === self.location.origin,

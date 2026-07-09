@@ -46,8 +46,8 @@ export const SHIFTS = {
 
 export const SERVICES = [
   { id: 'pkg_escursioni', label: 'Escursioni', prezzo: 45 },
-  { id: 'tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
-  { id: 'pkg_ssp', label: 'SSP', prezzo: 45 },
+  { id: 'tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 15 },
+  { id: 'pkg_ssp', label: 'SSP', prezzo: 40 },
   { id: 'cauzione', label: 'Cauzione', prezzo: 50 },
 ]
 
