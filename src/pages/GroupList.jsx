@@ -222,15 +222,19 @@ function GroupCard({ group, onClick }) {
       </div>
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
         {groupServices(group).map(sv => {
-          const paid = (group[sv.id] || 0) > 0             // pagato in meta (toggle attivo)
-          const prebooked = prebookedCount(group, sv) > 0
+          const paidMeta = (group[sv.id] || 0) > 0            // incassato in meta
+          const prebooked = prebookedCount(group, sv) > 0     // prenotato in prebooking
           const isEsc = prebookKeyForService(sv.id) === 'escursioni'
-          const yellow = paid || (isEsc && prebooked)      // escursioni prenotate = già pagate → giallo
-          const blue = !yellow && prebooked                // prenotato non ancora pagato (es. SSP) → blu
-          const on = yellow || blue
+          // Colori: blu = prebooking già pagato (escursioni), verde = incassato in meta,
+          //         rosso = prebooking da incassare (es. SSP), grigio = assente.
+          let st
+          if (isEsc && prebooked) st = { background: 'var(--iv-blue-light)', color: 'var(--iv-blue)', borderColor: 'var(--iv-blue-mid)' }
+          else if (paidMeta)      st = { background: '#DCFCE7', color: '#15803D', borderColor: '#BBF7D0' }
+          else if (prebooked)     st = { background: '#FEE2E2', color: '#B91C1C', borderColor: '#FECACA' }
+          else                    st = undefined   // assente -> chip grigio di base
           return (
-            <span key={sv.id} className={`flag-chip ${on ? 'on' : ''}`} style={yellow ? { background: '#FEF3C7', color: '#B45309', borderColor: '#FCD9A5' } : undefined}>
-              <span className="dot" style={yellow ? { background: '#D97706' } : undefined} />{sv.label}
+            <span key={sv.id} className="flag-chip" style={st}>
+              <span className="dot" />{sv.label}
             </span>
           )
         })}
