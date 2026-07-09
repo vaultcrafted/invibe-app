@@ -917,15 +917,23 @@ function IncassiTab({ data, loading }) {
       )}
 
       {/* Tabella pivot */}
-      <div style={{ overflowX: 'auto', borderRadius: 12, border: '0.5px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+      <div style={{ overflow: 'auto', maxHeight: '70vh', borderRadius: 12, border: '0.5px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 600 }}>
           <thead>
             <tr>
-              <th style={{ ...thLeftStyle, minWidth: 140 }}>Capogruppo</th>
-              <th style={{ ...thStyle, minWidth: 60 }}>Pax</th>
-              {SV && SV.map(sv => <th key={sv.id} style={{ ...thStyle, minWidth: 90 }}>{sv.label}</th>)}
-              <th style={{ ...thStyle, minWidth: 80, color: 'var(--iv-blue)' }}>{isQty ? 'Tot. servizi' : 'Totale'}</th>
+              <th style={{ ...thLeftStyle, minWidth: 140, position: 'sticky', top: 0, zIndex: 3 }}>Capogruppo</th>
+              <th style={{ ...thStyle, minWidth: 60, position: 'sticky', top: 0, zIndex: 3 }}>Pax</th>
+              {SV && SV.map(sv => <th key={sv.id} style={{ ...thStyle, minWidth: 90, position: 'sticky', top: 0, zIndex: 3 }}>{sv.label}</th>)}
+              <th style={{ ...thStyle, minWidth: 80, color: 'var(--iv-blue)', position: 'sticky', top: 0, zIndex: 3 }}>{isQty ? 'Tot. servizi' : 'Totale'}</th>
             </tr>
+            {groups.length > 0 && (
+              <tr>
+                <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13, position: 'sticky', top: 33, zIndex: 3 }}>TOTALE GENERALE</td>
+                <td style={{ ...tdStyle, ...grandStyle, color: '#fff', position: 'sticky', top: 33, zIndex: 3 }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
+                {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff', position: 'sticky', top: 33, zIndex: 3 }}>{isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
+                <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15, position: 'sticky', top: 33, zIndex: 3 }}>{isQty ? grandTotal(groups) : `€${grandTotal(groups)}`}</td>
+              </tr>
+            )}
           </thead>
           <tbody>
             {groups.length === 0 ? (
@@ -994,16 +1002,6 @@ function IncassiTab({ data, loading }) {
                   )
                 }
               })
-
-              // Totale generale
-              rows.push(
-                <tr key="grand" style={grandStyle}>
-                  <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
-                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                  {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
-                  <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>{isQty ? grandTotal(groups) : `€${grandTotal(groups)}`}</td>
-                </tr>
-              )
 
               return rows
             })()}
