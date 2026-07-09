@@ -432,7 +432,7 @@ export default function Admin() {
         </div>
       ))}
       {tab === 'premi' && <PremiTab scope={scopeShifts} />}
-      {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} />}
+      {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} onRefresh={fetchIncassi} />}
       {tab === 'cassa' && <CassaTab />}
       {tab === 'pax' && <PaxContentTab scope={scopeShifts} />}
     </div>
@@ -810,7 +810,9 @@ function VotesSection({ voteData, staffProfiles, loading, filterDest, filterShif
   )
 }
 
-function IncassiTab({ data, loading }) {
+function IncassiTab({ data, loading, onRefresh }) {
+  const [refreshing, setRefreshing] = useState(false)
+  async function doRefresh() { setRefreshing(true); await onRefresh(); setRefreshing(false) }
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
   const [viewMode, setViewMode] = useState('euro') // 'euro' | 'quantita'
@@ -934,6 +936,7 @@ function IncassiTab({ data, loading }) {
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>6</span> = già pagato in prebooking (conteggio, non €)</span>
         <span>€ = incassato in meta (cassa)</span>
+        <button onClick={doRefresh} disabled={refreshing} style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--iv-blue)', color: '#fff', border: 'none', opacity: refreshing ? 0.6 : 1 }}>{refreshing ? 'Aggiorno…' : '↻ Aggiorna dati'}</button>
       </div>
 
       {/* Tabella pivot */}
