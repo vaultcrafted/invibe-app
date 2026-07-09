@@ -87,9 +87,13 @@ export default function GroupList() {
   const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'M').length || 0), 0)
   const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'F').length || 0), 0)
 
-  // Per i filtri PREBOOKING conta la quantità realmente prenotata (dal file CM),
-  // non la dimensione dei gruppi (un gruppo da 17 può averne prenotate solo 15).
-  const prebookKey = svcFilter === 'prebook_esc' ? 'escursioni' : svcFilter === 'prebook_ssp' ? 'ssp' : null
+  // Per i filtri PREBOOKING (e per "chi ha preso Escursioni/Navetta") conta la quantità
+  // realmente prenotata (dal file CM), non la dimensione dei gruppi.
+  let prebookKey = svcFilter === 'prebook_esc' ? 'escursioni' : svcFilter === 'prebook_ssp' ? 'ssp' : null
+  if (!prebookKey && svcFilter && svcFilter.startsWith('has:')) {
+    // le escursioni (e la Navetta di Pag) sono sempre prebooking: conto la quantità prenotata
+    if (prebookKeyForService(svcFilter.replace('has:', '')) === 'escursioni') prebookKey = 'escursioni'
+  }
   const fPrebook = prebookKey ? filtered.reduce((s, g) => s + (Number(g.prebook?.[prebookKey]) || 0), 0) : 0
 
   return (
