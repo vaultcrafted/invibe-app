@@ -288,7 +288,7 @@ export function capogruppoCode(code) {
 // Mappa un id servizio -> chiave "prenotato" (prebook). null se non tracciato.
 export function prebookKeyForService(id) {
   if (!id) return null
-  if (id.includes('escursioni')) return 'escursioni'
+  if (id.includes('escursioni') || id === 'pag_navetta') return 'escursioni'   // Pag: la Navetta è l'escursione
   if (id.includes('ssp') || id === 'gal_boat_party' || id === 'zan_boat') return 'ssp'
   return null
 }
