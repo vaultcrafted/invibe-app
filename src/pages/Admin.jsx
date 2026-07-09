@@ -822,8 +822,11 @@ function IncassiTab({ data, loading }) {
   const isQty = viewMode === 'quantita'
 
   // Quantità di un servizio per un gruppo: SEMPRE la colonna a quantità (modello nuovo)
-  // true se il servizio, per quel gruppo, è pagato in prebooking (quindi NON è cassa in meta)
+  // true se il servizio, per quel gruppo, è pagato in prebooking (quindi NON è cassa in meta).
+  // Le colonne "cash" (es. Pag SSP cash) sono SEMPRE incasso in meta: il conteggio
+  // prebooking va solo sulla colonna bonifico (o sull'SSP a colonna unica delle altre mete).
   function isPrebPaid(g, sv) {
+    if (sv.id.includes('cash')) return false
     const pk = prebookKeyForService(sv.id)
     return pk != null && isPrebookingPagato(sv.id, g.destination, g.shift_num)
   }
