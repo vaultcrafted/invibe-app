@@ -109,6 +109,13 @@ export default function GroupList() {
           {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
       </div>
+      {/* Legenda colori — sticky, resta visibile mentre scorri */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 20, background: 'var(--bg-primary)', borderBottom: '0.5px solid var(--border)', padding: '7px 16px', display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--iv-blue)' }} />Prebooking pagato</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16A34A' }} />Incassato</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#DC2626' }} />Da incassare</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: '#94A3B8' }} />Assente</span>
+      </div>
       {loading ? (
         <div className="loading-screen"><div className="spinner" /></div>
       ) : filtered.length === 0 ? (
