@@ -378,21 +378,11 @@ a { text-decoration: none; color: inherit; }
   background: var(--bg-primary);
 }
 
-/* Tabella Incassi: su MOBILE scorre la pagina in modo naturale (solo scroll
-   orizzontale nella tabella); su DESKTOP diventa uno scroll-box con header sticky. */
+/* Tabella Incassi: sta direttamente sulla pagina (nessun box/bordo/ombra).
+   Solo scroll orizzontale quando le colonne servizi superano la larghezza. */
 .incassi-table-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border-radius: 12px;
-  border: 0.5px solid var(--border);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
-}
-@media (min-width: 701px) {
-  .incassi-table-wrap {
-    overflow: auto;
-    max-height: 70vh;
-    overscroll-behavior: contain;
-  }
 }
 .stat-box { background: var(--bg-secondary); border-radius: var(--radius-sm); padding: 11px 13px; }
 .stat-label { font-size: 11px; color: var(--text-secondary); }
