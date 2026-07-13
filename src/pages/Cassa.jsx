@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import { subscribe as subscribeSync } from '../lib/syncQueue'
 import Topbar from '../components/Topbar'
-import { Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft } from 'lucide-react'
+import { Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Search } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -32,6 +32,8 @@ export default function Cassa() {
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
+  const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
+  const [searchCapo, setSearchCapo] = useState('')
 
   const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -88,7 +90,7 @@ export default function Cassa() {
     setLoading(false)
   }
 
-  function openTurno(s) { setSelectedShift(s); setView('detail') }
+  function openTurno(s) { setSelectedShift(s); setView('detail'); setFiltroMetodo('Tutti'); setFiltroCategoria('Tutte'); setSearchCapo('') }
   function backToSummary() { setSelectedShift(null); setView('summary'); loadSummary() }
 
   // ================= RIEPILOGO =================
@@ -186,7 +188,17 @@ export default function Cassa() {
   }
 
   // ================= DETTAGLIO TURNO (lettura) =================
-  const movVisibili = movimenti.filter(m => filtroMetodo === 'Tutti' || (m.metodo || 'Cash') === filtroMetodo)
+  const categoriePresenti = [...new Set(movimenti.map(m => m.categoria).filter(Boolean))]
+  const movVisibili = movimenti.filter(m => {
+    if (filtroMetodo !== 'Tutti' && (m.metodo || 'Cash') !== filtroMetodo) return false
+    if (filtroCategoria !== 'Tutte' && m.categoria !== filtroCategoria) return false
+    if (searchCapo.trim()) {
+      const q = searchCapo.trim().toLowerCase()
+      const hay = `${m.descrizione || ''} ${m.categoria || ''} ${m.inserito_da || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
   const totaleEntrate = movVisibili.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
   const totaleUscite = movVisibili.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
   const saldo = totaleEntrate - totaleUscite
@@ -220,6 +232,15 @@ export default function Cassa() {
         </div>
       </div>
 
+      {/* Ricerca per capogruppo / codice / descrizione */}
+      <div style={{ padding: '0 16px 8px' }}>
+        <div className="search-bar">
+          <Search size={15} color="var(--text-tertiary)" />
+          <input placeholder="Cerca capogruppo, codice o descrizione..." value={searchCapo} onChange={e => setSearchCapo(e.target.value)} />
+          {searchCapo && <button onClick={() => setSearchCapo('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
+        </div>
+      </div>
+
       {/* Filtro metodo di pagamento */}
       <div style={{ padding: '0 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
         {['Tutti', ...METODI].map(mt => {
@@ -235,12 +256,22 @@ export default function Cassa() {
         })}
       </div>
 
+      {/* Filtro categoria */}
+      {categoriePresenti.length > 0 && (
+        <div style={{ padding: '4px 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <button onClick={() => setFiltroCategoria('Tutte')} style={chip(filtroCategoria === 'Tutte')}>Tutte le categorie</button>
+          {categoriePresenti.map(cat => (
+            <button key={cat} onClick={() => setFiltroCategoria(cat)} style={chip(filtroCategoria === cat)}>{cat}</button>
+          ))}
+        </div>
+      )}
+
       {/* Lista movimenti (lettura) */}
       <div style={{ padding: '4px 16px 32px' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : movVisibili.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento{filtroMetodo !== 'Tutti' ? ' con ' + filtroMetodo : ' registrato'}</div>
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || searchCapo ? ' con questi filtri' : ' registrato'}</div>
         ) : (
           <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
             {movVisibili.map((m, i) => {
