@@ -137,11 +137,43 @@ export default function GroupDetail() {
     syncCassaEntrata(serviceId, next[serviceId], group[serviceId] || 0)
   }
 
-  // Crea SOLO il movimento del DELTA in cassa per un servizio del gruppo (append-only).
-  // Non cancella MAI le righe già registrate nei giorni precedenti: se un gruppo aveva già
-  // 10 pax con quel servizio e ora ne aggiunge 2, scrive un movimento di soli +2 (datato oggi),
-  // lasciando intatto il movimento storico dei 10 (datato quando erano stati inseriti).
-  // "servizi_cassa" sul gruppo tiene lo snapshot di cosa è già stato registrato: { [serviceId]: { qty, metodo } }.
+  // Somma quanto è REALMENTE registrato in cassa (Supabase) per un servizio/metodo di questo
+  // gruppo. Non ci si fida di nessuno snapshot: si legge sempre lo stato vero, così funziona
+  // anche per i movimenti creati prima di questa logica (o in modi diversi).
+  async function registeredQty(serviceId, metodo, prezzo) {
+    if (!metodo || prezzo <= 0) return 0
+    try {
+      const { data: rows } = await supabase
+        .from('cassa_movimenti')
+        .select('importo')
+        .match({ group_id: groupId, servizio_id: serviceId, metodo, tipo: 'entrata', auto: true })
+      const tot = (rows || []).reduce((s, r) => s + Number(r.importo), 0)
+      return tot / prezzo
+    } catch (e) { return 0 }
+  }
+
+  // Rimuove TUTTI i movimenti auto già registrati per un servizio di questo gruppo (qualsiasi
+  // metodo, per sicurezza: copre anche i casi in cui il metodo sia cambiato nel tempo o i
+  // movimenti risalgano a prima di questa logica). Usata quando il servizio viene spento del tutto.
+  async function removeAllRegistered(serviceId, metodoHint) {
+    try {
+      const match = { group_id: groupId, servizio_id: serviceId, tipo: 'entrata', auto: true }
+      if (metodoHint) match.metodo = metodoHint
+      const { data: rows } = await supabase
+        .from('cassa_movimenti')
+        .select('id, importo, descrizione, categoria, data, metodo')
+        .match(match)
+      for (const row of (rows || [])) {
+        enqueueDelete('cassa_movimenti', { id: row.id })
+        sendCassaToSheet({
+          destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+          tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
+          categoria: row.categoria || '', metodo: row.metodo || 'Cash', data: row.data || '',
+        })
+      }
+    } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
+  }
+
   // Riduce/rimuove i movimenti già registrati per un servizio/metodo di un TOT di quantità,
   // partendo dal più recente (LIFO): se avevo messo 10 e poi portato a 12, togliendo di nuovo
   // 2 correggo/cancello il movimento dei +2 appena inserito, lasciando intatto l'originale da 10.
@@ -192,18 +224,20 @@ export default function GroupDetail() {
     const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
     if (!svc) return
 
-    const rec = (group.servizi_cassa || {})[serviceId] || { qty: 0, metodo: null }
+    // Metodo con cui era registrato PRIMA di questa modifica (fonte di verità: servizi_metodo
+    // sul gruppo, non uno snapshot separato che potrebbe non esistere per servizi più vecchi).
+    const prevMetodo = (group.servizi_metodo || {})[serviceId] || null
     const prezzo = svc.prezzo
     const newQty = qty || 0
     const data = new Date().toISOString().slice(0, 10)
     const categoria = cassaCategoriaForService(serviceId, svc.label)
     const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
 
-    if (rec.metodo && metodo && rec.metodo !== metodo) {
-      // Cambio di metodo: tolgo per intero quanto era registrato sul vecchio metodo
-      // (correggendo/cancellando i movimenti esistenti, non con un'uscita) e lo registro
-      // per intero sul nuovo metodo, datato oggi (è un evento nuovo: è cambiato come è stato pagato).
-      await reduceRegisteredAmount(serviceId, rec.metodo, rec.qty, prezzo)
+    if (prevMetodo && metodo && prevMetodo !== metodo) {
+      // Cambio di metodo: rimuovo per intero quanto era registrato sul vecchio metodo
+      // (leggendo lo stato vero, non uno snapshot) e lo registro per intero sul nuovo,
+      // datato oggi (è un evento nuovo: è cambiato come è stato pagato).
+      await removeAllRegistered(serviceId, prevMetodo)
       if (newQty > 0) {
         enqueueInsert('cassa_movimenti', {
           destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
@@ -214,12 +248,15 @@ export default function GroupDetail() {
         sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: newQty * prezzo, descrizione, categoria, metodo, data })
       }
     } else if (!metodo) {
-      // Metodo tolto del tutto: correggo/cancello quanto era già registrato, nessuna nuova entrata.
-      await reduceRegisteredAmount(serviceId, rec.metodo, rec.qty, prezzo)
+      // Servizio spento del tutto (o metodo tolto): rimuovo TUTTO quanto era registrato per
+      // questo servizio in cassa, qualsiasi sia il metodo (copre anche movimenti pre-esistenti).
+      await removeAllRegistered(serviceId, prevMetodo || null)
     } else {
-      // Stesso metodo (o primo inserimento): scrivo solo il delta.
-      const delta = newQty - rec.qty
-      if (delta > 0) {
+      // Stesso metodo (o primo inserimento): leggo quanto è REALMENTE già registrato e scrivo
+      // solo il delta rispetto a quello, non rispetto a uno snapshot.
+      const already = await registeredQty(serviceId, metodo, prezzo)
+      const delta = newQty - already
+      if (delta > 0.001) {
         // Aggiunta reale (successa ora): nuova riga datata oggi.
         enqueueInsert('cassa_movimenti', {
           destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
@@ -228,18 +265,11 @@ export default function GroupDetail() {
           group_id: groupId, servizio_id: serviceId, auto: true,
         })
         sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data })
-      } else if (delta < 0) {
+      } else if (delta < -0.001) {
         // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
         await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
       }
     }
-
-    // Aggiorno lo snapshot di quanto è ORA registrato in cassa per questo servizio
-    const nextRec = { ...(group.servizi_cassa || {}) }
-    if (metodo && newQty > 0) nextRec[serviceId] = { qty: newQty, metodo }
-    else delete nextRec[serviceId]
-    setGroup(prev => ({ ...prev, servizi_cassa: nextRec }))
-    enqueueUpdate('groups', { id: groupId }, { servizi_cassa: nextRec }, { dedupKey: `groups:${groupId}:servizi_cassa` })
   }
 
   async function toggleParticipantActive(participantId) {
