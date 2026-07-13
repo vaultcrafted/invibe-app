@@ -92,8 +92,9 @@ export default function Admin() {
         gFrom += pageSize
       }
 
-      // Conta partecipanti con paginazione
+      // Conta partecipanti (attivi e rimossi) con paginazione
       const countMap = {}
+      const rimossiMap = {}
       let from = 0
       while (true) {
         const { data: page } = await supabase
@@ -101,11 +102,14 @@ export default function Admin() {
           .select('group_id, attivo')
           .range(from, from + pageSize - 1)
         if (!page || page.length === 0) break
-        page.forEach(p => { if (p.attivo !== false) countMap[p.group_id] = (countMap[p.group_id] || 0) + 1 })
+        page.forEach(p => {
+          if (p.attivo !== false) countMap[p.group_id] = (countMap[p.group_id] || 0) + 1
+          else rimossiMap[p.group_id] = (rimossiMap[p.group_id] || 0) + 1
+        })
         if (page.length < pageSize) break
         from += pageSize
       }
-      setIncassiData(groups.filter(g => inScope(g.destination, g.shift_num)).map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0 })))
+      setIncassiData(groups.filter(g => inScope(g.destination, g.shift_num)).map(g => ({ ...g, num_partecipanti: countMap[g.id] || 0, num_rimossi: rimossiMap[g.id] || 0 })))
     } catch (e) {
       console.error(e)
       setIncassiData([])
@@ -815,13 +819,23 @@ function IncassiTab({ data, loading, onRefresh }) {
   async function doRefresh() { setRefreshing(true); await onRefresh(); setRefreshing(false) }
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
-  const [viewMode, setViewMode] = useState('euro') // 'euro' | 'quantita'
+  const [viewMode, setViewMode] = useState('euro') // 'euro' | 'quantita' | 'percentuale'
 
   if (loading || !data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico incassi...</div>
 
   // Servizi mostrati come colonne: quelli della meta selezionata. In "Tutte" niente colonne servizio (metas diverse), solo Pax e Totale.
   const SV = filterDest ? getServices(filterDest) : null
   const isQty = viewMode === 'quantita'
+  const isPct = viewMode === 'percentuale'
+
+  // Colori soglia penetrazione vendite: verde >=70%, giallo 40-69%, rosso <40%
+  function pctStyle(p) {
+    if (p == null) return { color: 'var(--text-tertiary)' }
+    if (p >= 70) return { color: '#15803D', background: '#F0FDF4', fontWeight: 700 }
+    if (p >= 40) return { color: '#A16207', background: '#FEFCE8', fontWeight: 700 }
+    return { color: '#B91C1C', background: '#FEF2F2', fontWeight: 700 }
+  }
+  function fmtPct(p) { return p == null ? '\u2014' : Math.round(p) + '%' }
 
   // Quantità di un servizio per un gruppo: SEMPRE la colonna a quantità (modello nuovo)
   // true se il servizio, per quel gruppo, è pagato in prebooking (quindi NON è cassa in meta).
@@ -848,6 +862,41 @@ function IncassiTab({ data, loading, onRefresh }) {
   // Cella mostrata: € o numero secondo la vista scelta
   function svCell(g, sv) {
     return isQty ? svQty(g, sv) : svValue(g, sv)
+  }
+  // Percentuale di penetrazione di un servizio per un gruppo: quantita venduta (prebook+meta) / pax
+  function svPct(g, sv) {
+    const pax = g.num_partecipanti || 0
+    if (pax === 0) return null
+    return (svQty(g, sv) / pax) * 100
+  }
+  // Percentuale aggregata su un set di gruppi per un servizio: somma quantita / somma pax
+  function colPct(gs, sv) {
+    const pax = gs.reduce((t, g) => t + (g.num_partecipanti || 0), 0)
+    if (pax === 0) return null
+    const qty = gs.reduce((t, g) => t + svQty(g, sv), 0)
+    return (qty / pax) * 100
+  }
+  // Percentuale totale riga: media pesata su tutti i servizi della meta del gruppo
+  function rowPct(g) {
+    const sv = groupServices(g)
+    const pax = g.num_partecipanti || 0
+    if (pax === 0 || sv.length === 0) return null
+    const qty = sv.reduce((t, s) => t + svQty(g, s), 0)
+    return (qty / (pax * sv.length)) * 100
+  }
+  // Percentuale totale aggregata su un set di gruppi: somma quantita (sui servizi di ciascuna
+  // destinazione) / somma (pax * n. servizi). Funziona sia filtrando una meta sia su "Tutte".
+  function grandPct(gs) {
+    let qty = 0, denom = 0
+    gs.forEach(g => {
+      const sv = groupServices(g)
+      const pax = g.num_partecipanti || 0
+      if (pax > 0 && sv.length > 0) {
+        qty += sv.reduce((t, s) => t + svQty(g, s), 0)
+        denom += pax * sv.length
+      }
+    })
+    return denom > 0 ? (qty / denom) * 100 : null
   }
   // Servizi che concorrono al totale di un gruppo: quelli della SUA meta
   function groupServices(g) {
@@ -900,6 +949,9 @@ function IncassiTab({ data, loading, onRefresh }) {
         <button onClick={() => setViewMode('quantita')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: isQty ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: isQty ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isQty ? 'var(--iv-blue)' : 'var(--border)') }}>
           # Quantità
         </button>
+        <button onClick={() => setViewMode('percentuale')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: isPct ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: isPct ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isPct ? 'var(--iv-blue)' : 'var(--border)') }}>
+          % Vendite
+        </button>
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -936,6 +988,12 @@ function IncassiTab({ data, loading, onRefresh }) {
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>6</span> = già pagato in prebooking (conteggio, non €)</span>
         <span>€ = incassato in meta (cassa)</span>
+        {isPct && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#F0FDF4', border: '1px solid #15803D' }} /> ≥70%</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#FEFCE8', border: '1px solid #A16207' }} /> 40-69%</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#FEF2F2', border: '1px solid #B91C1C' }} /> &lt;40%</span>
+        </span>}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ fontSize: 9.5, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', border: '0.5px solid #FCA5A5', padding: '1px 6px', borderRadius: 20 }}>-N</span> = partecipanti rimossi dal gruppo (non vengono più)</span>
         <button onClick={doRefresh} disabled={refreshing} style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'var(--iv-blue)', color: '#fff', border: 'none', opacity: refreshing ? 0.6 : 1 }}>{refreshing ? 'Aggiorno…' : '↻ Aggiorna dati'}</button>
       </div>
 
@@ -953,8 +1011,8 @@ function IncassiTab({ data, loading, onRefresh }) {
               <tr>
                 <td style={{ ...tdLeftStyle, ...grandStyle, color: '#fff', fontSize: 13 }}>TOTALE GENERALE</td>
                 <td style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{groups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
-                <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>{isQty ? grandTotal(groups) : `€${grandTotal(groups)}`}</td>
+                {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...grandStyle, color: '#fff' }}>{isPct ? fmtPct(colPct(groups, sv)) : isQty ? colTotal(groups, sv) : `€${colTotal(groups, sv)}`}</td>)}
+                <td style={{ ...tdStyle, ...grandStyle, color: '#fff', fontSize: 15 }}>{isPct ? fmtPct(grandPct(groups)) : isQty ? grandTotal(groups) : `€${grandTotal(groups)}`}</td>
               </tr>
             )}
           </thead>
@@ -992,9 +1050,17 @@ function IncassiTab({ data, loading, onRefresh }) {
                     const tot = rowTotal(g)
                     rows.push(
                       <tr key={g.id}>
-                        <td style={tdLeftStyle}>{capogruppoCode(g.capogruppo_code) && <span className="code-chip" style={{ marginRight: 6 }}>{capogruppoCode(g.capogruppo_code)}</span>}{g.capogruppo_display}</td>
+                        <td style={tdLeftStyle}>
+                          {capogruppoCode(g.capogruppo_code) && <span className="code-chip" style={{ marginRight: 6 }}>{capogruppoCode(g.capogruppo_code)}</span>}
+                          {g.capogruppo_display}
+                          {g.num_rimossi > 0 && <span title={`${g.num_rimossi} partecipante${g.num_rimossi > 1 ? 'i' : ''} rimosso/i dal gruppo`} style={{ marginLeft: 6, fontSize: 9.5, fontWeight: 700, color: '#DC2626', background: '#FEF2F2', border: '0.5px solid #FCA5A5', padding: '1px 6px', borderRadius: 20 }}>-{g.num_rimossi}</span>}
+                        </td>
                         <td style={tdStyle}>{n}</td>
                         {SV && SV.map(sv => {
+                          if (isPct) {
+                            const p = svPct(g, sv)
+                            return <td key={sv.id} style={{ ...tdStyle, ...pctStyle(p) }}>{fmtPct(p)}</td>
+                          }
                           const prebPaid = isPrebPaid(g, sv)
                           const val = svCell(g, sv)
                           if (prebPaid) {
@@ -1003,7 +1069,7 @@ function IncassiTab({ data, loading, onRefresh }) {
                           }
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? (isQty ? val : `€${val}`) : '—'}</td>
                         })}
-                        <td style={{ ...tdStyle, fontWeight: 700, color: tot > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>{tot > 0 ? (isQty ? tot : `€${tot}`) : '—'}</td>
+                        <td style={{ ...tdStyle, fontWeight: 700, ...(isPct ? pctStyle(rowPct(g)) : { color: tot > 0 ? 'var(--iv-blue)' : 'var(--text-tertiary)' }) }}>{isPct ? fmtPct(rowPct(g)) : (tot > 0 ? (isQty ? tot : `€${tot}`) : '—')}</td>
                       </tr>
                     )
                   })
@@ -1012,8 +1078,8 @@ function IncassiTab({ data, loading, onRefresh }) {
                     <tr key={`sub-${destId}-${sNum}`} style={subtotalStyle}>
                       <td style={{ ...tdLeftStyle, ...subtotalStyle }}>Subtotale {shiftLabel(destId, Number(sNum))}</td>
                       <td style={{ ...tdStyle, ...subtotalStyle }}>{sGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>{isQty ? colTotal(sGroups, sv) : `€${colTotal(sGroups, sv)}`}</td>)}
-                      <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>{isQty ? grandTotal(sGroups) : `€${grandTotal(sGroups)}`}</td>
+                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, ...subtotalStyle }}>{isPct ? fmtPct(colPct(sGroups, sv)) : isQty ? colTotal(sGroups, sv) : `€${colTotal(sGroups, sv)}`}</td>)}
+                      <td style={{ ...tdStyle, ...subtotalStyle, color: 'var(--iv-blue)' }}>{isPct ? fmtPct(grandPct(sGroups)) : isQty ? grandTotal(sGroups) : `€${grandTotal(sGroups)}`}</td>
                     </tr>
                   )
                 })
@@ -1024,8 +1090,8 @@ function IncassiTab({ data, loading, onRefresh }) {
                     <tr key={`dest-${destId}`} style={{ background: destColor + '20' }}>
                       <td style={{ ...tdLeftStyle, background: 'transparent', color: destColor, fontWeight: 800 }}>TOTALE {dest?.name?.toUpperCase()}</td>
                       <td style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{allDestGroups.reduce((t, g) => t + (g.num_partecipanti || 0), 0)}</td>
-                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{isQty ? colTotal(allDestGroups, sv) : `€${colTotal(allDestGroups, sv)}`}</td>)}
-                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>{isQty ? grandTotal(allDestGroups) : `€${grandTotal(allDestGroups)}`}</td>
+                      {SV && SV.map(sv => <td key={sv.id} style={{ ...tdStyle, background: 'transparent', fontWeight: 700 }}>{isPct ? fmtPct(colPct(allDestGroups, sv)) : isQty ? colTotal(allDestGroups, sv) : `€${colTotal(allDestGroups, sv)}`}</td>)}
+                      <td style={{ ...tdStyle, background: 'transparent', fontWeight: 800, color: destColor }}>{isPct ? fmtPct(grandPct(allDestGroups)) : isQty ? grandTotal(allDestGroups) : `€${grandTotal(allDestGroups)}`}</td>
                     </tr>
                   )
                 }
