@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PaxContentTab from '../components/PaxContentTab'
-import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft } from 'lucide-react'
+import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { sendCassaToSheet } from '../lib/sheetsSync'
@@ -1405,6 +1405,8 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
+  const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
+  const [searchCapo, setSearchCapo] = useState('')
   const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
   const [triedSave, setTriedSave] = useState(false)
@@ -1478,7 +1480,17 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     load()
   }
 
-  const movVisibili = movimenti.filter(m => filtroMetodo === 'Tutti' || (m.metodo || 'Cash') === filtroMetodo)
+  const categoriePresenti = [...new Set(movimenti.map(m => m.categoria).filter(Boolean))]
+  const movVisibili = movimenti.filter(m => {
+    if (filtroMetodo !== 'Tutti' && (m.metodo || 'Cash') !== filtroMetodo) return false
+    if (filtroCategoria !== 'Tutte' && m.categoria !== filtroCategoria) return false
+    if (searchCapo.trim()) {
+      const q = searchCapo.trim().toLowerCase()
+      const hay = `${m.descrizione || ''} ${m.categoria || ''} ${m.inserito_da || ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
+    return true
+  })
   const totEntrate = movVisibili.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
   const totUscite = movVisibili.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
 
@@ -1511,6 +1523,13 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         </button>
       )}
 
+      {/* Ricerca per capogruppo / codice / descrizione */}
+      <div className="search-bar">
+        <Search size={15} color="var(--text-tertiary)" />
+        <input placeholder="Cerca capogruppo, codice o descrizione..." value={searchCapo} onChange={e => setSearchCapo(e.target.value)} />
+        {searchCapo && <button onClick={() => setSearchCapo('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
+      </div>
+
       {/* Filtro metodo di pagamento */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
         {['Tutti', ...METODI].map(mt => {
@@ -1526,11 +1545,21 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         })}
       </div>
 
+      {/* Filtro categoria */}
+      {categoriePresenti.length > 0 && (
+        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+          <button onClick={() => setFiltroCategoria('Tutte')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte le categorie</button>
+          {categoriePresenti.map(cat => (
+            <button key={cat} onClick={() => setFiltroCategoria(cat)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === cat ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--border)') }}>{cat}</button>
+          ))}
+        </div>
+      )}
+
       <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : movVisibili.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento{filtroMetodo !== 'Tutti' ? ' con ' + filtroMetodo : ' per questo turno'}</div>
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || searchCapo ? ' con questi filtri' : ' per questo turno'}</div>
         ) : movVisibili.map((m, i) => {
           const isEntrata = m.tipo === 'entrata'
           const dataFmt = new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })
