@@ -69,7 +69,7 @@ export default function GroupDetail() {
     setGroup(prev => ({ ...prev, [serviceId]: newVal }))
     enqueueUpdate('groups', { id: groupId }, { [serviceId]: newVal }, {
       dedupKey: `groups:${groupId}:${serviceId}`,
-      sheet: [sheetPayload(serviceId, newVal ? participants.length : 0)],
+      sheet: [sheetPayload(serviceId, newVal ? participants.filter(p => p.attivo !== false).length : 0)],
     })
   }
 

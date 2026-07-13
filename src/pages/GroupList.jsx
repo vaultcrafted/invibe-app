@@ -49,7 +49,7 @@ export default function GroupList() {
     setLoading(true)
     const { data } = await supabase
       .from('groups')
-      .select('*, participants(id, nome, cognome, sesso, nascita)')
+      .select('*, participants(id, nome, cognome, sesso, nascita, attivo)')
       .eq('destination', destId)
       .eq('shift_num', parseInt(shiftNum))
       .order('capogruppo_display')
@@ -83,9 +83,10 @@ export default function GroupList() {
   if (!dest || !shift) return <div className="loading-screen"><p>Turno non trovato.</p></div>
 
   // Conteggi sui gruppi attualmente visibili (rispettano ricerca + filtro servizio)
-  const fPeople = filtered.reduce((s, g) => s + (g.participants?.length || 0), 0)
-  const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'M').length || 0), 0)
-  const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.sesso === 'F').length || 0), 0)
+  // Esclude i partecipanti rimossi (attivo=false): non devono comparire in nessun conteggio.
+  const fPeople = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false).length || 0), 0)
+  const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && p.sesso === 'M').length || 0), 0)
+  const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && p.sesso === 'F').length || 0), 0)
 
   // Quantità EFFETTIVA di un servizio per un gruppo:
   // - se pagato in prebooking (escursioni sempre, SSP bonifico) -> quantità prenotata (o confermata per escursioni)
@@ -236,7 +237,7 @@ function chipStyle(active, color, bgActive) {
 }
 
 function GroupCard({ group, onClick }) {
-  const participants = group.participants || []
+  const participants = (group.participants || []).filter(p => p.attivo !== false)
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
   const initials = getInitials(group.capogruppo_display)
