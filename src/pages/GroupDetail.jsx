@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService, isPrebookingPagato } from '../lib/constants'
-import { enqueueUpdate, enqueueInsert } from '../lib/syncQueue'
+import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
 import { sendCassaToSheet, syncToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
@@ -142,6 +142,51 @@ export default function GroupDetail() {
   // 10 pax con quel servizio e ora ne aggiunge 2, scrive un movimento di soli +2 (datato oggi),
   // lasciando intatto il movimento storico dei 10 (datato quando erano stati inseriti).
   // "servizi_cassa" sul gruppo tiene lo snapshot di cosa è già stato registrato: { [serviceId]: { qty, metodo } }.
+  // Riduce/rimuove i movimenti già registrati per un servizio/metodo di un TOT di quantità,
+  // partendo dal più recente (LIFO): se avevo messo 10 e poi portato a 12, togliendo di nuovo
+  // 2 correggo/cancello il movimento dei +2 appena inserito, lasciando intatto l'originale da 10.
+  // Corregge il movimento ESISTENTE (stessa data) invece di aggiungere una nuova riga di uscita.
+  async function reduceRegisteredAmount(serviceId, metodo, qtyToRemove, prezzo) {
+    if (qtyToRemove <= 0 || !metodo) return
+    let remaining = qtyToRemove
+    try {
+      const { data: rows } = await supabase
+        .from('cassa_movimenti')
+        .select('id, importo, descrizione, categoria, data')
+        .match({ group_id: groupId, servizio_id: serviceId, metodo, tipo: 'entrata', auto: true })
+        .order('created_at', { ascending: false })
+      for (const row of (rows || [])) {
+        if (remaining <= 0) break
+        const rowQty = Math.round((Number(row.importo) / prezzo) * 100) / 100
+        if (rowQty <= remaining + 1e-6) {
+          // Questo movimento va rimosso per intero
+          enqueueDelete('cassa_movimenti', { id: row.id })
+          sendCassaToSheet({
+            destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+            tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
+            categoria: row.categoria || '', metodo, data: row.data || '',
+          })
+          remaining -= rowQty
+        } else {
+          // Correggo per intero: sottraggo solo la parte necessaria, stessa data originale
+          const nuovoImporto = Number(row.importo) - remaining * prezzo
+          enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto })
+          sendCassaToSheet({
+            destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+            tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
+            categoria: row.categoria || '', metodo, data: row.data || '',
+          })
+          sendCassaToSheet({
+            destination: group.destination, shift_num: group.shift_num, azione: 'add',
+            tipoMov: 'entrata', importo: nuovoImporto, descrizione: row.descrizione || '',
+            categoria: row.categoria || '', metodo, data: row.data || '',
+          })
+          remaining = 0
+        }
+      }
+    } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
+  }
+
   async function syncCassaEntrata(serviceId, metodo, qty) {
     if (!canEditCassa) return
     const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
@@ -154,54 +199,39 @@ export default function GroupDetail() {
     const categoria = cassaCategoriaForService(serviceId, svc.label)
     const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
 
-    // Righe da scrivere: ogni riga è un movimento INDIPENDENTE (mai una cancellazione di storico)
-    const ops = []
-    function addOp(mov_metodo, tipoMov, importo) {
-      if (importo <= 0) return
-      ops.push({ metodo: mov_metodo, tipoMov, importo })
-    }
-
     if (rec.metodo && metodo && rec.metodo !== metodo) {
-      // Cambio di metodo: storno l'intero importo già registrato dal vecchio metodo,
-      // lo riaccredito per intero (alla nuova quantità) sul nuovo metodo. Entrambi datati oggi.
-      addOp(rec.metodo, 'uscita', rec.qty * prezzo)
-      addOp(metodo, 'entrata', newQty * prezzo)
+      // Cambio di metodo: tolgo per intero quanto era registrato sul vecchio metodo
+      // (correggendo/cancellando i movimenti esistenti, non con un'uscita) e lo registro
+      // per intero sul nuovo metodo, datato oggi (è un evento nuovo: è cambiato come è stato pagato).
+      await reduceRegisteredAmount(serviceId, rec.metodo, rec.qty, prezzo)
+      if (newQty > 0) {
+        enqueueInsert('cassa_movimenti', {
+          destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
+          categoria, importo: newQty * prezzo, metodo, descrizione,
+          inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
+          group_id: groupId, servizio_id: serviceId, auto: true,
+        })
+        sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: newQty * prezzo, descrizione, categoria, metodo, data })
+      }
     } else if (!metodo) {
-      // Metodo tolto del tutto: storno quanto era già registrato, nessuna nuova entrata.
-      addOp(rec.metodo, 'uscita', rec.qty * prezzo)
+      // Metodo tolto del tutto: correggo/cancello quanto era già registrato, nessuna nuova entrata.
+      await reduceRegisteredAmount(serviceId, rec.metodo, rec.qty, prezzo)
     } else {
-      // Stesso metodo (o primo inserimento): scrivo solo il delta rispetto a quanto già registrato.
+      // Stesso metodo (o primo inserimento): scrivo solo il delta.
       const delta = newQty - rec.qty
-      if (delta > 0) addOp(metodo, 'entrata', delta * prezzo)
-      else if (delta < 0) addOp(metodo, 'uscita', -delta * prezzo)
-    }
-
-    for (const op of ops) {
-      enqueueInsert('cassa_movimenti', {
-        destination: group.destination,
-        shift_num: group.shift_num,
-        data,
-        tipo: op.tipoMov,
-        categoria,
-        importo: op.importo,
-        metodo: op.metodo,
-        descrizione: op.tipoMov === 'uscita' ? `${descrizione} (storno/correzione)` : descrizione,
-        inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
-        group_id: groupId,
-        servizio_id: serviceId,
-        auto: true,
-      })
-      sendCassaToSheet({
-        destination: group.destination,
-        shift_num: group.shift_num,
-        azione: 'add',
-        tipoMov: op.tipoMov,
-        importo: op.importo,
-        descrizione: op.tipoMov === 'uscita' ? `${descrizione} (storno/correzione)` : descrizione,
-        categoria,
-        metodo: op.metodo,
-        data,
-      })
+      if (delta > 0) {
+        // Aggiunta reale (successa ora): nuova riga datata oggi.
+        enqueueInsert('cassa_movimenti', {
+          destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
+          categoria, importo: delta * prezzo, metodo, descrizione,
+          inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
+          group_id: groupId, servizio_id: serviceId, auto: true,
+        })
+        sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data })
+      } else if (delta < 0) {
+        // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
+        await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
+      }
     }
 
     // Aggiorno lo snapshot di quanto è ORA registrato in cassa per questo servizio
