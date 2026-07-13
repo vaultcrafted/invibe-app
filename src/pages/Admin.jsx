@@ -943,7 +943,7 @@ function IncassiTab({ data, loading, onRefresh }) {
       {/* Filtri */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Vista:</span>
-        <button onClick={() => setViewMode('euro')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !isQty ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !isQty ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!isQty ? 'var(--iv-blue)' : 'var(--border)') }}>
+        <button onClick={() => setViewMode('euro')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: viewMode === 'euro' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: viewMode === 'euro' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (viewMode === 'euro' ? 'var(--iv-blue)' : 'var(--border)') }}>
           € Importi
         </button>
         <button onClick={() => setViewMode('quantita')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: isQty ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: isQty ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (isQty ? 'var(--iv-blue)' : 'var(--border)') }}>
