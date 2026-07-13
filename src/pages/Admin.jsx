@@ -986,7 +986,7 @@ function IncassiTab({ data, loading, onRefresh }) {
 
       {/* Legenda */}
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>6</span> = già pagato in prebooking (conteggio, non €)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>blu</span> = già pagato in prebooking (conteggio, non €)</span>
         <span>€ = incassato in meta (cassa)</span>
         {isPct && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#F0FDF4', border: '1px solid #15803D' }} /> ≥70%</span>
