@@ -85,9 +85,10 @@ export default function GroupDetail() {
       dedupKey: `groups:${groupId}:${serviceId}`,
       sheet: [sheetPayload(serviceId, qty)],
     })
-    // Se il servizio ha già un metodo, aggiorno l'importo dell'entrata in cassa (qty 0 -> la rimuove)
+    // Se il servizio ha già un metodo SINGOLO, aggiorno l'importo dell'entrata in cassa (qty 0 -> la rimuove).
+    // Se è diviso tra più metodi, non tocco nulla: le quantità per metodo si aggiustano a mano.
     const metodo = (group.servizi_metodo || {})[serviceId]
-    if (metodo) syncCassaEntrata(serviceId, metodo, qty)
+    if (metodo && typeof metodo === 'string') syncCassaEntrata(serviceId, metodo, qty)
   }
 
   // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
@@ -117,9 +118,10 @@ export default function GroupDetail() {
       }
       syncCassaEntrata(serviceId, undefined, 0)
     } else {
-      // Accendo: se c'era già un metodo memorizzato, ricreo l'entrata sulla nuova quantità
+      // Accendo: se c'era già un metodo SINGOLO memorizzato, ricreo l'entrata sulla nuova quantità.
+      // Se è diviso tra più metodi, non tocco nulla: le quantità per metodo si aggiustano a mano.
       const metodo = (group.servizi_metodo || {})[serviceId]
-      if (metodo) syncCassaEntrata(serviceId, metodo, newQty)
+      if (metodo && typeof metodo === 'string') syncCassaEntrata(serviceId, metodo, newQty)
     }
   }
 
@@ -137,7 +139,52 @@ export default function GroupDetail() {
     syncCassaEntrata(serviceId, next[serviceId], group[serviceId] || 0)
   }
 
-  // Somma quanto è REALMENTE registrato in cassa (Supabase) per un servizio/metodo di questo
+  // Attiva la "ripartizione tra più metodi" per un servizio: converte l'eventuale metodo
+  // singolo già scelto in un oggetto {metodo: qty}, senza toccare nulla in cassa (l'importo
+  // già registrato resta lo stesso, solo la forma di come lo teniamo in memoria cambia).
+  function enableSplitMetodo(serviceId) {
+    if (!canEditServizi) return
+    const cur = group.servizi_metodo || {}
+    const raw = cur[serviceId]
+    const seed = typeof raw === 'string' ? { [raw]: group[serviceId] || 0 } : (raw && typeof raw === 'object' ? raw : {})
+    const next = { ...cur, [serviceId]: seed }
+    setGroup(prev => ({ ...prev, servizi_metodo: next }))
+    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+  }
+
+  // Annulla la ripartizione: toglie il metodo dal servizio e rimuove dalla cassa tutto quanto
+  // era stato registrato sotto qualsiasi metodo per quel servizio (si riparte da zero).
+  async function clearSplitMetodo(serviceId) {
+    if (!canEditServizi) return
+    if (!window.confirm('Annullare la ripartizione tra più metodi? Tutti gli incassi già registrati in cassa per questo servizio verranno rimossi (potrai reinserirli).')) return
+    const cur = group.servizi_metodo || {}
+    const next = { ...cur }; delete next[serviceId]
+    setGroup(prev => ({ ...prev, servizi_metodo: next }))
+    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    if (canEditCassa) await removeAllRegistered(serviceId, null)
+  }
+
+  // Imposta quante unità di un servizio sono state pagate con UN metodo specifico, quando il
+  // servizio è "diviso" tra più metodi (es. Praja: 3 Cash + 2 Wivawallet + 2 Bonifico).
+  // Ogni metodo viene sincronizzato in cassa in modo indipendente dagli altri.
+  async function setMetodoQty(serviceId, metodo, value) {
+    if (!canEditServizi) return
+    const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
+    if (!svc) return
+    const totalQty = group[serviceId] || 0
+    const newQty = Math.max(0, Math.min(totalQty, parseInt(value, 10) || 0))
+    const cur = group.servizi_metodo || {}
+    const raw = cur[serviceId]
+    const breakdown = raw && typeof raw === 'object' ? { ...raw } : {}
+    if (newQty > 0) breakdown[metodo] = newQty
+    else delete breakdown[metodo]
+    const next = { ...cur, [serviceId]: breakdown }
+    setGroup(prev => ({ ...prev, servizi_metodo: next }))
+    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+    await syncMetodoAmount(serviceId, metodo, newQty, svc)
+  }
+
+
   // gruppo. Non ci si fida di nessuno snapshot: si legge sempre lo stato vero, così funziona
   // anche per i movimenti creati prima di questa logica (o in modi diversi).
   async function registeredQty(serviceId, metodo, prezzo) {
@@ -219,6 +266,31 @@ export default function GroupDetail() {
     } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
   }
 
+  // Sincronizza SOLO un metodo per un servizio alla quantità data (usata sia dal flusso
+  // "singolo metodo" che da quello "diviso tra più metodi", dove ogni metodo è indipendente).
+  async function syncMetodoAmount(serviceId, metodo, newQty, svc) {
+    if (!canEditCassa || !metodo) return
+    const prezzo = svc.prezzo
+    const data = new Date().toISOString().slice(0, 10)
+    const categoria = cassaCategoriaForService(serviceId, svc.label)
+    const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
+    const already = await registeredQty(serviceId, metodo, prezzo)
+    const delta = newQty - already
+    if (delta > 0.001) {
+      // Aggiunta reale (successa ora): nuova riga datata oggi.
+      enqueueInsert('cassa_movimenti', {
+        destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
+        categoria, importo: delta * prezzo, metodo, descrizione,
+        inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
+        group_id: groupId, servizio_id: serviceId, auto: true,
+      })
+      sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data })
+    } else if (delta < -0.001) {
+      // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
+      await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
+    }
+  }
+
   async function syncCassaEntrata(serviceId, metodo, qty) {
     if (!canEditCassa) return
     const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
@@ -226,12 +298,15 @@ export default function GroupDetail() {
 
     // Metodo con cui era registrato PRIMA di questa modifica (fonte di verità: servizi_metodo
     // sul gruppo, non uno snapshot separato che potrebbe non esistere per servizi più vecchi).
-    const prevMetodo = (group.servizi_metodo || {})[serviceId] || null
-    const prezzo = svc.prezzo
+    // Se era diviso tra più metodi (oggetto), non c'è un "metodo singolo precedente": tratto
+    // come null così la rimozione totale sotto copre comunque tutti i metodi.
+    const prevMetodoRaw = (group.servizi_metodo || {})[serviceId]
+    const prevMetodo = typeof prevMetodoRaw === 'string' ? prevMetodoRaw : null
     const newQty = qty || 0
     const data = new Date().toISOString().slice(0, 10)
     const categoria = cassaCategoriaForService(serviceId, svc.label)
     const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
+    const prezzo = svc.prezzo
 
     if (prevMetodo && metodo && prevMetodo !== metodo) {
       // Cambio di metodo: rimuovo per intero quanto era registrato sul vecchio metodo
@@ -249,26 +324,12 @@ export default function GroupDetail() {
       }
     } else if (!metodo) {
       // Servizio spento del tutto (o metodo tolto): rimuovo TUTTO quanto era registrato per
-      // questo servizio in cassa, qualsiasi sia il metodo (copre anche movimenti pre-esistenti).
+      // questo servizio in cassa, qualsiasi sia il metodo (copre anche movimenti pre-esistenti
+      // e le ripartizioni tra più metodi).
       await removeAllRegistered(serviceId, prevMetodo || null)
     } else {
-      // Stesso metodo (o primo inserimento): leggo quanto è REALMENTE già registrato e scrivo
-      // solo il delta rispetto a quello, non rispetto a uno snapshot.
-      const already = await registeredQty(serviceId, metodo, prezzo)
-      const delta = newQty - already
-      if (delta > 0.001) {
-        // Aggiunta reale (successa ora): nuova riga datata oggi.
-        enqueueInsert('cassa_movimenti', {
-          destination: group.destination, shift_num: group.shift_num, data, tipo: 'entrata',
-          categoria, importo: delta * prezzo, metodo, descrizione,
-          inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
-          group_id: groupId, servizio_id: serviceId, auto: true,
-        })
-        sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data })
-      } else if (delta < -0.001) {
-        // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
-        await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
-      }
+      // Stesso metodo (o primo inserimento): sincronizzo solo quel metodo.
+      await syncMetodoAmount(serviceId, metodo, newQty, svc)
     }
   }
 
@@ -400,11 +461,14 @@ export default function GroupDetail() {
                   const lockedPrebook = lockedEsc || lockedSspPreb   // qualsiasi servizio pagato in prebooking
                   const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
                   const shownActive = lockedPrebook ? true : active
-                  const svMetodo = (group.servizi_metodo || {})[sv.id]
-                  // Acceso ma senza metodo -> va segnalato (esclude ciò che è già pagato in prebooking)
-                  const needsMetodo = shownActive && !lockedPrebook && !svMetodo
+                  const svMetodoRaw = (group.servizi_metodo || {})[sv.id]
+                  const isSplitMetodo = !!svMetodoRaw && typeof svMetodoRaw === 'object'
+                  const metodoBreakdown = isSplitMetodo ? svMetodoRaw : (svMetodoRaw ? { [svMetodoRaw]: qty } : {})
+                  const sumMetodoBreakdown = Object.values(metodoBreakdown).reduce((s, v) => s + (Number(v) || 0), 0)
+                  // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato (esclude prebooking)
+                  const needsMetodo = shownActive && !lockedPrebook && sumMetodoBreakdown < qty
                   const locked = lockedPrebook || !canEditServizi   // bloccato se pagato prebooking o sola lettura
-                  const paidMeta = (group[sv.id] || 0) > 0
+                  const paidMeta = sumMetodoBreakdown > 0
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
                   if (prebooked && prebPagato) stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
@@ -472,21 +536,56 @@ export default function GroupDetail() {
                       {/* Metodo di pagamento — compare solo quando il servizio è attivo e NON già pagato in prebooking */}
                       {shownActive && !lockedPrebook && canEditServizi && (
                         <div style={{ padding: '0 18px 14px 18px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
-                            {METODI.map(mt => {
-                              const on = (group.servizi_metodo || {})[sv.id] === mt
-                              const c = METODO_COLORS[mt] || '#64748B'
-                              return (
-                                <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
-                              )
-                            })}
-                          </div>
-                          {needsMetodo && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '7px 10px', borderRadius: 8, background: '#FEE2E2', color: '#991B1B', fontSize: 11.5, fontWeight: 600 }}>
-                              <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-                              Seleziona il metodo di pagamento, altrimenti il servizio non finisce in cassa né in rendicontazione.
-                            </div>
+                          {!isSplitMetodo ? (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: 2 }}>Pagato con</span>
+                                {METODI.map(mt => {
+                                  const on = svMetodoRaw === mt
+                                  const c = METODO_COLORS[mt] || '#64748B'
+                                  return (
+                                    <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
+                                  )
+                                })}
+                                <button onClick={() => enableSplitMetodo(sv.id)} style={{ padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: 'var(--iv-blue)', border: '1px dashed var(--iv-blue-mid)' }}>
+                                  + dividi tra più metodi
+                                </button>
+                              </div>
+                              {needsMetodo && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, padding: '7px 10px', borderRadius: 8, background: '#FEE2E2', color: '#991B1B', fontSize: 11.5, fontWeight: 600 }}>
+                                  <AlertTriangle size={14} style={{ flexShrink: 0 }} />
+                                  Seleziona il metodo di pagamento, altrimenti il servizio non finisce in cassa né in rendicontazione.
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Pagato con — diviso tra più metodi</span>
+                                <button onClick={() => clearSplitMetodo(sv.id)} style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-tertiary)', textDecoration: 'underline', cursor: 'pointer' }}>annulla ripartizione</button>
+                              </div>
+                              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                                {METODI.map(mt => {
+                                  const c = METODO_COLORS[mt] || '#64748B'
+                                  const v = metodoBreakdown[mt] || 0
+                                  return (
+                                    <div key={mt} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: v > 0 ? c : 'var(--text-tertiary)' }}>{mt}</span>
+                                      <input
+                                        type="number" min="0" max={qty}
+                                        value={v}
+                                        onChange={e => setMetodoQty(sv.id, mt, e.target.value)}
+                                        style={{ width: 54, padding: '6px 4px', borderRadius: 8, textAlign: 'center', fontSize: 13, fontWeight: 700, border: '1.5px solid ' + (v > 0 ? c : 'var(--border)'), color: v > 0 ? c : 'var(--text-primary)' }}
+                                      />
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              <div style={{ marginTop: 8, fontSize: 11.5, fontWeight: 700, color: sumMetodoBreakdown === qty ? '#15803D' : '#B91C1C' }}>
+                                Ripartito {sumMetodoBreakdown} / {qty}
+                                {sumMetodoBreakdown !== qty && (sumMetodoBreakdown < qty ? ' — mancano ancora da assegnare' : ' — hai assegnato più del totale del servizio')}
+                              </div>
+                            </>
                           )}
                         </div>
                       )}

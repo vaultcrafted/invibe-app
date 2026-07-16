@@ -1464,14 +1464,35 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         tipoMov: m.tipo, importo: m.importo, descrizione: m.descrizione || '',
         categoria: m.categoria || '', metodo: m.metodo || 'Cash', data: m.data,
       })
-      // Se il movimento era AUTOMATICO (nato dal toggle di un servizio del gruppo),
-      // spengo quel servizio nella scheda del capogruppo: quantità a 0 + rimuovo il metodo.
+      // Se il movimento era AUTOMATICO (nato dal toggle di un servizio del gruppo):
+      //  - se il servizio era diviso tra più metodi, tolgo SOLO il metodo di questo
+      //    movimento dalla ripartizione, lasciando intatti gli altri metodi/quantità;
+      //  - se era un metodo singolo, spengo tutto il servizio (quantità a 0 + metodo rimosso),
+      //    comportamento di sempre.
       if (m.auto && m.group_id && m.servizio_id) {
         try {
-          const { data: g } = await supabase.from('groups').select('servizi_metodo').eq('id', m.group_id).maybeSingle()
-          const nextMetodo = { ...((g && g.servizi_metodo) || {}) }
-          delete nextMetodo[m.servizio_id]
-          await supabase.from('groups').update({ [m.servizio_id]: 0, servizi_metodo: nextMetodo }).eq('id', m.group_id)
+          const { data: g } = await supabase.from('groups').select(`servizi_metodo,${m.servizio_id}`).eq('id', m.group_id).maybeSingle()
+          const curMetodo = (g && g.servizi_metodo) || {}
+          const raw = curMetodo[m.servizio_id]
+          const nextMetodo = { ...curMetodo }
+          const updates = {}
+          if (raw && typeof raw === 'object') {
+            const breakdown = { ...raw }
+            delete breakdown[m.metodo]
+            const remaining = Object.values(breakdown).reduce((s, v) => s + (Number(v) || 0), 0)
+            if (remaining > 0) {
+              nextMetodo[m.servizio_id] = breakdown
+              // Non tocco la quantità totale del servizio: restano solo gli altri metodi già pagati.
+            } else {
+              delete nextMetodo[m.servizio_id]
+              updates[m.servizio_id] = 0
+            }
+          } else {
+            delete nextMetodo[m.servizio_id]
+            updates[m.servizio_id] = 0
+          }
+          updates.servizi_metodo = nextMetodo
+          await supabase.from('groups').update(updates).eq('id', m.group_id)
         } catch (e) {
           console.error('Spegnimento toggle servizio fallito:', e)
         }
