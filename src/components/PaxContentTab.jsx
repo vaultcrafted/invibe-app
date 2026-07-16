@@ -7,6 +7,15 @@ const DEST_COLORS = { pag: '#1E6BF1', corfu: '#059669', zante: '#D97706', gallip
 const POI_CAT = ['Alloggi', 'Spiagge', 'Locali', 'Market', 'Ristoranti', 'Farmacia', 'Ospedale', 'Altro']
 const CAT_EMOJI = { Alloggi: '🏠', Spiagge: '🏖️', Locali: '🎶', Market: '🛒', Ristoranti: '🍽️', Farmacia: '💊', Ospedale: '🏥', Altro: '📍' }
 
+// Estrae lat/lng da un link Google Maps COMPLETO (non funziona sui link abbreviati maps.app.goo.gl,
+// che non contengono le coordinate nel testo del link).
+function extractLatLng(url) {
+  if (!url) return null
+  const pats = [/@(-?\d+\.\d+),(-?\d+\.\d+)/, /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/, /[?&](?:q|ll|destination|center)=(-?\d+\.\d+),(-?\d+\.\d+)/]
+  for (const re of pats) { const m = url.match(re); if (m) return [parseFloat(m[1]), parseFloat(m[2])] }
+  return null
+}
+
 const input = { width: '100%', padding: '11px 13px', borderRadius: 10, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }
 
 function Segmented({ value, onChange, options }) {
@@ -267,7 +276,7 @@ function Programmi({ meta, col, onLog, allowedShifts }) {
 function Poi({ meta, col, onLog }) {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
-  const empty = { categoria: 'Spiagge', nome: '', descrizione: '', maps_url: '', telefono: '', foto: [] }
+  const empty = { categoria: 'Spiagge', nome: '', descrizione: '', maps_url: '', lat: '', lng: '', telefono: '', foto: [] }
   const [form, setForm] = useState(empty)
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -281,7 +290,7 @@ function Poi({ meta, col, onLog }) {
     setList(data || []); setLoading(false)
   }
   function startEdit(p) {
-    setForm({ categoria: p.categoria, nome: p.nome || '', descrizione: p.descrizione || '', maps_url: p.maps_url || '', telefono: p.telefono || '', foto: Array.isArray(p.foto) ? p.foto : [] })
+    setForm({ categoria: p.categoria, nome: p.nome || '', descrizione: p.descrizione || '', maps_url: p.maps_url || '', lat: p.lat != null ? String(p.lat) : '', lng: p.lng != null ? String(p.lng) : '', telefono: p.telefono || '', foto: Array.isArray(p.foto) ? p.foto : [] })
     setEditId(p.id); setOpen(true)
   }
   function cancelForm() { setForm(empty); setEditId(null); setOpen(false) }
@@ -307,7 +316,9 @@ function Poi({ meta, col, onLog }) {
   async function save() {
     if (!form.nome.trim()) return
     setBusy(true)
-    const payload = { categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, telefono: form.telefono || null, foto: form.foto || [] }
+    const lat = form.lat !== '' ? parseFloat(String(form.lat).replace(',', '.')) : null
+    const lng = form.lng !== '' ? parseFloat(String(form.lng).replace(',', '.')) : null
+    const payload = { categoria: form.categoria, nome: form.nome.trim(), descrizione: form.descrizione || null, maps_url: form.maps_url || null, lat: Number.isFinite(lat) ? lat : null, lng: Number.isFinite(lng) ? lng : null, telefono: form.telefono || null, foto: form.foto || [] }
     if (editId) {
       await supabase.from('pax_poi').update(payload).eq('id', editId)
       onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${form.categoria} · ${form.nome.trim()}` })
@@ -340,9 +351,28 @@ function Poi({ meta, col, onLog }) {
           </div>
           <input style={{ ...input, marginBottom: 8 }} placeholder="Nome" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
           <input style={{ ...input, marginBottom: 8 }} placeholder="Descrizione breve" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 12 }}>
-            <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => setForm(f => ({ ...f, maps_url: e.target.value }))} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+            <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => {
+              const url = e.target.value
+              setForm(f => {
+                const next = { ...f, maps_url: url }
+                // Se il link è completo (non abbreviato) contiene le coordinate: le precompilo da solo,
+                // solo se lat/lng non sono già stati inseriti a mano.
+                if (!f.lat && !f.lng) {
+                  const c = extractLatLng(url)
+                  if (c) { next.lat = String(c[0]); next.lng = String(c[1]) }
+                }
+                return next
+              })
+            }} />
             <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
+            <input style={input} placeholder="Latitudine (es. 39.6243)" value={form.lat} onChange={e => setForm(f => ({ ...f, lat: e.target.value }))} />
+            <input style={input} placeholder="Longitudine (es. 19.9217)" value={form.lng} onChange={e => setForm(f => ({ ...f, lng: e.target.value }))} />
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.4 }}>
+            Il pin sulla mappa dei pax si vede SOLO se compili latitudine/longitudine (i link Maps abbreviati tipo "maps.app.goo.gl/..." non contengono le coordinate). Per trovarle: apri il punto su Google Maps → tocca e tieni premuto sul locale → in basso compaiono le coordinate, tocca per copiarle.
           </div>
 
           {/* Foto (galleria) */}
@@ -386,7 +416,12 @@ function Poi({ meta, col, onLog }) {
               <div style={{ width: 38, height: 38, borderRadius: 11, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{CAT_EMOJI[p.categoria] || '📍'}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 10.5, fontWeight: 700, color: col, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{p.categoria}</div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>{p.nome}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {p.nome}
+                  {(p.lat == null || p.lng == null) && (
+                    <span title="Nessuna posizione: non comparirà come pin sulla mappa dei pax" style={{ fontSize: 9.5, fontWeight: 700, color: '#B45309', background: '#FEF3C7', border: '0.5px solid #FDE68A', padding: '1px 6px', borderRadius: 999 }}>senza posizione</span>
+                  )}
+                </div>
                 {p.descrizione && <div style={{ fontSize: 12, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.descrizione}</div>}
               </div>
               <button onClick={() => startEdit(p)} title="Modifica" style={{ background: 'none', border: 'none', color: col, cursor: 'pointer', flexShrink: 0, padding: 4, display: 'flex' }}>
