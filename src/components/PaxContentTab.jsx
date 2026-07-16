@@ -16,6 +16,26 @@ function extractLatLng(url) {
   return null
 }
 
+// Risolve QUALSIASI link Maps, anche quelli abbreviati (maps.app.goo.gl/xxxxx): il browser non può
+// leggere da solo dove porta un redirect di un altro sito (blocco di sicurezza), quindi passiamo da
+// un proxy pubblico che segue il redirect al posto nostro e ci restituisce l'URL finale (con le
+// coordinate). Se il link è già completo, extractLatLng lo trova subito senza bisogno del proxy.
+async function resolveMapsUrl(url) {
+  if (!url) return null
+  const direct = extractLatLng(url)
+  if (direct) return direct
+  try {
+    const proxied = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
+    const res = await fetch(proxied)
+    if (!res.ok) return null
+    const data = await res.json()
+    const finalUrl = (data && data.status && data.status.url) || ''
+    return extractLatLng(finalUrl) || extractLatLng((data && data.contents) || '')
+  } catch (e) {
+    return null
+  }
+}
+
 const input = { width: '100%', padding: '11px 13px', borderRadius: 10, border: '0.5px solid var(--border)', background: 'var(--bg-secondary)', fontSize: 14, color: 'var(--text-primary)', outline: 'none' }
 
 function Segmented({ value, onChange, options }) {
@@ -282,6 +302,8 @@ function Poi({ meta, col, onLog }) {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [editId, setEditId] = useState(null)
+  const [resolvingForm, setResolvingForm] = useState(false)
+  const [bulkResolving, setBulkResolving] = useState(null) // { done, total, falliti }
 
   useEffect(() => { load() }, [meta])
   async function load() {
@@ -338,6 +360,30 @@ function Poi({ meta, col, onLog }) {
     onLog?.('poi', 'modificato', { destination: meta, dettaglio: `${p.nome} → ${!p.attivo ? 'visibile' : 'nascosto'}` }); load()
   }
 
+  // Risolve in blocco la posizione di TUTTI i punti di questa meta che hanno un link Maps
+  // ma nessuna coordinata (anche i link abbreviati) — un click al posto di farlo uno per uno.
+  const daRisolvere = list.filter(p => p.maps_url && (p.lat == null || p.lng == null))
+  async function bulkResolveMissing() {
+    const targets = daRisolvere
+    if (targets.length === 0) return
+    setBulkResolving({ done: 0, total: targets.length, falliti: 0 })
+    let falliti = 0
+    for (let i = 0; i < targets.length; i++) {
+      const p = targets[i]
+      const coords = await resolveMapsUrl(p.maps_url)
+      if (coords) {
+        await supabase.from('pax_poi').update({ lat: coords[0], lng: coords[1] }).eq('id', p.id)
+      } else {
+        falliti++
+      }
+      setBulkResolving({ done: i + 1, total: targets.length, falliti })
+      await new Promise(r => setTimeout(r, 350)) // non bombardo il servizio di risoluzione
+    }
+    onLog?.('poi', 'modificato', { destination: meta, dettaglio: `Posizioni risolte in blocco: ${targets.length - falliti}/${targets.length}` })
+    load()
+    setTimeout(() => setBulkResolving(null), 5000)
+  }
+
   const formCard = (
         <div className="card" style={{ border: '1px solid ' + col }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>{editId ? 'Modifica punto' : "Nuovo punto d'interesse"}</div>
@@ -352,19 +398,20 @@ function Poi({ meta, col, onLog }) {
           <input style={{ ...input, marginBottom: 8 }} placeholder="Nome" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} />
           <input style={{ ...input, marginBottom: 8 }} placeholder="Descrizione breve" value={form.descrizione} onChange={e => setForm(f => ({ ...f, descrizione: e.target.value }))} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
-            <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => {
-              const url = e.target.value
-              setForm(f => {
-                const next = { ...f, maps_url: url }
-                // Se il link è completo (non abbreviato) contiene le coordinate: le precompilo da solo,
-                // solo se lat/lng non sono già stati inseriti a mano.
-                if (!f.lat && !f.lng) {
-                  const c = extractLatLng(url)
-                  if (c) { next.lat = String(c[0]); next.lng = String(c[1]) }
-                }
-                return next
-              })
-            }} />
+            <div style={{ position: 'relative' }}>
+              <input style={input} placeholder="Link Google Maps" value={form.maps_url} onChange={e => {
+                const url = e.target.value
+                setForm(f => ({ ...f, maps_url: url }))
+              }} onBlur={async e => {
+                const url = e.target.value
+                if (!url || (form.lat && form.lng)) return
+                setResolvingForm(true)
+                const coords = await resolveMapsUrl(url)
+                setResolvingForm(false)
+                if (coords) setForm(f => (f.maps_url === url ? { ...f, lat: String(coords[0]), lng: String(coords[1]) } : f))
+              }} />
+              {resolvingForm && <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 10.5, color: 'var(--text-tertiary)' }}>risolvo...</span>}
+            </div>
             <input style={input} placeholder="Telefono" value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} />
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 6 }}>
@@ -372,7 +419,7 @@ function Poi({ meta, col, onLog }) {
             <input style={input} placeholder="Longitudine (es. 19.9217)" value={form.lng} onChange={e => setForm(f => ({ ...f, lng: e.target.value }))} />
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginBottom: 12, lineHeight: 1.4 }}>
-            Il pin sulla mappa dei pax si vede SOLO se compili latitudine/longitudine (i link Maps abbreviati tipo "maps.app.goo.gl/..." non contengono le coordinate). Per trovarle: apri il punto su Google Maps → tocca e tieni premuto sul locale → in basso compaiono le coordinate, tocca per copiarle.
+            Incolla il link Maps (anche abbreviato): l'app prova a trovare da sola le coordinate quando esci dal campo. Se non ci riesce, inseriscile a mano — apri il punto su Google Maps, tieni premuto sul locale, in basso compaiono le coordinate, tocca per copiarle.
           </div>
 
           {/* Foto (galleria) */}
@@ -402,7 +449,24 @@ function Poi({ meta, col, onLog }) {
   return (
     <>
       {!open && (
-        <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setOpen(true) }} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7 }}>＋ Aggiungi punto</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+          <button className="btn-primary" onClick={() => { setForm(empty); setEditId(null); setOpen(true) }} style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 7 }}>＋ Aggiungi punto</button>
+          {daRisolvere.length > 0 && !bulkResolving && (
+            <button onClick={bulkResolveMissing} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '10px 14px', borderRadius: 10, fontSize: 13, fontWeight: 700, background: 'var(--bg-secondary)', color: col, border: '0.5px solid ' + col }}>
+              📍 Trova posizione automatica ({daRisolvere.length} mancanti)
+            </button>
+          )}
+        </div>
+      )}
+      {bulkResolving && (
+        <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '10px 13px', marginBottom: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {bulkResolving.done < bulkResolving.total
+            ? `Risolvo le posizioni... ${bulkResolving.done}/${bulkResolving.total}`
+            : `Fatto: ${bulkResolving.total - bulkResolving.falliti}/${bulkResolving.total} risolti automaticamente${bulkResolving.falliti > 0 ? ` — ${bulkResolving.falliti} da inserire a mano (link non risolvibile)` : ''}`}
+          <div style={{ height: 4, borderRadius: 4, background: 'var(--border)', marginTop: 7, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(bulkResolving.done / bulkResolving.total) * 100}%`, background: col, transition: 'width .2s' }} />
+          </div>
+        </div>
       )}
 
       {open && !editId && formCard}
