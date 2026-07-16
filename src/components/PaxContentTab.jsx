@@ -16,17 +16,33 @@ function extractLatLng(url) {
   return null
 }
 
+async function fetchTimeout(url, opts, ms) {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), ms)
+  try { return await fetch(url, { ...opts, signal: ctrl.signal }) }
+  finally { clearTimeout(t) }
+}
+
 // Risolve QUALSIASI link Maps, anche quelli abbreviati (maps.app.goo.gl/xxxxx): il browser non può
-// leggere da solo dove porta un redirect di un altro sito (blocco di sicurezza), quindi passiamo da
-// un proxy pubblico che segue il redirect al posto nostro e ci restituisce l'URL finale (con le
-// coordinate). Se il link è già completo, extractLatLng lo trova subito senza bisogno del proxy.
+// leggere da solo dove porta un redirect di un altro sito (blocco di sicurezza), quindi ci serve
+// qualcuno che lo faccia al posto nostro. Prova PRIMA la funzione server-side su Supabase (affidabile,
+// nessun limite del browser); se non è ancora stata attivata, usa come ripiego un proxy pubblico.
+// Ogni tentativo ha un timeout: non resta mai bloccata a lungo, nemmeno se il servizio è giù.
 async function resolveMapsUrl(url) {
   if (!url) return null
   const direct = extractLatLng(url)
   if (direct) return direct
+
+  // 1) Funzione Supabase dedicata (vedi migrazione/istruzioni: Edge Function "resolve-maps-url")
+  try {
+    const { data, error } = await supabase.functions.invoke('resolve-maps-url', { body: { url } })
+    if (!error && data && data.lat != null && data.lng != null) return [data.lat, data.lng]
+  } catch (e) { /* funzione non ancora attiva o offline: provo il ripiego */ }
+
+  // 2) Ripiego: proxy pubblico (più lento e meno affidabile, ma non richiede setup)
   try {
     const proxied = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`
-    const res = await fetch(proxied)
+    const res = await fetchTimeout(proxied, {}, 8000)
     if (!res.ok) return null
     const data = await res.json()
     const finalUrl = (data && data.status && data.status.url) || ''
@@ -304,6 +320,7 @@ function Poi({ meta, col, onLog }) {
   const [editId, setEditId] = useState(null)
   const [resolvingForm, setResolvingForm] = useState(false)
   const [bulkResolving, setBulkResolving] = useState(null) // { done, total, falliti }
+  const stopBulkRef = useRef(false)
 
   useEffect(() => { load() }, [meta])
   async function load() {
@@ -366,9 +383,11 @@ function Poi({ meta, col, onLog }) {
   async function bulkResolveMissing() {
     const targets = daRisolvere
     if (targets.length === 0) return
+    stopBulkRef.current = false
     setBulkResolving({ done: 0, total: targets.length, falliti: 0 })
     let falliti = 0
     for (let i = 0; i < targets.length; i++) {
+      if (stopBulkRef.current) break
       const p = targets[i]
       const coords = await resolveMapsUrl(p.maps_url)
       if (coords) {
@@ -377,11 +396,11 @@ function Poi({ meta, col, onLog }) {
         falliti++
       }
       setBulkResolving({ done: i + 1, total: targets.length, falliti })
-      await new Promise(r => setTimeout(r, 350)) // non bombardo il servizio di risoluzione
+      await new Promise(r => setTimeout(r, 200)) // non bombardo il servizio di risoluzione
     }
     onLog?.('poi', 'modificato', { destination: meta, dettaglio: `Posizioni risolte in blocco: ${targets.length - falliti}/${targets.length}` })
     load()
-    setTimeout(() => setBulkResolving(null), 5000)
+    setTimeout(() => setBulkResolving(null), 6000)
   }
 
   const formCard = (
@@ -460,9 +479,16 @@ function Poi({ meta, col, onLog }) {
       )}
       {bulkResolving && (
         <div style={{ background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '10px 13px', marginBottom: 4, fontSize: 12.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
-          {bulkResolving.done < bulkResolving.total
-            ? `Risolvo le posizioni... ${bulkResolving.done}/${bulkResolving.total}`
-            : `Fatto: ${bulkResolving.total - bulkResolving.falliti}/${bulkResolving.total} risolti automaticamente${bulkResolving.falliti > 0 ? ` — ${bulkResolving.falliti} da inserire a mano (link non risolvibile)` : ''}`}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+            <span>
+              {bulkResolving.done < bulkResolving.total
+                ? `Risolvo le posizioni... ${bulkResolving.done}/${bulkResolving.total}`
+                : `Fatto: ${bulkResolving.total - bulkResolving.falliti}/${bulkResolving.total} risolti automaticamente${bulkResolving.falliti > 0 ? ` — ${bulkResolving.falliti} da inserire a mano (link non risolvibile)` : ''}`}
+            </span>
+            {bulkResolving.done < bulkResolving.total && (
+              <button onClick={() => { stopBulkRef.current = true }} style={{ fontSize: 11, fontWeight: 700, color: '#B91C1C', background: '#FEF2F2', border: '0.5px solid #FCA5A5', padding: '4px 10px', borderRadius: 999, flexShrink: 0 }}>Ferma</button>
+            )}
+          </div>
           <div style={{ height: 4, borderRadius: 4, background: 'var(--border)', marginTop: 7, overflow: 'hidden' }}>
             <div style={{ height: '100%', width: `${(bulkResolving.done / bulkResolving.total) * 100}%`, background: col, transition: 'width .2s' }} />
           </div>
