@@ -229,6 +229,11 @@ export default function Cassa() {
             <span>↓ Entrate €{totaleEntrate.toFixed(2)}</span>
             <span>↑ Uscite €{totaleUscite.toFixed(2)}</span>
           </div>
+          <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, opacity: 0.85 }}>
+            {movVisibili.length === movimenti.length
+              ? `${movimenti.length} movimenti totali`
+              : `${movVisibili.length} movimenti su ${movimenti.length} totali (con questi filtri)`}
+          </div>
         </div>
       </div>
 

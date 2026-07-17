@@ -1538,6 +1538,12 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         </div>
       </div>
 
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-tertiary)' }}>
+        {movVisibili.length === movimenti.length
+          ? `${movimenti.length} movimenti totali`
+          : `${movVisibili.length} movimenti su ${movimenti.length} totali (con questi filtri)`}
+      </div>
+
       {canEditCassa && (
         <button onClick={openForm} style={{ padding: '12px', borderRadius: 12, background: 'var(--iv-blue)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', width: 'fit-content', paddingLeft: 20, paddingRight: 20 }}>
           <Plus size={16} /> Nuovo movimento
