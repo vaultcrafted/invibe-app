@@ -456,22 +456,27 @@ export default function GroupDetail() {
                   const prebPagato = isPrebookingPagato(sv.id, group.destination, group.shift_num)
                   const prebEsc = isEsc ? (prebooked || 0) : 0
                   const lockedEsc = prebEsc > 0                       // escursioni: bloccate, con conteggio confermabile
-                  // SSP (o altri) prenotati E pagati in prebooking (turni bonifico): bloccati e NON modificabili
-                  const lockedSspPreb = !isEsc && prebPagato && (prebooked || 0) > 0
-                  const lockedPrebook = lockedEsc || lockedSspPreb   // qualsiasi servizio pagato in prebooking
+                  // SSP (o altri) prenotati E pagati in prebooking (turni bonifico): la parte prenotata resta
+                  // protetta (badge "prenotate N · Prebooking pagato", non modificabile), ma il gruppo può comunque
+                  // acquistarne ALTRE in meta — lo stepper/metodo sotto gestiscono SOLO questa quantità extra,
+                  // che si somma a quella già pagata in prebooking (non la sostituisce).
+                  const prebPagatoNonEsc = !isEsc && prebPagato && (prebooked || 0) > 0
+                  const lockedPrebook = lockedEsc   // solo le escursioni restano completamente bloccate
                   const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
-                  const shownActive = lockedPrebook ? true : active
+                  const shownActive = lockedPrebook ? true : (active || prebPagatoNonEsc)
                   const svMetodoRaw = (group.servizi_metodo || {})[sv.id]
                   const isSplitMetodo = !!svMetodoRaw && typeof svMetodoRaw === 'object'
                   const metodoBreakdown = isSplitMetodo ? svMetodoRaw : (svMetodoRaw ? { [svMetodoRaw]: qty } : {})
                   const sumMetodoBreakdown = Object.values(metodoBreakdown).reduce((s, v) => s + (Number(v) || 0), 0)
-                  // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato (esclude prebooking)
-                  const needsMetodo = shownActive && !lockedPrebook && sumMetodoBreakdown < qty
-                  const locked = lockedPrebook || !canEditServizi   // bloccato se pagato prebooking o sola lettura
+                  // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato (esclude escursioni; per la
+                  // quota extra oltre al prebooking scatta solo se c'è davvero qty extra da incassare)
+                  const needsMetodo = shownActive && !lockedPrebook && qty > 0 && sumMetodoBreakdown < qty
+                  const locked = lockedPrebook || !canEditServizi   // bloccato se escursioni pagate in prebooking o sola lettura
                   const paidMeta = sumMetodoBreakdown > 0
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
-                  if (prebooked && prebPagato) stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
+                  if (prebooked && prebPagato && paidMeta) stato = { label: 'Prebooking + extra incassato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
+                  else if (prebooked && prebPagato) stato = { label: 'Prebooking pagato', c: 'var(--iv-blue)', bg: 'var(--iv-blue-light)', bd: 'var(--iv-blue-mid)' }
                   else if (paidMeta)   stato = { label: 'Incassato', c: '#15803D', bg: '#DCFCE7', bd: '#BBF7D0' }
                   else if (prebooked)  stato = { label: 'Da incassare', c: '#B91C1C', bg: '#FEE2E2', bd: '#FECACA' }
                   else                 stato = { label: 'Assente', c: '#64748B', bg: '#F1F5F9', bd: '#E2E8F0' }
@@ -494,9 +499,14 @@ export default function GroupDetail() {
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap', background: stato.bg, color: stato.c, border: '0.5px solid ' + stato.bd }}>{stato.label}</span>
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                          {lockedPrebook
-                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>{lockedEsc ? 'Già pagate in prebooking' : 'Già pagato in prebooking'}</span>
-                            : <>€{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span></>}
+                          {prebPagatoNonEsc && <span style={{ color: '#16A34A', fontWeight: 600 }}>{prebooked} già pagato in prebooking</span>}
+                          {lockedEsc
+                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>Già pagate in prebooking</span>
+                            : <>
+                                {prebPagatoNonEsc && <span> · </span>}
+                                {prebPagatoNonEsc && <span>extra: </span>}
+                                €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
+                              </>}
                           {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
                         </div>
                       </div>
@@ -509,14 +519,6 @@ export default function GroupDetail() {
                           onChange={e => setGroup(prev => ({ ...prev, escursioni_conf: Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, prebEsc)) }))}
                           onBlur={saveEscConf}
                           style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
-                        />
-                      ) : lockedSspPreb ? (
-                        <input
-                          type="number"
-                          value={prebooked || 0}
-                          disabled readOnly
-                          title="Pagato in prebooking — non modificabile"
-                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: 0.6, background: 'var(--bg-secondary)', cursor: 'not-allowed' }}
                         />
                       ) : (
                         <input
@@ -533,9 +535,10 @@ export default function GroupDetail() {
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                       </div>
-                      {/* Metodo di pagamento — compare solo quando il servizio è attivo e NON già pagato in prebooking */}
-                      {shownActive && !lockedPrebook && canEditServizi && (
+                      {/* Metodo di pagamento — compare quando c'è una quantità (extra, oltre l'eventuale prebooking) da incassare */}
+                      {shownActive && !lockedPrebook && qty > 0 && canEditServizi && (
                         <div style={{ padding: '0 18px 14px 18px' }}>
+                          {prebPagatoNonEsc && <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginBottom: 6 }}>Metodo per le {qty} unità extra acquistate in meta (oltre alle {prebooked} già pagate in prebooking)</div>}
                           {!isSplitMetodo ? (
                             <>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
