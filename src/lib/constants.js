@@ -218,7 +218,7 @@ export const SHEET_SERVIZIO_MAP = {
   qta_pranzo_laviron: 'Pranzo Lavrion',
   // Zante
   zan_escursioni: 'Escursioni in meta',
-  zan_boat: 'SSP',
+  zan_boat: 'SSP in meta',
   zan_tassa_soggiorno: 'Tassa di Soggiorno',
   zan_cebu: 'Cebu',
   zan_bbq: 'BBQ',
