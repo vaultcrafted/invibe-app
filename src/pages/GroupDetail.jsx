@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService, isPrebookingPagato } from '../lib/constants'
 import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
-import { sendCassaToSheet, syncToSheet } from '../lib/sheetsSync'
+import { syncToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2, AlertTriangle } from 'lucide-react'
@@ -211,12 +211,11 @@ export default function GroupDetail() {
         .select('id, importo, descrizione, categoria, data, metodo')
         .match(match)
       for (const row of (rows || [])) {
-        enqueueDelete('cassa_movimenti', { id: row.id })
-        sendCassaToSheet({
-          destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+        enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
+          __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
           tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
           categoria: row.categoria || '', metodo: row.metodo || 'Cash', data: row.data || '',
-        })
+        }] })
       }
     } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
   }
@@ -239,27 +238,27 @@ export default function GroupDetail() {
         const rowQty = Math.round((Number(row.importo) / prezzo) * 100) / 100
         if (rowQty <= remaining + 1e-6) {
           // Questo movimento va rimosso per intero
-          enqueueDelete('cassa_movimenti', { id: row.id })
-          sendCassaToSheet({
-            destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+          enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
+            __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
             tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
             categoria: row.categoria || '', metodo, data: row.data || '',
-          })
+          }] })
           remaining -= rowQty
         } else {
           // Correggo per intero: sottraggo solo la parte necessaria, stessa data originale
           const nuovoImporto = Number(row.importo) - remaining * prezzo
-          enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto })
-          sendCassaToSheet({
-            destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
-            tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
-            categoria: row.categoria || '', metodo, data: row.data || '',
-          })
-          sendCassaToSheet({
-            destination: group.destination, shift_num: group.shift_num, azione: 'add',
-            tipoMov: 'entrata', importo: nuovoImporto, descrizione: row.descrizione || '',
-            categoria: row.categoria || '', metodo, data: row.data || '',
-          })
+          enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto }, { sheet: [
+            {
+              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+              tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
+              categoria: row.categoria || '', metodo, data: row.data || '',
+            },
+            {
+              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add',
+              tipoMov: 'entrata', importo: nuovoImporto, descrizione: row.descrizione || '',
+              categoria: row.categoria || '', metodo, data: row.data || '',
+            },
+          ] })
           remaining = 0
         }
       }
@@ -283,8 +282,7 @@ export default function GroupDetail() {
         categoria, importo: delta * prezzo, metodo, descrizione,
         inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
         group_id: groupId, servizio_id: serviceId, auto: true,
-      })
-      sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data })
+      }, { sheet: [{ __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data }] })
     } else if (delta < -0.001) {
       // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
       await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
@@ -319,8 +317,7 @@ export default function GroupDetail() {
           categoria, importo: newQty * prezzo, metodo, descrizione,
           inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
           group_id: groupId, servizio_id: serviceId, auto: true,
-        })
-        sendCassaToSheet({ destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: newQty * prezzo, descrizione, categoria, metodo, data })
+        }, { sheet: [{ __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: newQty * prezzo, descrizione, categoria, metodo, data }] })
       }
     } else if (!metodo) {
       // Servizio spento del tutto (o metodo tolto): rimuovo TUTTO quanto era registrato per
@@ -346,6 +343,7 @@ export default function GroupDetail() {
     const newNPax = updated.filter(p => p.attivo !== false).length
     // Scrive il Pax aggiornato (persone presenti) sul foglio rendicontazione
     syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: 'num_pax', quantita: newNPax })
+      .catch(err => console.warn('Sync pax sul foglio fallito:', err?.message || err))
     // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
     const svc = getServices(group.destination, group.shift_num)
     svc.forEach(sv => {

@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { syncToSheet } from './sheetsSync'
+import { syncToSheet, sendCassaToSheet } from './sheetsSync'
 
 // Coda di scritture offline.
 // - Le scritture vengono accodate e applicate subito se c'è rete (comportamento identico a prima).
@@ -54,15 +54,16 @@ export function enqueueUpdate(table, match, payload, opts = {}) {
   return op.id
 }
 
-export function enqueueInsert(table, row) {
-  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet: null, ts: Date.now() }
+// INSERT. sheet = array di payload per syncToSheet (opzionale, stesso meccanismo di retry di enqueueUpdate).
+export function enqueueInsert(table, row, opts = {}) {
+  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet: opts.sheet || null, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
 }
 
-export function enqueueDelete(table, match) {
-  const op = { id: uid(), type: 'delete', table, match, dedupKey: null, sheet: null, ts: Date.now() }
+export function enqueueDelete(table, match, opts = {}) {
+  const op = { id: uid(), type: 'delete', table, match, dedupKey: null, sheet: opts.sheet || null, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
@@ -88,19 +89,65 @@ export async function flush() {
       if (!q.length) break
       const op = q[0]
       try {
-        if (op.type === 'update') {
-          const { error } = await supabase.from(op.table).update(op.payload).match(op.match)
-          if (error) throw error
-        } else if (op.type === 'insert') {
-          const { error } = await supabase.from(op.table).insert(op.payload)
-          if (error) throw error
-        } else if (op.type === 'delete') {
-          const { error } = await supabase.from(op.table).delete().match(op.match)
-          if (error) throw error
-        }
-        if (op.sheet) {
-          if (typeof navigator !== 'undefined' && !navigator.onLine) throw new Error('offline prima del sync foglio')
-          for (const s of op.sheet) { await syncToSheet(s) }
+        if (op.type === 'sheet-retry') {
+          // Riprova solo il sync foglio di un'operazione DB già andata a buon fine in precedenza.
+          // Non deve MAI bloccare la coda: se fallisce ancora, si riaccoda da solo (fino al tetto).
+          try {
+            for (const s of op.sheet) {
+              if (s && s.__kind === 'cassa') await sendCassaToSheet(s)
+              else await syncToSheet(s)
+            }
+          } catch (sheetErr) {
+            console.warn('Retry sync foglio fallito ancora:', sheetErr?.message || sheetErr)
+            const retryCount = (op.sheetRetryCount || 0) + 1
+            if (retryCount <= 5) {
+              const cur = load()
+              cur.push({ id: uid(), type: 'sheet-retry', sheet: op.sheet, sheetRetryCount: retryCount, dedupKey: null, ts: Date.now() })
+              persist(cur)
+            } else {
+              console.error('Sync foglio abbandonato dopo troppi tentativi:', op.sheet)
+            }
+          }
+        } else {
+          if (op.type === 'update') {
+            const { error } = await supabase.from(op.table).update(op.payload).match(op.match)
+            if (error) throw error
+          } else if (op.type === 'insert') {
+            const { error } = await supabase.from(op.table).insert(op.payload)
+            if (error) throw error
+          } else if (op.type === 'delete') {
+            const { error } = await supabase.from(op.table).delete().match(op.match)
+            if (error) throw error
+          }
+          // Il salvataggio su Supabase (fonte di verità) è andato a buon fine: da qui in poi
+          // un eventuale fallimento riguarda SOLO il foglio Google, e non deve bloccare le
+          // altre operazioni in coda (altrimenti un foglio irraggiungibile ferma tutta l'app),
+          // né far ripetere la scrittura DB già riuscita (che duplicherebbe l'inserimento).
+          if (op.sheet) {
+            const offline = typeof navigator !== 'undefined' && !navigator.onLine
+            let sheetOk = false
+            if (!offline) {
+              try {
+                for (const s of op.sheet) {
+                  if (s && s.__kind === 'cassa') await sendCassaToSheet(s)
+                  else await syncToSheet(s)
+                }
+                sheetOk = true
+              } catch (sheetErr) {
+                console.warn('Sync foglio fallito, riprovo più tardi (non blocca il resto):', sheetErr?.message || sheetErr)
+              }
+            }
+            if (!sheetOk) {
+              const retryCount = (op.sheetRetryCount || 0) + 1
+              if (retryCount <= 5) {
+                const cur = load()
+                cur.push({ id: uid(), type: 'sheet-retry', sheet: op.sheet, sheetRetryCount: retryCount, dedupKey: null, ts: Date.now() })
+                persist(cur)
+              } else {
+                console.error('Sync foglio abbandonato dopo troppi tentativi:', op.sheet)
+              }
+            }
+          }
         }
         // rimuovo l'op svolta (ricarico, potrebbe essere cambiata nel frattempo)
         const cur = load()
@@ -108,7 +155,7 @@ export async function flush() {
         if (idx >= 0) { cur.splice(idx, 1); persist(cur) }
         else persist(cur) // op già rimossa (collasso): ricalcolo stato
       } catch (e) {
-        // probabile assenza di rete o errore server: mi fermo, riprovo più tardi
+        // probabile assenza di rete o errore server sul DB: mi fermo, riprovo più tardi
         console.warn('Sync in pausa, riprovo:', e?.message || e)
         break
       }

@@ -1451,7 +1451,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
       destination, shift_num: shiftNum, azione: 'add',
       tipoMov: form.tipo, importo: amount, descrizione: form.descrizione || '',
       categoria: form.categoria || '', metodo: form.metodo || 'Cash', data: form.data,
-    })
+    }).catch(err => console.warn('Sync cassa foglio fallito:', err?.message || err))
     setShowForm(false); load()
   }
 
@@ -1463,7 +1463,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         destination, shift_num: shiftNum, azione: 'elimina',
         tipoMov: m.tipo, importo: m.importo, descrizione: m.descrizione || '',
         categoria: m.categoria || '', metodo: m.metodo || 'Cash', data: m.data,
-      })
+      }).catch(err => console.warn('Sync cassa foglio fallito:', err?.message || err))
       // Se il movimento era AUTOMATICO (nato dal toggle di un servizio del gruppo):
       //  - se il servizio era diviso tra più metodi, tolgo SOLO il metodo di questo
       //    movimento dalla ripartizione, lasciando intatti gli altri metodi/quantità;
