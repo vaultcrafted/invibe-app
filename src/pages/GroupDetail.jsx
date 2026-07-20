@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService, isPrebookingPagato } from '../lib/constants'
@@ -43,6 +43,24 @@ export default function GroupDetail() {
   const [participants, setParticipants] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(null)
+  // Blocca doppie esecuzioni concorrenti (doppio tap, o un secondo tentativo mentre il primo
+  // sta ancora salvando con rete lenta) sulla STESSA azione cassa — altrimenti partono due
+  // scritture identiche in cassa per un singolo tocco.
+  const pendingActionsRef = useRef(new Set())
+  const [pendingKeys, setPendingKeys] = useState(() => new Set())
+  function withActionLock(key, fn) {
+    return async (...args) => {
+      if (pendingActionsRef.current.has(key)) return // già in corso: ignoro il doppione
+      pendingActionsRef.current.add(key)
+      setPendingKeys(new Set(pendingActionsRef.current))
+      try {
+        await fn(...args)
+      } finally {
+        pendingActionsRef.current.delete(key)
+        setPendingKeys(new Set(pendingActionsRef.current))
+      }
+    }
+  }
   const [editingAlloggio, setEditingAlloggio] = useState(false)
   const [editingNote, setEditingNote] = useState(false)
   const [expandedId, setExpandedId] = useState(null)
@@ -80,6 +98,10 @@ export default function GroupDetail() {
 
   async function saveQtaService(serviceId) {
     if (!canEditServizi) return
+    const key = `toggle:${serviceId}` // stessa chiave del toggle: sono la stessa "azione" sul servizio
+    if (pendingActionsRef.current.has(key)) return // doppio tap / doppia chiamata: ignoro
+    pendingActionsRef.current.add(key); setPendingKeys(new Set(pendingActionsRef.current))
+    try {
     const qty = group[serviceId] || 0
     enqueueUpdate('groups', { id: groupId }, { [serviceId]: qty }, {
       dedupKey: `groups:${groupId}:${serviceId}`,
@@ -88,7 +110,10 @@ export default function GroupDetail() {
     // Se il servizio ha già un metodo SINGOLO, aggiorno l'importo dell'entrata in cassa (qty 0 -> la rimuove).
     // Se è diviso tra più metodi, non tocco nulla: le quantità per metodo si aggiustano a mano.
     const metodo = (group.servizi_metodo || {})[serviceId]
-    if (metodo && typeof metodo === 'string') syncCassaEntrata(serviceId, metodo, qty)
+    if (metodo && typeof metodo === 'string') await syncCassaEntrata(serviceId, metodo, qty)
+    } finally {
+      pendingActionsRef.current.delete(key); setPendingKeys(new Set(pendingActionsRef.current))
+    }
   }
 
   // Conferma escursioni prenotate (già pagate in prebooking): NON va in rendicontazione (nessun sheet).
@@ -102,6 +127,10 @@ export default function GroupDetail() {
 
   async function toggleQtaService(serviceId) {
     if (!canEditServizi) return
+    const key = `toggle:${serviceId}`
+    if (pendingActionsRef.current.has(key)) return // doppio tap / doppia chiamata: ignoro
+    pendingActionsRef.current.add(key); setPendingKeys(new Set(pendingActionsRef.current))
+    try {
     const current = group[serviceId] || 0
     const newQty = current > 0 ? 0 : participants.filter(p => p.attivo !== false).length
     setGroup(prev => ({ ...prev, [serviceId]: newQty }))
@@ -116,12 +145,15 @@ export default function GroupDetail() {
         setGroup(prev => ({ ...prev, servizi_metodo: next }))
         enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
       }
-      syncCassaEntrata(serviceId, undefined, 0)
+      await syncCassaEntrata(serviceId, undefined, 0)
     } else {
       // Accendo: se c'era già un metodo SINGOLO memorizzato, ricreo l'entrata sulla nuova quantità.
       // Se è diviso tra più metodi, non tocco nulla: le quantità per metodo si aggiustano a mano.
       const metodo = (group.servizi_metodo || {})[serviceId]
-      if (metodo && typeof metodo === 'string') syncCassaEntrata(serviceId, metodo, newQty)
+      if (metodo && typeof metodo === 'string') await syncCassaEntrata(serviceId, metodo, newQty)
+    }
+    } finally {
+      pendingActionsRef.current.delete(key); setPendingKeys(new Set(pendingActionsRef.current))
     }
   }
 
@@ -129,6 +161,9 @@ export default function GroupDetail() {
   // Ritap sullo stesso metodo = deseleziona.
   function setMetodo(serviceId, metodo) {
     if (!canEditServizi) return
+    const key = `metodo:${serviceId}`
+    if (pendingActionsRef.current.has(key)) return // doppio tap / doppia chiamata: ignoro
+    pendingActionsRef.current.add(key); setPendingKeys(new Set(pendingActionsRef.current))
     const cur = group.servizi_metodo || {}
     const next = { ...cur }
     if (cur[serviceId] === metodo) delete next[serviceId]
@@ -137,6 +172,7 @@ export default function GroupDetail() {
     enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
     // Entrata automatica in cassa col metodo scelto (undefined = deselezionato -> rimuove)
     syncCassaEntrata(serviceId, next[serviceId], group[serviceId] || 0)
+      .finally(() => { pendingActionsRef.current.delete(key); setPendingKeys(new Set(pendingActionsRef.current)) })
   }
 
   // Attiva la "ripartizione tra più metodi" per un servizio: converte l'eventuale metodo
@@ -167,10 +203,9 @@ export default function GroupDetail() {
   // Imposta quante unità di un servizio sono state pagate con UN metodo specifico, quando il
   // servizio è "diviso" tra più metodi (es. Praja: 3 Cash + 2 Wivawallet + 2 Bonifico).
   // Ogni metodo viene sincronizzato in cassa in modo indipendente dagli altri.
-  async function setMetodoQty(serviceId, metodo, value) {
+  // Aggiorna solo lo stato locale (istantaneo, nessuna rete): chiamata ad ogni tasto premuto.
+  function updateMetodoQtyLocal(serviceId, metodo, value) {
     if (!canEditServizi) return
-    const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
-    if (!svc) return
     const totalQty = group[serviceId] || 0
     const newQty = Math.max(0, Math.min(totalQty, parseInt(value, 10) || 0))
     const cur = group.servizi_metodo || {}
@@ -178,10 +213,28 @@ export default function GroupDetail() {
     const breakdown = raw && typeof raw === 'object' ? { ...raw } : {}
     if (newQty > 0) breakdown[metodo] = newQty
     else delete breakdown[metodo]
-    const next = { ...cur, [serviceId]: breakdown }
-    setGroup(prev => ({ ...prev, servizi_metodo: next }))
-    enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
-    await syncMetodoAmount(serviceId, metodo, newQty, svc)
+    setGroup(prev => ({ ...prev, servizi_metodo: { ...cur, [serviceId]: breakdown } }))
+  }
+
+  // Salva davvero (Supabase + cassa): chiamata solo quando si esce dal campo (onBlur), non ad
+  // ogni tasto — così il blocco anti-doppio-tap qui sotto non rischia di "mangiarsi" una cifra
+  // digitata velocemente mentre il tentativo precedente sta ancora salvando.
+  async function commitMetodoQty(serviceId, metodo) {
+    if (!canEditServizi) return
+    const key = `metodoqty:${serviceId}:${metodo}`
+    if (pendingActionsRef.current.has(key)) return // doppio blur / doppia chiamata: ignoro
+    pendingActionsRef.current.add(key); setPendingKeys(new Set(pendingActionsRef.current))
+    try {
+      const svc = getServices(group.destination, group.shift_num).find(s => s.id === serviceId)
+      if (!svc) return
+      const next = group.servizi_metodo || {}
+      enqueueUpdate('groups', { id: groupId }, { servizi_metodo: next }, { dedupKey: `groups:${groupId}:servizi_metodo` })
+      const breakdown = next[serviceId]
+      const newQty = (breakdown && typeof breakdown === 'object' ? breakdown[metodo] : 0) || 0
+      await syncMetodoAmount(serviceId, metodo, newQty, svc)
+    } finally {
+      pendingActionsRef.current.delete(key); setPendingKeys(new Set(pendingActionsRef.current))
+    }
   }
 
 
@@ -446,7 +499,7 @@ export default function GroupDetail() {
                 {useQta ? services.map((sv, i) => {
                   const qty = group[sv.id] || 0
                   const active = qty > 0
-                  const isSaving = saving === sv.id
+                  const isSaving = saving === sv.id || [...pendingKeys].some(k => k.endsWith(`:${sv.id}`) || k.includes(`:${sv.id}:`))
                   const pbKey = prebookKeyForService(sv.id)
                   const prebooked = pbKey && group.prebook && group.prebook[pbKey] != null ? Number(group.prebook[pbKey]) : null
                   const short = prebooked != null && qty < prebooked
@@ -469,7 +522,7 @@ export default function GroupDetail() {
                   // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato (esclude escursioni; per la
                   // quota extra oltre al prebooking scatta solo se c'è davvero qty extra da incassare)
                   const needsMetodo = shownActive && !lockedPrebook && qty > 0 && sumMetodoBreakdown < qty
-                  const locked = lockedPrebook || !canEditServizi   // bloccato se escursioni pagate in prebooking o sola lettura
+                  const locked = lockedPrebook || !canEditServizi || isSaving   // bloccato se escursioni pagate in prebooking, sola lettura, o salvataggio in corso
                   const paidMeta = sumMetodoBreakdown > 0
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
@@ -522,7 +575,7 @@ export default function GroupDetail() {
                         <input
                           type="number" min="0"
                           value={qty}
-                          disabled={!canEditServizi}
+                          disabled={!canEditServizi || isSaving}
                           onChange={e => updateQtaService(sv.id, e.target.value)}
                           onBlur={() => saveQtaService(sv.id)}
                           style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
@@ -545,7 +598,7 @@ export default function GroupDetail() {
                                   const on = svMetodoRaw === mt
                                   const c = METODO_COLORS[mt] || '#64748B'
                                   return (
-                                    <button key={mt} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
+                                    <button key={mt} disabled={isSaving} onClick={() => setMetodo(sv.id, mt)} style={{ padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: isSaving ? 'not-allowed' : 'pointer', opacity: isSaving ? 0.6 : 1, background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)', border: '1px solid ' + (on ? c : 'var(--border)'), transition: 'all 0.15s' }}>{mt}</button>
                                   )
                                 })}
                                 <button onClick={() => enableSplitMetodo(sv.id)} style={{ padding: '5px 10px', borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: 'transparent', color: 'var(--iv-blue)', border: '1px dashed var(--iv-blue-mid)' }}>
@@ -575,8 +628,10 @@ export default function GroupDetail() {
                                       <input
                                         type="number" min="0" max={qty}
                                         value={v}
-                                        onChange={e => setMetodoQty(sv.id, mt, e.target.value)}
-                                        style={{ width: 54, padding: '6px 4px', borderRadius: 8, textAlign: 'center', fontSize: 13, fontWeight: 700, border: '1.5px solid ' + (v > 0 ? c : 'var(--border)'), color: v > 0 ? c : 'var(--text-primary)' }}
+                                        disabled={isSaving}
+                                        onChange={e => updateMetodoQtyLocal(sv.id, mt, e.target.value)}
+                                        onBlur={() => commitMetodoQty(sv.id, mt)}
+                                        style={{ width: 54, padding: '6px 4px', borderRadius: 8, textAlign: 'center', fontSize: 13, fontWeight: 700, opacity: isSaving ? 0.6 : 1, border: '1.5px solid ' + (v > 0 ? c : 'var(--border)'), color: v > 0 ? c : 'var(--text-primary)' }}
                                       />
                                     </div>
                                   )
