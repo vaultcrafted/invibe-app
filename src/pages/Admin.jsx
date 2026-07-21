@@ -56,19 +56,26 @@ export default function Admin() {
     }
     // --- partecipanti attivi per gruppo (paginati) ---
     const partCount = {}
+    const maleCount = {}
+    const femaleCount = {}
     let pfrom = 0
     while (true) {
       const { data } = await supabase.from('participants')
-        .select('group_id, attivo').range(pfrom, pfrom + PAGE - 1)
+        .select('group_id, attivo, sesso').range(pfrom, pfrom + PAGE - 1)
       if (!data || data.length === 0) break
-      data.forEach(p => { if (p.attivo !== false) partCount[p.group_id] = (partCount[p.group_id] || 0) + 1 })
+      data.forEach(p => {
+        if (p.attivo === false) return
+        partCount[p.group_id] = (partCount[p.group_id] || 0) + 1
+        if (p.sesso === 'M') maleCount[p.group_id] = (maleCount[p.group_id] || 0) + 1
+        else if (p.sesso === 'F') femaleCount[p.group_id] = (femaleCount[p.group_id] || 0) + 1
+      })
       if (data.length < PAGE) break
       pfrom += PAGE
     }
     const scopedGroups = groups.filter(g => inScope(g.destination, g.shift_num))
     const totalParts = scopedGroups.reduce((a, g) => a + (partCount[g.id] || 0), 0)
     setStats({
-      groups: scopedGroups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0 })),
+      groups: scopedGroups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0, num_maschi: maleCount[g.id] || 0, num_femmine: femaleCount[g.id] || 0 })),
       totalParts,
     })
   }
@@ -523,12 +530,24 @@ const fmtNum = (n) => (n || 0).toLocaleString('it-IT')
 // Per una lista di gruppi + i servizi della meta: quantità venduta, n. gruppi col servizio, incasso (qta*prezzo)
 function computeServices(grp, services) {
   return services.map((s, i) => {
-    let qty = 0, groupsWith = 0
+    let qty = 0, groupsWith = 0, maschi = 0, femmine = 0
     for (const g of grp) {
       const v = Number(g[s.id]) || 0
-      if (v > 0) { qty += v; groupsWith++ }
+      if (v > 0) {
+        qty += v; groupsWith++
+        // Stima proporzionale: il servizio non è tracciato per singolo partecipante, solo come
+        // quantità sul gruppo. Distribuiamo la quantità tra M/F in base a quanti maschi/femmine
+        // attivi ci sono nel gruppo rispetto al totale (es. gruppo 6M/4F che compra 5 unità ->
+        // ~3 stimati M, ~2 stimati F). È una stima, non un dato esatto.
+        const pax = g.num_partecipanti || 0
+        if (pax > 0) {
+          const fracM = (g.num_maschi || 0) / pax
+          maschi += v * fracM
+          femmine += v * (1 - fracM)
+        }
+      }
     }
-    return { ...s, qty, groupsWith, revenue: qty * (s.prezzo || 0), color: SVC_PALETTE[i % SVC_PALETTE.length] }
+    return { ...s, qty, groupsWith, maschi: Math.round(maschi), femmine: Math.round(femmine), revenue: qty * (s.prezzo || 0), color: SVC_PALETTE[i % SVC_PALETTE.length] }
   })
 }
 
@@ -559,6 +578,11 @@ function ServiceRow({ s, totalGroups }) {
         </span>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{fmtNum(s.qty)} pz</span>
+          {(s.maschi > 0 || s.femmine > 0) && (
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} title="Stima proporzionale in base alla composizione M/F del gruppo, non un dato esatto">
+              <span style={{ color: '#2563EB' }}>♂ {s.maschi}</span> · <span style={{ color: '#DB2777' }}>♀ {s.femmine}</span>
+            </span>
+          )}
           <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{fmtEur(s.revenue)}</span>
         </span>
       </div>
@@ -1226,7 +1250,10 @@ function StatsTab({ stats }) {
           </div>
           {filteredServices.length === 0
             ? <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun servizio venduto.</div>
-            : filteredServices.map(s => <ServiceRow key={s.id} s={s} totalGroups={filtered.length} />)}
+            : <>
+                <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginBottom: 10 }}>♂/♀ = stima in base alla composizione del gruppo (i servizi non sono legati al singolo partecipante)</div>
+                {filteredServices.map(s => <ServiceRow key={s.id} s={s} totalGroups={filtered.length} />)}
+              </>}
         </div>
       )}
 
@@ -1406,6 +1433,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [saving, setSaving] = useState(false)
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
   const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
+  const [filtroTipo, setFiltroTipo] = useState('Tutti') // 'Tutti' | 'entrata' | 'uscita'
   const [searchCapo, setSearchCapo] = useState('')
   const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
@@ -1505,6 +1533,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const movVisibili = movimenti.filter(m => {
     if (filtroMetodo !== 'Tutti' && (m.metodo || 'Cash') !== filtroMetodo) return false
     if (filtroCategoria !== 'Tutte' && m.categoria !== filtroCategoria) return false
+    if (filtroTipo !== 'Tutti' && m.tipo !== filtroTipo) return false
     if (searchCapo.trim()) {
       const q = searchCapo.trim().toLowerCase()
       const hay = `${m.descrizione || ''} ${m.categoria || ''} ${m.inserito_da || ''}`.toLowerCase()
@@ -1557,6 +1586,24 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         {searchCapo && <button onClick={() => setSearchCapo('')} style={{ color: 'var(--text-tertiary)', fontSize: 18, lineHeight: 1 }}>×</button>}
       </div>
 
+      {/* Filtro entrate/uscite */}
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {[
+          { v: 'Tutti', label: 'Tutti', c: 'var(--iv-blue)' },
+          { v: 'entrata', label: '↓ Solo entrate', c: '#16A34A' },
+          { v: 'uscita', label: '↑ Solo uscite', c: '#DC2626' },
+        ].map(({ v, label, c }) => {
+          const on = filtroTipo === v
+          return (
+            <button key={v} onClick={() => setFiltroTipo(v)} style={{
+              padding: '6px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (on ? c : 'var(--border)'),
+            }}>{label}</button>
+          )
+        })}
+      </div>
+
       {/* Filtro metodo di pagamento */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
         {['Tutti', ...METODI].map(mt => {
@@ -1586,7 +1633,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         {loading ? (
           <div style={{ padding: 24, textAlign: 'center' }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : movVisibili.length === 0 ? (
-          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || searchCapo ? ' con questi filtri' : ' per questo turno'}</div>
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || filtroTipo !== 'Tutti' || searchCapo ? ' con questi filtri' : ' per questo turno'}</div>
         ) : movVisibili.map((m, i) => {
           const isEntrata = m.tipo === 'entrata'
           const dataFmt = new Date(m.data).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })

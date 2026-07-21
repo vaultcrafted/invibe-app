@@ -33,6 +33,7 @@ export default function Cassa() {
   const [loading, setLoading] = useState(true)
   const [filtroMetodo, setFiltroMetodo] = useState('Tutti')
   const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
+  const [filtroTipo, setFiltroTipo] = useState('Tutti') // 'Tutti' | 'entrata' | 'uscita'
   const [searchCapo, setSearchCapo] = useState('')
 
   const assignedShifts = isFullAccess
@@ -90,7 +91,7 @@ export default function Cassa() {
     setLoading(false)
   }
 
-  function openTurno(s) { setSelectedShift(s); setView('detail'); setFiltroMetodo('Tutti'); setFiltroCategoria('Tutte'); setSearchCapo('') }
+  function openTurno(s) { setSelectedShift(s); setView('detail'); setFiltroMetodo('Tutti'); setFiltroCategoria('Tutte'); setFiltroTipo('Tutti'); setSearchCapo('') }
   function backToSummary() { setSelectedShift(null); setView('summary'); loadSummary() }
 
   // ================= RIEPILOGO =================
@@ -192,6 +193,7 @@ export default function Cassa() {
   const movVisibili = movimenti.filter(m => {
     if (filtroMetodo !== 'Tutti' && (m.metodo || 'Cash') !== filtroMetodo) return false
     if (filtroCategoria !== 'Tutte' && m.categoria !== filtroCategoria) return false
+    if (filtroTipo !== 'Tutti' && m.tipo !== filtroTipo) return false
     if (searchCapo.trim()) {
       const q = searchCapo.trim().toLowerCase()
       const hay = `${m.descrizione || ''} ${m.categoria || ''} ${m.inserito_da || ''}`.toLowerCase()
@@ -246,6 +248,24 @@ export default function Cassa() {
         </div>
       </div>
 
+      {/* Filtro entrate/uscite */}
+      <div style={{ padding: '0 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {[
+          { v: 'Tutti', label: 'Tutti', c: 'var(--iv-blue)' },
+          { v: 'entrata', label: '↓ Solo entrate', c: '#16A34A' },
+          { v: 'uscita', label: '↑ Solo uscite', c: '#DC2626' },
+        ].map(({ v, label, c }) => {
+          const on = filtroTipo === v
+          return (
+            <button key={v} onClick={() => setFiltroTipo(v)} style={{
+              padding: '6px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+              background: on ? c : 'var(--bg-secondary)', color: on ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (on ? c : 'var(--border)'),
+            }}>{label}</button>
+          )
+        })}
+      </div>
+
       {/* Filtro metodo di pagamento */}
       <div style={{ padding: '0 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
         {['Tutti', ...METODI].map(mt => {
@@ -276,7 +296,7 @@ export default function Cassa() {
         {loading ? (
           <div style={{ textAlign: 'center', padding: 24 }}><div className="spinner" style={{ margin: '0 auto' }} /></div>
         ) : movVisibili.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || searchCapo ? ' con questi filtri' : ' registrato'}</div>
+          <div style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-tertiary)', fontSize: 13 }}>Nessun movimento trovato{filtroMetodo !== 'Tutti' || filtroCategoria !== 'Tutte' || filtroTipo !== 'Tutti' || searchCapo ? ' con questi filtri' : ' registrato'}</div>
         ) : (
           <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
             {movVisibili.map((m, i) => {
