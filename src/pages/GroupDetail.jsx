@@ -506,23 +506,24 @@ export default function GroupDetail() {
                   const isEsc = pbKey === 'escursioni'
                   const prebPagato = isPrebookingPagato(sv.id, group.destination, group.shift_num)
                   const prebEsc = isEsc ? (prebooked || 0) : 0
-                  const lockedEsc = prebEsc > 0                       // escursioni: bloccate, con conteggio confermabile
-                  // SSP (o altri) prenotati E pagati in prebooking (turni bonifico): la parte prenotata resta
-                  // protetta (badge "prenotate N · Prebooking pagato", non modificabile), ma il gruppo può comunque
-                  // acquistarne ALTRE in meta — lo stepper/metodo sotto gestiscono SOLO questa quantità extra,
-                  // che si somma a quella già pagata in prebooking (non la sostituisce).
-                  const prebPagatoNonEsc = !isEsc && prebPagato && (prebooked || 0) > 0
-                  const lockedPrebook = lockedEsc   // solo le escursioni restano completamente bloccate
-                  const confQty = lockedEsc ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
-                  const shownActive = lockedPrebook ? true : (active || prebPagatoNonEsc)
+                  // Le escursioni prenotate mostrano in più un "conferma presenze" (quanti dei prenotati si
+                  // sono davvero presentati) — è una cosa in aggiunta, non blocca più l'acquisto di extra.
+                  const showEscConf = isEsc && prebEsc > 0
+                  // Qualsiasi servizio prenotato E pagato in prebooking (turni bonifico, incluse le escursioni)
+                  // resta protetto per la parte prenotata (badge "prenotate N · Prebooking pagato", non
+                  // modificabile), ma il gruppo può comunque acquistarne ALTRE in meta — lo stepper/metodo
+                  // sotto gestiscono SOLO questa quantità extra, che si somma a quella prenotata (non la sostituisce).
+                  const prebPagatoNonEsc = prebPagato && (prebooked || 0) > 0
+                  const confQty = showEscConf ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
+                  const shownActive = active || prebPagatoNonEsc || showEscConf
                   const svMetodoRaw = (group.servizi_metodo || {})[sv.id]
                   const isSplitMetodo = !!svMetodoRaw && typeof svMetodoRaw === 'object'
                   const metodoBreakdown = isSplitMetodo ? svMetodoRaw : (svMetodoRaw ? { [svMetodoRaw]: qty } : {})
                   const sumMetodoBreakdown = Object.values(metodoBreakdown).reduce((s, v) => s + (Number(v) || 0), 0)
-                  // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato (esclude escursioni; per la
-                  // quota extra oltre al prebooking scatta solo se c'è davvero qty extra da incassare)
-                  const needsMetodo = shownActive && !lockedPrebook && qty > 0 && sumMetodoBreakdown < qty
-                  const locked = lockedPrebook || !canEditServizi || isSaving   // bloccato se escursioni pagate in prebooking, sola lettura, o salvataggio in corso
+                  // Acceso ma senza metodo (o ripartizione incompleta) -> va segnalato solo se c'è davvero
+                  // qty extra da incassare (non per la parte prenotata, già pagata)
+                  const needsMetodo = shownActive && qty > 0 && sumMetodoBreakdown < qty
+                  const locked = !canEditServizi || isSaving   // bloccato se sola lettura o salvataggio in corso
                   const paidMeta = sumMetodoBreakdown > 0
                   // Stato colorato del servizio (coerente con la legenda)
                   let stato
@@ -550,44 +551,43 @@ export default function GroupDetail() {
                           <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 999, whiteSpace: 'nowrap', background: stato.bg, color: stato.c, border: '0.5px solid ' + stato.bd }}>{stato.label}</span>
                         </div>
                         <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                          {prebPagatoNonEsc && <span style={{ color: '#16A34A', fontWeight: 600 }}>{prebooked} già pagato in prebooking</span>}
-                          {lockedEsc
-                            ? <span style={{ color: '#16A34A', fontWeight: 600 }}>Già pagate in prebooking</span>
-                            : <>
-                                {prebPagatoNonEsc && <span> · </span>}
-                                {prebPagatoNonEsc && <span>extra: </span>}
-                                €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
-                              </>}
+                          {prebPagatoNonEsc && <span style={{ color: '#16A34A', fontWeight: 600 }}>{prebooked} già {isEsc ? 'pagate' : 'pagato'} in prebooking</span>}
+                          {prebPagatoNonEsc && <span> · </span>}
+                          {prebPagatoNonEsc && <span>extra: </span>}
+                          €{sv.prezzo} × {qty} = <span style={{ fontWeight: 600, color: active ? 'var(--iv-blue)' : 'var(--text-tertiary)' }}>€{sv.prezzo * qty}</span>
                           {isSaving && <span style={{ marginLeft: 8, fontSize: 10 }}>salvo...</span>}
                         </div>
+                        {showEscConf && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>Presenze confermate:</span>
+                            <input
+                              type="number" min="0" max={prebEsc}
+                              value={confQty}
+                              disabled={!canEditServizi}
+                              onChange={e => setGroup(prev => ({ ...prev, escursioni_conf: Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, prebEsc)) }))}
+                              onBlur={saveEscConf}
+                              style={{ width: 44, padding: '3px 6px', borderRadius: 7, border: '1px solid var(--border)', textAlign: 'center', fontSize: 12, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
+                            />
+                            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>/ {prebEsc} prenotate</span>
+                          </div>
+                        )}
                       </div>
-                      {/* Numero modificabile */}
-                      {lockedEsc ? (
-                        <input
-                          type="number" min="0" max={prebEsc}
-                          value={confQty}
-                          disabled={!canEditServizi}
-                          onChange={e => setGroup(prev => ({ ...prev, escursioni_conf: Math.max(0, Math.min(parseInt(e.target.value, 10) || 0, prebEsc)) }))}
-                          onBlur={saveEscConf}
-                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
-                        />
-                      ) : (
-                        <input
-                          type="number" min="0"
-                          value={qty}
-                          disabled={!canEditServizi || isSaving}
-                          onChange={e => updateQtaService(sv.id, e.target.value)}
-                          onBlur={() => saveQtaService(sv.id)}
-                          style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
-                        />
-                      )}
+                      {/* Numero modificabile: quantità EXTRA acquistata in meta (oltre a quella eventualmente prenotata) */}
+                      <input
+                        type="number" min="0"
+                        value={qty}
+                        disabled={!canEditServizi || isSaving}
+                        onChange={e => updateQtaService(sv.id, e.target.value)}
+                        onBlur={() => saveQtaService(sv.id)}
+                        style={{ width: 56, padding: '8px 10px', borderRadius: 10, border: '1px solid var(--border)', textAlign: 'center', fontSize: 14, fontWeight: 600, opacity: canEditServizi ? 1 : 0.5, background: canEditServizi ? '#fff' : 'var(--bg-secondary)' }}
+                      />
                       {/* Toggle */}
-                      <div onClick={() => { if (!locked) toggleQtaService(sv.id) }} title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare i servizi' : (lockedPrebook ? 'Già pagato in prebooking (bloccato)' : '')} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.85 : 1, transition: 'background 0.2s' }}>
+                      <div onClick={() => { if (!locked) toggleQtaService(sv.id) }} title={!canEditServizi ? 'Solo CM, Referente Meta e Ufficio possono modificare i servizi' : ''} style={{ width: 46, height: 26, borderRadius: 13, background: shownActive ? 'var(--iv-blue)' : '#D1D5DB', position: 'relative', flexShrink: 0, cursor: locked ? 'not-allowed' : 'pointer', opacity: locked ? 0.85 : 1, transition: 'background 0.2s' }}>
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#fff', position: 'absolute', top: 3, left: shownActive ? 23 : 3, transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.18)' }} />
                       </div>
                       </div>
                       {/* Metodo di pagamento — compare quando c'è una quantità (extra, oltre l'eventuale prebooking) da incassare */}
-                      {shownActive && !lockedPrebook && qty > 0 && canEditServizi && (
+                      {shownActive && qty > 0 && canEditServizi && (
                         <div style={{ padding: '0 18px 14px 18px' }}>
                           {prebPagatoNonEsc && <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginBottom: 6 }}>Metodo per le {qty} unità extra acquistate in meta (oltre alle {prebooked} già pagate in prebooking)</div>}
                           {!isSplitMetodo ? (

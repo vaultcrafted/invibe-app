@@ -871,16 +871,18 @@ function IncassiTab({ data, loading, onRefresh }) {
     return pk != null && isPrebookingPagato(sv.id, g.destination, g.shift_num)
   }
   function svQty(g, sv) {
+    const extra = g[sv.id] || 0
     if (isPrebPaid(g, sv)) {
       const pk = prebookKeyForService(sv.id)
-      return (g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : 0
+      const preb = (g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : 0
+      return preb + extra   // prenotato in prebooking + eventuale extra acquistato in meta
     }
-    return g[sv.id] || 0
+    return extra
   }
-  // Valore in € (quantità × prezzo). I servizi pagati in prebooking valgono 0 €:
-  // i soldi sono già incassati fuori dalla meta, non vanno nella cassa.
+  // Valore in € (quantità × prezzo). La quota pagata in prebooking vale 0 € (già incassata fuori
+  // dalla meta), ma un'eventuale quota EXTRA acquistata in meta è incasso vero e va contata:
+  // g[sv.id] rappresenta sempre e solo l'extra (mai la parte prenotata), quindi basta questo.
   function svValue(g, sv) {
-    if (isPrebPaid(g, sv)) return 0
     return sv.prezzo * (g[sv.id] || 0)
   }
   // Cella mostrata: € o numero secondo la vista scelta
@@ -1011,6 +1013,7 @@ function IncassiTab({ data, loading, onRefresh }) {
       {/* Legenda */}
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>blu</span> = già pagato in prebooking (conteggio, non €)</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: '#16A34A', fontWeight: 700 }}>+N</span> = extra acquistato in meta oltre al prebooking (si somma al totale)</span>
         <span>€ = incassato in meta (cassa)</span>
         {isPct && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: 3, background: '#F0FDF4', border: '1px solid #15803D' }} /> ≥70%</span>
@@ -1088,8 +1091,19 @@ function IncassiTab({ data, loading, onRefresh }) {
                           const prebPaid = isPrebPaid(g, sv)
                           const val = svCell(g, sv)
                           if (prebPaid) {
-                            // pagato in prebooking: conteggio BLU in vista quantità, 0 in vista euro
-                            return <td key={sv.id} style={{ ...tdStyle, color: isQty ? 'var(--iv-blue)' : 'var(--text-tertiary)', fontWeight: isQty && val > 0 ? 700 : 400 }}>{isQty ? (val > 0 ? val : '—') : '€0'}</td>
+                            const extra = g[sv.id] || 0
+                            const pk = prebookKeyForService(sv.id)
+                            const preb = (g.prebook && g.prebook[pk] != null) ? Number(g.prebook[pk]) : 0
+                            // pagato in prebooking: conteggio BLU (+ N extra in verde se acquistato in meta)
+                            if (isQty) {
+                              return (
+                                <td key={sv.id} style={{ ...tdStyle, color: 'var(--iv-blue)', fontWeight: preb > 0 ? 700 : 400 }}>
+                                  {preb > 0 ? preb : (extra === 0 ? '—' : '')}
+                                  {extra > 0 && <span style={{ color: '#16A34A', fontWeight: 700 }}>{preb > 0 ? ' +' : ''}{extra}</span>}
+                                </td>
+                              )
+                            }
+                            return <td key={sv.id} style={{ ...tdStyle, color: extra > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{extra > 0 ? `€${sv.prezzo * extra}` : '€0'}</td>
                           }
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? (isQty ? val : `€${val}`) : '—'}</td>
                         })}
