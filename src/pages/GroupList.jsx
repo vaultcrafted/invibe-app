@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode, prebookKeyForService, isPrebookingPagato } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, getInitials, SERVICES, SERVICES_CORFU, getServices, shiftLabel, capogruppoCode, prebookKeyForService, isPrebookingPagato, calcAge } from '../lib/constants'
 import Topbar from '../components/Topbar'
 
 function prebookedCount(g, sv) {
@@ -87,6 +87,8 @@ export default function GroupList() {
   const fPeople = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false).length || 0), 0)
   const fMales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && p.sesso === 'M').length || 0), 0)
   const fFemales = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && p.sesso === 'F').length || 0), 0)
+  const fMaggiorenni = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && calcAge(p.nascita) != null && calcAge(p.nascita) >= 18).length || 0), 0)
+  const fMinorenni = filtered.reduce((s, g) => s + (g.participants?.filter(p => p.attivo !== false && calcAge(p.nascita) != null && calcAge(p.nascita) < 18).length || 0), 0)
 
   // Quantità EFFETTIVA di un servizio per un gruppo:
   // - se pagato in prebooking (escursioni sempre, SSP bonifico) -> quantità prenotata (o confermata per escursioni)
@@ -118,7 +120,9 @@ export default function GroupList() {
       <div style={{ padding: '12px 16px 2px', fontSize: 13, fontWeight: 600 }}>{dest.name} · {shiftLabel(destId, parseInt(shiftNum))}</div>
       <div style={{ padding: '0 16px 8px', fontSize: 12, color: 'var(--text-secondary)' }}>{shift.label} · {filtered.length} gruppi · {filterCount != null
         ? <>{filterCount} {countLabel}</>
-        : <>{fPeople} persone</>} · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>{svcFilter ? ' · filtro attivo' : ''}</div>
+        : <>{fPeople} persone</>} · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>
+        {(fMaggiorenni + fMinorenni) > 0 && <> · <span style={{ color: '#0891B2', fontWeight: 600 }}>{fMaggiorenni} magg.</span> <span style={{ color: '#EA580C', fontWeight: 600 }}>{fMinorenni} min.</span></>}
+        {svcFilter ? ' · filtro attivo' : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -240,6 +244,9 @@ function GroupCard({ group, onClick }) {
   const participants = (group.participants || []).filter(p => p.attivo !== false)
   const males = participants.filter(p => p.sesso === 'M').length
   const females = participants.filter(p => p.sesso === 'F').length
+  const withAge = participants.map(p => calcAge(p.nascita)).filter(a => a != null)
+  const maggiorenni = withAge.filter(a => a >= 18).length
+  const minorenni = withAge.filter(a => a < 18).length
   const initials = getInitials(group.capogruppo_display)
   return (
     <button className="card" style={{ textAlign: 'left', width: '100%', cursor: 'pointer' }} onClick={onClick}>
@@ -252,6 +259,7 @@ function GroupCard({ group, onClick }) {
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
             {participants.length} persone · <span className="dot-m">{males}M</span> <span className="dot-f">{females}F</span>
+            {withAge.length > 0 && <> · <span style={{ color: '#0891B2', fontWeight: 600 }}>{maggiorenni} magg.</span> <span style={{ color: '#EA580C', fontWeight: 600 }}>{minorenni} min.</span></>}
           </div>
         </div>
       </div>
