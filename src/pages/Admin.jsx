@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { sendCassaToSheet } from '../lib/sheetsSync'
 import { useAuth } from '../context/AuthContext'
-import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode, prebookKeyForService, isPrebookingPagato } from '../lib/constants'
+import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode, prebookKeyForService, isPrebookingPagato, calcAge } from '../lib/constants'
 
 // Tutti gli id colonna servizio (unione di tutte le mete) per il fetch incassi
 const ALL_SERVICE_IDS = [...new Set(DESTINATIONS.flatMap(d => getServices(d.id).map(s => s.id)))]
@@ -58,16 +58,23 @@ export default function Admin() {
     const partCount = {}
     const maleCount = {}
     const femaleCount = {}
+    const adultCount = {}
+    const minorCount = {}
     let pfrom = 0
     while (true) {
       const { data } = await supabase.from('participants')
-        .select('group_id, attivo, sesso').range(pfrom, pfrom + PAGE - 1)
+        .select('group_id, attivo, sesso, nascita').range(pfrom, pfrom + PAGE - 1)
       if (!data || data.length === 0) break
       data.forEach(p => {
         if (p.attivo === false) return
         partCount[p.group_id] = (partCount[p.group_id] || 0) + 1
         if (p.sesso === 'M') maleCount[p.group_id] = (maleCount[p.group_id] || 0) + 1
         else if (p.sesso === 'F') femaleCount[p.group_id] = (femaleCount[p.group_id] || 0) + 1
+        const age = calcAge(p.nascita)
+        if (age != null) {
+          if (age >= 18) adultCount[p.group_id] = (adultCount[p.group_id] || 0) + 1
+          else minorCount[p.group_id] = (minorCount[p.group_id] || 0) + 1
+        }
       })
       if (data.length < PAGE) break
       pfrom += PAGE
@@ -75,7 +82,7 @@ export default function Admin() {
     const scopedGroups = groups.filter(g => inScope(g.destination, g.shift_num))
     const totalParts = scopedGroups.reduce((a, g) => a + (partCount[g.id] || 0), 0)
     setStats({
-      groups: scopedGroups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0, num_maschi: maleCount[g.id] || 0, num_femmine: femaleCount[g.id] || 0 })),
+      groups: scopedGroups.map(g => ({ ...g, num_partecipanti: partCount[g.id] || 0, num_maschi: maleCount[g.id] || 0, num_femmine: femaleCount[g.id] || 0, num_adulti: adultCount[g.id] || 0, num_minori: minorCount[g.id] || 0 })),
       totalParts,
     })
   }
@@ -530,24 +537,29 @@ const fmtNum = (n) => (n || 0).toLocaleString('it-IT')
 // Per una lista di gruppi + i servizi della meta: quantità venduta, n. gruppi col servizio, incasso (qta*prezzo)
 function computeServices(grp, services) {
   return services.map((s, i) => {
-    let qty = 0, groupsWith = 0, maschi = 0, femmine = 0
+    let qty = 0, groupsWith = 0, maschi = 0, femmine = 0, adulti = 0, minori = 0
     for (const g of grp) {
       const v = Number(g[s.id]) || 0
       if (v > 0) {
         qty += v; groupsWith++
         // Stima proporzionale: il servizio non è tracciato per singolo partecipante, solo come
-        // quantità sul gruppo. Distribuiamo la quantità tra M/F in base a quanti maschi/femmine
-        // attivi ci sono nel gruppo rispetto al totale (es. gruppo 6M/4F che compra 5 unità ->
-        // ~3 stimati M, ~2 stimati F). È una stima, non un dato esatto.
+        // quantità sul gruppo. Distribuiamo la quantità tra M/F e adulti/minori in base a quanti
+        // ce ne sono nel gruppo rispetto al totale attivo. È una stima, non un dato esatto.
         const pax = g.num_partecipanti || 0
         if (pax > 0) {
           const fracM = (g.num_maschi || 0) / pax
           maschi += v * fracM
           femmine += v * (1 - fracM)
         }
+        const conEta = (g.num_adulti || 0) + (g.num_minori || 0)
+        if (conEta > 0) {
+          const fracAdulti = (g.num_adulti || 0) / conEta
+          adulti += v * fracAdulti
+          minori += v * (1 - fracAdulti)
+        }
       }
     }
-    return { ...s, qty, groupsWith, maschi: Math.round(maschi), femmine: Math.round(femmine), revenue: qty * (s.prezzo || 0), color: SVC_PALETTE[i % SVC_PALETTE.length] }
+    return { ...s, qty, groupsWith, maschi: Math.round(maschi), femmine: Math.round(femmine), adulti: Math.round(adulti), minori: Math.round(minori), revenue: qty * (s.prezzo || 0), color: SVC_PALETTE[i % SVC_PALETTE.length] }
   })
 }
 
@@ -567,8 +579,10 @@ function KpiCard({ value, label, accent, icon }) {
 }
 
 // Riga servizio: label, quantità, incasso, barra = % gruppi che hanno il servizio
-function ServiceRow({ s, totalGroups }) {
+function ServiceRow({ s, totalGroups, breakdownMode }) {
   const pct = totalGroups > 0 ? Math.round((s.groupsWith / totalGroups) * 100) : 0
+  const showSesso = breakdownMode === 'sesso' && (s.maschi > 0 || s.femmine > 0)
+  const showEta = breakdownMode === 'eta' && (s.adulti > 0 || s.minori > 0)
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
@@ -578,9 +592,14 @@ function ServiceRow({ s, totalGroups }) {
         </span>
         <span style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexShrink: 0 }}>
           <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{fmtNum(s.qty)} pz</span>
-          {(s.maschi > 0 || s.femmine > 0) && (
+          {showSesso && (
             <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} title="Stima proporzionale in base alla composizione M/F del gruppo, non un dato esatto">
               <span style={{ color: '#2563EB' }}>♂ {s.maschi}</span> · <span style={{ color: '#DB2777' }}>♀ {s.femmine}</span>
+            </span>
+          )}
+          {showEta && (
+            <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }} title="Stima proporzionale in base alla composizione per età del gruppo, non un dato esatto">
+              <span style={{ color: '#0891B2' }}>🧑 {s.adulti}</span> · <span style={{ color: '#EA580C' }}>🧒 {s.minori}</span>
             </span>
           )}
           <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{fmtEur(s.revenue)}</span>
@@ -1147,6 +1166,7 @@ function IncassiTab({ data, loading, onRefresh }) {
 function StatsTab({ stats }) {
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
+  const [breakdownMode, setBreakdownMode] = useState('sesso') // 'sesso' | 'eta'
 
   const groups = stats.groups
   const totalGroups = groups.length
@@ -1265,8 +1285,21 @@ function StatsTab({ stats }) {
           {filteredServices.length === 0
             ? <div style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>Nessun servizio venduto.</div>
             : <>
-                <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginBottom: 10 }}>♂/♀ = stima in base alla composizione del gruppo (i servizi non sono legati al singolo partecipante)</div>
-                {filteredServices.map(s => <ServiceRow key={s.id} s={s} totalGroups={filtered.length} />)}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>
+                    {breakdownMode === 'sesso' ? '♂/♀ = stima in base alla composizione del gruppo (i servizi non sono legati al singolo partecipante)' : '🧑/🧒 = stima maggiorenni/minorenni in base alla composizione del gruppo'}
+                  </div>
+                  <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                    {[{ v: 'sesso', label: '♂ ♀' }, { v: 'eta', label: 'Maggior./Minor.' }].map(({ v, label }) => (
+                      <button key={v} onClick={() => setBreakdownMode(v)} style={{
+                        padding: '4px 10px', borderRadius: 999, fontSize: 10.5, fontWeight: 700, cursor: 'pointer',
+                        background: breakdownMode === v ? accent : 'var(--bg-secondary)', color: breakdownMode === v ? '#fff' : 'var(--text-secondary)',
+                        border: '0.5px solid ' + (breakdownMode === v ? accent : 'var(--border)'),
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+                {filteredServices.map(s => <ServiceRow key={s.id} s={s} totalGroups={filtered.length} breakdownMode={breakdownMode} />)}
               </>}
         </div>
       )}
