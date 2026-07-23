@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import Navigation from './components/Navigation'
 import InstallPrompt from './components/InstallPrompt'
 import SyncIndicator from './components/SyncIndicator'
+import AiAssistantFab from './components/AiAssistantFab'
 import Login from './pages/Login'
 import Destinations from './pages/Destinations'
 import ShiftSelect from './pages/ShiftSelect'
@@ -69,6 +70,7 @@ function AppShell() {
       </div>
       {!isLogin && <InstallPrompt />}
       {!isLogin && <SyncIndicator />}
+      {!isLogin && <AiAssistantFab />}
     </div>
   )
 }

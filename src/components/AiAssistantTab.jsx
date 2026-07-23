@@ -9,7 +9,7 @@ const SUGGESTIONS = [
   'Quanti maschi e femmine hanno la Tassa di soggiorno da incassare a Sardegna?',
 ]
 
-export default function AiAssistantTab() {
+export default function AiAssistantTab({ embedded = false }) {
   const [messages, setMessages] = useState([]) // { role: 'user'|'assistant', text }
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -41,7 +41,7 @@ export default function AiAssistantTab() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 170px)', maxWidth: 780, margin: '0 auto' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: embedded ? '100%' : 'calc(100vh - 170px)', maxWidth: 780, margin: '0 auto' }}>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 4px' }}>
         {messages.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--text-tertiary)' }}>
