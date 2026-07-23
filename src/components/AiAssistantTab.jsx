@@ -30,7 +30,17 @@ export default function AiAssistantTab({ embedded = false }) {
       // Converto lo storico nel formato atteso dall'API Anthropic (role + content testo)
       const apiMessages = nextMessages.map(m => ({ role: m.role, content: m.text }))
       const { data, error: fnError } = await supabase.functions.invoke('ai-assistant', { body: { messages: apiMessages } })
-      if (fnError) throw fnError
+      if (fnError) {
+        // supabase-js non mette il corpo della risposta in fnError.message quando lo status non è 2xx:
+        // va letto a mano da fnError.context (la Response vera e propria), altrimenti perdiamo il
+        // messaggio "DIAGNOSTICA: ..." che la funzione ha effettivamente restituito.
+        let detail = fnError.message
+        try {
+          const body = await fnError.context?.json()
+          if (body?.error) detail = body.error
+        } catch (_) { /* corpo non leggibile/non JSON: tengo il messaggio generico */ }
+        throw new Error(detail)
+      }
       if (data?.error) throw new Error(data.error)
       setMessages(prev => [...prev, { role: 'assistant', text: data?.answer || 'Non sono riuscito a trovare una risposta.' }])
     } catch (e) {
