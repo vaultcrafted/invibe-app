@@ -1436,19 +1436,6 @@ function CassaTab() {
   const totEntrate = filtered.filter(m => m.tipo === 'entrata').reduce((t, m) => t + Number(m.importo), 0)
   const totUscite = filtered.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
 
-  // Riepilogo per metodo di pagamento (solo entrate: le uscite in cassa sono quasi sempre Cash)
-  const perMetodo = METODI.map(mt => {
-    const rows = filtered.filter(m => (m.metodo || 'Cash') === mt && m.tipo === 'entrata')
-    return { metodo: mt, count: rows.length, tot: rows.reduce((t, m) => t + Number(m.importo), 0) }
-  }).filter(r => r.count > 0)
-
-  // Riepilogo per categoria (entrate e uscite separate)
-  const perCategoria = categoriePresenti.map(cat => {
-    const rowsE = filtered.filter(m => m.categoria === cat && m.tipo === 'entrata')
-    const rowsU = filtered.filter(m => m.categoria === cat && m.tipo === 'uscita')
-    return { categoria: cat, countE: rowsE.length, totE: rowsE.reduce((t, m) => t + Number(m.importo), 0), countU: rowsU.length, totU: rowsU.reduce((t, m) => t + Number(m.importo), 0) }
-  }).filter(r => r.countE > 0 || r.countU > 0).sort((a, b) => (b.totE + b.totU) - (a.totE + a.totU))
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1520,38 +1507,6 @@ function CassaTab() {
         </div>
       </div>
 
-      {(perMetodo.length > 0 || perCategoria.length > 0) && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {perMetodo.length > 0 && (
-            <div style={{ flex: '1 1 260px', background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', padding: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 10 }}>Entrate per metodo</div>
-              {perMetodo.map(r => (
-                <div key={r.metodo} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: '0.5px solid var(--border)' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 600 }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: METODO_COLORS[r.metodo] }} />
-                    {r.metodo} <span style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 500 }}>({r.count})</span>
-                  </span>
-                  <span style={{ fontSize: 13, fontWeight: 700 }}>€{r.tot.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {perCategoria.length > 0 && (
-            <div style={{ flex: '1 1 320px', background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', padding: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 10 }}>Per categoria</div>
-              {perCategoria.map(r => (
-                <div key={r.categoria} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderTop: '0.5px solid var(--border)', gap: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.categoria}</span>
-                  <span style={{ display: 'flex', gap: 10, flexShrink: 0, fontSize: 12.5 }}>
-                    {r.countE > 0 && <span style={{ color: '#16A34A', fontWeight: 700 }}>+€{r.totE.toFixed(2)} <span style={{ fontWeight: 500, color: 'var(--text-tertiary)' }}>({r.countE})</span></span>}
-                    {r.countU > 0 && <span style={{ color: '#DC2626', fontWeight: 700 }}>-€{r.totU.toFixed(2)} <span style={{ fontWeight: 500, color: 'var(--text-tertiary)' }}>({r.countU})</span></span>}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       <div style={{ background: 'var(--bg-primary)', borderRadius: 14, border: '0.5px solid var(--border)', overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px 100px 100px 100px', padding: '10px 16px', background: 'var(--bg-secondary)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
