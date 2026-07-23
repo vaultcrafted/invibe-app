@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PaxContentTab from '../components/PaxContentTab'
 import AiAssistantTab from '../components/AiAssistantTab'
-import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search } from 'lucide-react'
+import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search, SlidersHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import { sendCassaToSheet } from '../lib/sheetsSync'
@@ -1362,6 +1362,7 @@ function CassaTab() {
   const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
   const [filtroTipo, setFiltroTipo] = useState('Tutti')
   const [searchQ, setSearchQ] = useState('')
+  const [catMenuOpen, setCatMenuOpen] = useState(false)
   const [selectedRow, setSelectedRow] = useState(null) // { destination, shift_num }
 
   useEffect(() => { fetchAll() }, [])
@@ -1482,13 +1483,25 @@ function CassaTab() {
         })}
       </div>
 
-      {/* Filtro categoria */}
+      {/* Filtro categoria — nascosto dietro un menu, per non affollare la pagina con 20+ chip */}
       {categoriePresenti.length > 0 && (
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <button onClick={() => setFiltroCategoria('Tutte')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte le categorie</button>
-          {categoriePresenti.map(cat => (
-            <button key={cat} onClick={() => setFiltroCategoria(cat)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === cat ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--border)') }}>{cat}</button>
-          ))}
+        <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+          <button onClick={() => setCatMenuOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: filtroCategoria !== 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria !== 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria !== 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>
+            <SlidersHorizontal size={13} />
+            {filtroCategoria === 'Tutte' ? 'Filtra per categoria' : filtroCategoria}
+            {filtroCategoria !== 'Tutte' && <span onClick={e => { e.stopPropagation(); setFiltroCategoria('Tutte') }} style={{ fontSize: 15, lineHeight: 1, marginLeft: 2 }}>×</span>}
+          </button>
+          {catMenuOpen && (
+            <>
+              <div onClick={() => setCatMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, padding: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 560 }}>
+                <button onClick={() => { setFiltroCategoria('Tutte'); setCatMenuOpen(false) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte le categorie</button>
+                {categoriePresenti.map(cat => (
+                  <button key={cat} onClick={() => { setFiltroCategoria(cat); setCatMenuOpen(false) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === cat ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--border)') }}>{cat}</button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1581,6 +1594,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
   const [filtroTipo, setFiltroTipo] = useState('Tutti') // 'Tutti' | 'entrata' | 'uscita'
   const [searchCapo, setSearchCapo] = useState('')
+  const [catMenuOpen, setCatMenuOpen] = useState(false)
   const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
   const [triedSave, setTriedSave] = useState(false)
@@ -1765,13 +1779,25 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
         })}
       </div>
 
-      {/* Filtro categoria */}
+      {/* Filtro categoria — nascosto dietro un menu, per non affollare la pagina con 20+ chip */}
       {categoriePresenti.length > 0 && (
-        <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <button onClick={() => setFiltroCategoria('Tutte')} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte le categorie</button>
-          {categoriePresenti.map(cat => (
-            <button key={cat} onClick={() => setFiltroCategoria(cat)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === cat ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--border)') }}>{cat}</button>
-          ))}
+        <div style={{ position: 'relative', alignSelf: 'flex-start' }}>
+          <button onClick={() => setCatMenuOpen(o => !o)} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: filtroCategoria !== 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria !== 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria !== 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>
+            <SlidersHorizontal size={13} />
+            {filtroCategoria === 'Tutte' ? 'Filtra per categoria' : filtroCategoria}
+            {filtroCategoria !== 'Tutte' && <span onClick={e => { e.stopPropagation(); setFiltroCategoria('Tutte') }} style={{ fontSize: 15, lineHeight: 1, marginLeft: 2 }}>×</span>}
+          </button>
+          {catMenuOpen && (
+            <>
+              <div onClick={() => setCatMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, padding: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 560 }}>
+                <button onClick={() => { setFiltroCategoria('Tutte'); setCatMenuOpen(false) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === 'Tutte' ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === 'Tutte' ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte le categorie</button>
+                {categoriePresenti.map(cat => (
+                  <button key={cat} onClick={() => { setFiltroCategoria(cat); setCatMenuOpen(false) }} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: filtroCategoria === cat ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (filtroCategoria === cat ? 'var(--iv-blue)' : 'var(--border)') }}>{cat}</button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 

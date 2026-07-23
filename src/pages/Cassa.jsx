@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import { subscribe as subscribeSync } from '../lib/syncQueue'
 import Topbar from '../components/Topbar'
-import { Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Search } from 'lucide-react'
+import { Wallet, ArrowDownCircle, ArrowUpCircle, ArrowLeft, Search, SlidersHorizontal } from 'lucide-react'
 
 const DEST_COLORS = {
   pag: '#1E6BF1', corfu: '#059669', zante: '#D97706',
@@ -35,6 +35,7 @@ export default function Cassa() {
   const [filtroCategoria, setFiltroCategoria] = useState('Tutte')
   const [filtroTipo, setFiltroTipo] = useState('Tutti') // 'Tutti' | 'entrata' | 'uscita'
   const [searchCapo, setSearchCapo] = useState('')
+  const [catMenuOpen, setCatMenuOpen] = useState(false)
 
   const assignedShifts = isFullAccess
     ? DESTINATIONS.flatMap(d => SHIFTS[d.id].map(s => ({ destination: d.id, shift_num: s.num })))
@@ -281,13 +282,25 @@ export default function Cassa() {
         })}
       </div>
 
-      {/* Filtro categoria */}
+      {/* Filtro categoria — nascosto dietro un menu, per non affollare la pagina con 20+ chip */}
       {categoriePresenti.length > 0 && (
-        <div style={{ padding: '4px 16px 4px', display: 'flex', gap: 7, flexWrap: 'wrap' }}>
-          <button onClick={() => setFiltroCategoria('Tutte')} style={chip(filtroCategoria === 'Tutte')}>Tutte le categorie</button>
-          {categoriePresenti.map(cat => (
-            <button key={cat} onClick={() => setFiltroCategoria(cat)} style={chip(filtroCategoria === cat)}>{cat}</button>
-          ))}
+        <div style={{ padding: '4px 16px 4px', position: 'relative', alignSelf: 'flex-start' }}>
+          <button onClick={() => setCatMenuOpen(o => !o)} style={{ ...chip(filtroCategoria !== 'Tutte'), display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <SlidersHorizontal size={13} />
+            {filtroCategoria === 'Tutte' ? 'Filtra per categoria' : filtroCategoria}
+            {filtroCategoria !== 'Tutte' && <span onClick={e => { e.stopPropagation(); setFiltroCategoria('Tutte') }} style={{ fontSize: 15, lineHeight: 1, marginLeft: 2 }}>×</span>}
+          </button>
+          {catMenuOpen && (
+            <>
+              <div onClick={() => setCatMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 16, zIndex: 20, background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, padding: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.14)', display: 'flex', flexWrap: 'wrap', gap: 6, maxWidth: 560 }}>
+                <button onClick={() => { setFiltroCategoria('Tutte'); setCatMenuOpen(false) }} style={chip(filtroCategoria === 'Tutte')}>Tutte le categorie</button>
+                {categoriePresenti.map(cat => (
+                  <button key={cat} onClick={() => { setFiltroCategoria(cat); setCatMenuOpen(false) }} style={chip(filtroCategoria === cat)}>{cat}</button>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       )}
 
