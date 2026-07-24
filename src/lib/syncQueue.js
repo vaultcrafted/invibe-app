@@ -90,6 +90,25 @@ export function cancelOp(opId) {
   return removed
 }
 
+// Manda un singolo payload al foglio. Per i movimenti di CASSA, registra prima l'intenzione in
+// una tabella lato server (cassa_sheet_queue): così, anche se questo tentativo fallisce E il
+// browser si chiude prima di riuscire a riprovare, resta una traccia che una Edge Function
+// schedulata (cron, lato server) può riprendere da sola — non dipende più dal fatto che sia
+// rimasto aperto proprio QUESTO browser/dispositivo.
+async function sendSheetPayload(s) {
+  if (!(s && s.__kind === 'cassa')) { await syncToSheet(s); return }
+  let queueId = null
+  try {
+    const { data } = await supabase.from('cassa_sheet_queue').insert({ payload: s }).select('id').single()
+    queueId = data?.id ?? null
+  } catch (e) { /* offline o RLS: pace, il retry locale prova comunque a mandarlo lo stesso */ }
+  await sendCassaToSheet(s)
+  if (queueId != null) {
+    supabase.from('cassa_sheet_queue').update({ done: true, done_at: new Date().toISOString() }).eq('id', queueId)
+      .then(() => {}, () => {}) // se questo fallisce non è grave: il cron la rimanderà (doppione raro e innocuo)
+  }
+}
+
 export async function flush() {
   if (flushing) return
   if (typeof navigator !== 'undefined' && !navigator.onLine) { notify(); return }
@@ -104,10 +123,7 @@ export async function flush() {
           // Riprova solo il sync foglio di un'operazione DB già andata a buon fine in precedenza.
           // Non deve MAI bloccare la coda: se fallisce ancora, si riaccoda da solo (fino al tetto).
           try {
-            for (const s of op.sheet) {
-              if (s && s.__kind === 'cassa') await sendCassaToSheet(s)
-              else await syncToSheet(s)
-            }
+            for (const s of op.sheet) { await sendSheetPayload(s) }
           } catch (sheetErr) {
             console.warn('Retry sync foglio fallito ancora:', sheetErr?.message || sheetErr)
             const retryCount = (op.sheetRetryCount || 0) + 1
@@ -139,10 +155,7 @@ export async function flush() {
             let sheetOk = false
             if (!offline) {
               try {
-                for (const s of op.sheet) {
-                  if (s && s.__kind === 'cassa') await sendCassaToSheet(s)
-                  else await syncToSheet(s)
-                }
+                for (const s of op.sheet) { await sendSheetPayload(s) }
                 sheetOk = true
               } catch (sheetErr) {
                 console.warn('Sync foglio fallito, riprovo più tardi (non blocca il resto):', sheetErr?.message || sheetErr)
