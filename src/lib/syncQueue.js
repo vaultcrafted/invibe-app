@@ -91,21 +91,29 @@ export function cancelOp(opId) {
 }
 
 // Manda un singolo payload al foglio. Per i movimenti di CASSA, registra prima l'intenzione in
-// una tabella lato server (cassa_sheet_queue): così, anche se questo tentativo fallisce E il
-// browser si chiude prima di riuscire a riprovare, resta una traccia che una Edge Function
-// schedulata (cron, lato server) può riprendere da sola — non dipende più dal fatto che sia
-// rimasto aperto proprio QUESTO browser/dispositivo.
+// una tabella lato server (cassa_sheet_queue), poi chiede alla Edge Function di provarlo SUBITO
+// (fetch reale lato server, non 'no-cors' come da browser: qui possiamo davvero sapere se e'
+// andato a buon fine, invece di illuderci — Apps Script risponde sempre HTTP 200 anche quando
+// fallisce, mettendo l'errore vero dentro al corpo della risposta, che il browser in no-cors non
+// può leggere). Se anche questo tentativo fallisce, la riga resta pendente e il cron ogni 5 min
+// la riprende da sola.
 async function sendSheetPayload(s) {
   if (!(s && s.__kind === 'cassa')) { await syncToSheet(s); return }
   let queueId = null
   try {
     const { data } = await supabase.from('cassa_sheet_queue').insert({ payload: s }).select('id').single()
     queueId = data?.id ?? null
-  } catch (e) { /* offline o RLS: pace, il retry locale prova comunque a mandarlo lo stesso */ }
-  await sendCassaToSheet(s)
+  } catch (e) { /* offline o RLS: pace, resta comunque da processare via il vecchio fallback sotto */ }
+
   if (queueId != null) {
-    supabase.from('cassa_sheet_queue').update({ done: true, done_at: new Date().toISOString() }).eq('id', queueId)
-      .then(() => {}, () => {}) // se questo fallisce non è grave: il cron la rimanderà (doppione raro e innocuo)
+    const { data, error } = await supabase.functions.invoke('cassa-sheet-reconcile', { body: { onlyId: queueId } })
+    if (error || !data || data.succeeded !== 1) {
+      throw new Error((data && data.error) || error?.message || 'sync foglio non confermato, il cron lo riprenderà')
+    }
+  } else {
+    // Fallback raro (RLS/offline sulla insert): meglio tentare comunque alla vecchia maniera
+    // che perdere del tutto il tentativo immediato.
+    await sendCassaToSheet(s)
   }
 }
 
