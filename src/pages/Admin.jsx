@@ -5,7 +5,7 @@ import AiAssistantTab from '../components/AiAssistantTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search, SlidersHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
-import { sendCassaToSheet } from '../lib/sheetsSync'
+import { enqueueSheetOnly } from '../lib/syncQueue'
 import { useAuth } from '../context/AuthContext'
 import { parseTurnoExcel, DESTINATIONS, SHIFTS, shiftLabel, SERVICES, SERVICES_CORFU, getServices, capogruppoCode, prebookKeyForService, isPrebookingPagato, calcAge } from '../lib/constants'
 
@@ -1589,12 +1589,13 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     })
     setSaving(false)
     if (error) { setSaveError(error.message); return }
-    // invia il movimento al foglio di rendicontazione (fire-and-forget)
-    sendCassaToSheet({
-      destination, shift_num: shiftNum, azione: 'add',
+    // Invia il movimento al foglio di rendicontazione, CON ritentativo automatico se fallisce
+    // (prima era "spara e spera": se falliva anche una volta, restava disallineato per sempre).
+    enqueueSheetOnly([{
+      __kind: 'cassa', destination, shift_num: shiftNum, azione: 'add',
       tipoMov: form.tipo, importo: amount, descrizione: form.descrizione || '',
       categoria: form.categoria || '', metodo: form.metodo || 'Cash', data: form.data,
-    }).catch(err => console.warn('Sync cassa foglio fallito:', err?.message || err))
+    }])
     setShowForm(false); load()
   }
 
@@ -1602,11 +1603,11 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     const m = movimenti.find(x => x.id === id)
     await supabase.from('cassa_movimenti').delete().eq('id', id)
     if (m) {
-      sendCassaToSheet({
-        destination, shift_num: shiftNum, azione: 'elimina',
+      enqueueSheetOnly([{
+        __kind: 'cassa', destination, shift_num: shiftNum, azione: 'elimina',
         tipoMov: m.tipo, importo: m.importo, descrizione: m.descrizione || '',
         categoria: m.categoria || '', metodo: m.metodo || 'Cash', data: m.data,
-      }).catch(err => console.warn('Sync cassa foglio fallito:', err?.message || err))
+      }])
       // Se il movimento era AUTOMATICO (nato dal toggle di un servizio del gruppo):
       //  - se il servizio era diviso tra più metodi, tolgo SOLO il metodo di questo
       //    movimento dalla ripartizione, lasciando intatti gli altri metodi/quantità;

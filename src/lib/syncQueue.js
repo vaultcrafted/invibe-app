@@ -69,6 +69,17 @@ export function enqueueDelete(table, match, opts = {}) {
   return op.id
 }
 
+// Mette in coda con retry SOLO la parte foglio, senza nessuna operazione DB associata — utile
+// quando il salvataggio su Supabase è già stato fatto a parte (es. un form che vuole un errore
+// immediato se il DB fallisce), ma si vuole comunque che il sync verso il foglio Google riprovi
+// automaticamente se fallisce, invece di essere "spara e spera".
+export function enqueueSheetOnly(sheetPayloads) {
+  const op = { id: uid(), type: 'sheet-retry', sheet: sheetPayloads, sheetRetryCount: 0, dedupKey: null, ts: Date.now() }
+  const q = load(); q.push(op); persist(q)
+  flush()
+  return op.id
+}
+
 // Annulla un'operazione ancora non sincronizzata (es. cancellare un inserimento cassa fatto offline).
 // Ritorna true se era ancora in coda.
 export function cancelOp(opId) {
