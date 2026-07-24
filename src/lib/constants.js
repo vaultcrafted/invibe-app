@@ -113,6 +113,12 @@ export const PRICE_OVERRIDES = {
   G4: { gal_vega: 25 },
   G5: { gal_vega: 25 },
   P1: { pag_pizza: 25 },
+  // Cantante extra: 10€ resta solo per P1 (prezzo base sopra); da P2 in poi è 20€.
+  P2: { pag_cantante_extra: 20 },
+  P3: { pag_cantante_extra: 20 },
+  P4: { pag_cantante_extra: 20 },
+  P5: { pag_cantante_extra: 20 },
+  P6: { pag_cantante_extra: 20 },
 }
 
 // Prezzi caricati dal database (tabella servizi_prezzi). Se null, si usano i prezzi del codice.
