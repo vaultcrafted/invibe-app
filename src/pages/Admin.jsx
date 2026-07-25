@@ -1136,7 +1136,7 @@ function IncassiTab({ data, loading, onRefresh }) {
                                 </td>
                               )
                             }
-                            return <td key={sv.id} style={{ ...tdStyle, color: extra > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{extra > 0 ? `€${sv.prezzo * extra}` : '€0'}</td>
+                            return <td key={sv.id} style={{ ...tdStyle, color: extra > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{extra > 0 ? `€${svValue(g, sv)}` : '€0'}</td>
                           }
                           return <td key={sv.id} style={{ ...tdStyle, color: val > 0 ? 'var(--text-primary)' : 'var(--text-tertiary)' }}>{val > 0 ? (isQty ? val : `€${val}`) : '—'}</td>
                         })}

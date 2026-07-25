@@ -2,8 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICES, SERVICES_CORFU, getServices, DESTINATIONS, SHIFTS, getInitials, calcAge, capogruppoCode, prebookKeyForService, cassaCategoriaForService, isPrebookingPagato } from '../lib/constants'
-import { enqueueUpdate, enqueueInsert, enqueueDelete } from '../lib/syncQueue'
-import { syncToSheet } from '../lib/sheetsSync'
+import { enqueueUpdate, enqueueInsert, enqueueDelete, enqueueSheetOnly } from '../lib/syncQueue'
 import { useAuth } from '../context/AuthContext'
 import { METODI, METODO_COLORS } from './Cassa'
 import { ChevronLeft, Edit2, AlertTriangle } from 'lucide-react'
@@ -394,9 +393,9 @@ export default function GroupDetail() {
     })
 
     const newNPax = updated.filter(p => p.attivo !== false).length
-    // Scrive il Pax aggiornato (persone presenti) sul foglio rendicontazione
-    syncToSheet({ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: 'num_pax', quantita: newNPax })
-      .catch(err => console.warn('Sync pax sul foglio fallito:', err?.message || err))
+    // Scrive il Pax aggiornato (persone presenti) sul foglio rendicontazione, con ritentativo
+    // automatico se fallisce (prima era spara e spera: un fallimento restava silenzioso per sempre).
+    enqueueSheetOnly([{ destination: group.destination, shift_num: group.shift_num, capogruppo_code: group.capogruppo_code, servizioId: 'num_pax', quantita: newNPax }])
     // Aggiorno solo i servizi impostati sul gruppo intero (qty == vecchio nPax), lascio intatte le quantità modificate a mano
     const svc = getServices(group.destination, group.shift_num)
     svc.forEach(sv => {
