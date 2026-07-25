@@ -540,11 +540,16 @@ const fmtNum = (n) => (n || 0).toLocaleString('it-IT')
 // Per una lista di gruppi + i servizi della meta: quantità venduta, n. gruppi col servizio, incasso (qta*prezzo)
 function computeServices(grp, services) {
   return services.map((s, i) => {
-    let qty = 0, groupsWith = 0, maschi = 0, femmine = 0, adulti = 0, minori = 0
+    let qty = 0, groupsWith = 0, maschi = 0, femmine = 0, adulti = 0, minori = 0, revenue = 0
     for (const g of grp) {
       const v = Number(g[s.id]) || 0
       if (v > 0) {
         qty += v; groupsWith++
+        // Il prezzo può variare da turno a turno (es. Cantante extra 10€ su P1/P2 ma 20€ da P3
+        // in poi): il ricavo va calcolato col prezzo del turno SPECIFICO di questo gruppo, non
+        // con un unico prezzo fisso per tutta la meta.
+        const svTurno = getServices(g.destination, g.shift_num).find(x => x.id === s.id)
+        revenue += v * (svTurno ? svTurno.prezzo : (s.prezzo || 0))
         // Stima proporzionale: il servizio non è tracciato per singolo partecipante, solo come
         // quantità sul gruppo. Distribuiamo la quantità tra M/F e adulti/minori in base a quanti
         // ce ne sono nel gruppo rispetto al totale attivo. È una stima, non un dato esatto.
@@ -562,7 +567,7 @@ function computeServices(grp, services) {
         }
       }
     }
-    return { ...s, qty, groupsWith, maschi: Math.round(maschi), femmine: Math.round(femmine), adulti: Math.round(adulti), minori: Math.round(minori), revenue: qty * (s.prezzo || 0), color: SVC_PALETTE[i % SVC_PALETTE.length] }
+    return { ...s, qty, groupsWith, maschi: Math.round(maschi), femmine: Math.round(femmine), adulti: Math.round(adulti), minori: Math.round(minori), revenue, color: SVC_PALETTE[i % SVC_PALETTE.length] }
   })
 }
 
@@ -905,7 +910,12 @@ function IncassiTab({ data, loading, onRefresh }) {
   // dalla meta), ma un'eventuale quota EXTRA acquistata in meta è incasso vero e va contata:
   // g[sv.id] rappresenta sempre e solo l'extra (mai la parte prenotata), quindi basta questo.
   function svValue(g, sv) {
-    return sv.prezzo * (g[sv.id] || 0)
+    // Il prezzo può variare da turno a turno (es. Cantante extra 10€ su P1/P2 ma 20€ da P3 in
+    // poi): non basta il prezzo generico della meta (sv.prezzo), va preso quello del turno
+    // specifico di QUESTO gruppo.
+    const svTurno = getServices(g.destination, g.shift_num).find(s => s.id === sv.id)
+    const prezzo = svTurno ? svTurno.prezzo : sv.prezzo
+    return prezzo * (g[sv.id] || 0)
   }
   // Cella mostrata: € o numero secondo la vista scelta
   function svCell(g, sv) {
@@ -946,9 +956,10 @@ function IncassiTab({ data, loading, onRefresh }) {
     })
     return denom > 0 ? (qty / denom) * 100 : null
   }
-  // Servizi che concorrono al totale di un gruppo: quelli della SUA meta
+  // Servizi che concorrono al totale di un gruppo: quelli della SUA meta e del SUO turno
+  // (il prezzo può variare da turno a turno, es. Cantante extra 10€ su P1/P2 ma 20€ da P3 in poi)
   function groupServices(g) {
-    return filterDest ? SV : getServices(g.destination)
+    return getServices(g.destination, g.shift_num)
   }
 
   // Filtra gruppi
