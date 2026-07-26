@@ -91,6 +91,7 @@ export const SERVICES_SARDEGNA = [
   { id: 'sar_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 12 },
   { id: 'sar_pacchetto_serate', label: 'Pacchetto Serate', prezzo: 50 },
   { id: 'sar_pacchetto_saltafila', label: 'Pacchetto Saltafila', prezzo: 20 },
+  { id: 'sar_drink_saltafila', label: 'Drink saltafila', prezzo: 30 },
 ]
 
 // Pag: SSP / Boat / Vida sono sdoppiati cash/bonifico (campi separati)
@@ -195,7 +196,7 @@ export const CATEGORIE_META = {
   ],
   sardegna: [
     'Tassa di soggiorno', 'Cauzione', 'Escursioni in meta', 'SSP',
-    'Pacchetto serate', 'Pacchetto saltafila', 'Transfer aeroporto',
+    'Pacchetto serate', 'Pacchetto saltafila', 'Drink saltafila', 'Transfer aeroporto',
     'Spesa', 'Benzina', 'Rimborsi', 'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
   ],
   pag: [
@@ -248,6 +249,7 @@ export const SHEET_SERVIZIO_MAP = {
   sar_tassa_soggiorno: 'Tassa di Soggiorno',
   sar_pacchetto_serate: 'Pacchetto Serate',
   sar_pacchetto_saltafila: 'Pacchetto Saltafila',
+  sar_drink_saltafila: 'Drink saltafila',
   // Pag (cash/bonifico separati)
   pag_navetta: 'Navetta in meta',
   pag_tassa_soggiorno: 'Tassa di Soggiorno',
