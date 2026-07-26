@@ -62,6 +62,8 @@ export const SERVICES_CORFU = [
   { id: 'qta_mojito2', label: 'Mojito 2', prezzo: 10 },
   { id: 'qta_pool_sunrise', label: 'Solo Pool Sunrise', prezzo: 10 },
   { id: 'qta_pranzo_laviron', label: 'Pranzo Lavrion', prezzo: 10 },
+  // Nuovo locale "54": esiste solo da Corfù 3 in poi (non su C1/C2), venduto come extra in meta.
+  { id: 'qta_54', label: '54', prezzo: 20, minShift: 3 },
 ]
 
 // Servizi "in meta" per Zante / Gallipoli / Sardegna (a quantità, come Corfù).
@@ -153,7 +155,11 @@ export function getServices(destination, shiftNum) {
   const dbBase = DB_PRICES && DB_PRICES.base[destination]
   const dbOv = DB_PRICES && code && DB_PRICES.ov[code]
   const codeOv = code && PRICE_OVERRIDES[code]
-  return baseList.map(s => {
+  return baseList
+    // Alcuni servizi esistono solo da un certo turno in poi (es. il locale "54" a Corfù, da C3
+    // in poi). Se non conosciamo il turno (shiftNum non passato), li lasciamo tutti visibili.
+    .filter(s => !s.minShift || !shiftNum || shiftNum >= s.minShift)
+    .map(s => {
     // base effettiva: DB se presente, altrimenti codice
     const effBase = (dbBase && dbBase[s.id] != null) ? dbBase[s.id] : s.prezzo
     // override effettiva: DB se presente, altrimenti codice, altrimenti nessuna
@@ -172,7 +178,7 @@ export function getServices(destination, shiftNum) {
 // ============================================================
 export const CATEGORIE_META = {
   corfu: [
-    'Tassa di soggiorno', 'Cauzione', 'SSP', 'Paleo', 'Montecristo', 'Pazuzu',
+    'Tassa di soggiorno', 'Cauzione', 'SSP', 'Paleo', 'Montecristo', 'Pazuzu', '54',
     'Sunrise pool party', 'Mojito extra', 'Pranzo delicious', 'Cena delicious',
     'Transfer aeroporto', 'Parcheggio', 'Benzina', 'Rimborso spesa', 'Rimborsi',
     'Cassa (week precedente)', 'Cassa (week successiva)', 'Altro',
@@ -222,6 +228,7 @@ export const SHEET_SERVIZIO_MAP = {
   qta_mojito2: 'Mojito 2',
   qta_pool_sunrise: 'Solo Pool Sunrise',
   qta_pranzo_laviron: 'Pranzo Lavrion',
+  qta_54: '54',
   // Zante
   zan_escursioni: 'Escursioni in meta',
   zan_boat: 'SSP in meta',
