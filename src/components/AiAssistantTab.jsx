@@ -90,9 +90,7 @@ export default function AiAssistantTab({ embedded = false }) {
         )}
         {error && (
           <div style={{ padding: '10px 14px', borderRadius: 12, background: '#FEF2F2', border: '0.5px solid #FCA5A5', color: '#B91C1C', fontSize: 12.5, marginBottom: 12 }}>
-            {error.includes('not found') || error.includes('404')
-              ? "L'assistente non è ancora attivo: manca la Edge Function \"ai-assistant\" su Supabase. Chiedi a chi gestisce l'app di attivarla."
-              : `Errore: ${error}`}
+            {`Errore: ${error}`}
           </div>
         )}
         <div ref={bottomRef} />
