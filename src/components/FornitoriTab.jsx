@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
-import { Plus, X, Check, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
+import { Plus, X, AlertTriangle } from 'lucide-react'
 
 const fmtEur = (n) => '€ ' + Math.round(n || 0).toLocaleString('it-IT')
-const fmtData = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '—'
+const fmtDataBreve = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) : ''
 const oggiISO = () => new Date().toISOString().slice(0, 10)
 
 export default function FornitoriTab() {
@@ -12,28 +12,21 @@ export default function FornitoriTab() {
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDest, setFilterDest] = useState(null)
-  const [filterShift, setFilterShift] = useState(null) // null = tutti i turni della meta, sommati
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
 
   function blankForm() {
-    return { nome: '', destination: '', shift_num: '', importo: '', data_prevista: oggiISO(), note: '', gratis: false }
+    return { nome: '', destination: '', shift_num: '', importo: '', data_prevista: oggiISO(), data_pagamento: '', note: '', gratis: false }
   }
 
   useEffect(() => { load() }, [])
-  useEffect(() => { setFilterShift(null) }, [filterDest]) // cambiando meta, resetto il turno scelto
 
-  // Carica TUTTI i movimenti di cassa, superando il limite di default di 1000 righe per
-  // richiesta (paginando finché non arrivano meno righe di quelle chieste).
   async function loadTuttiMovimenti() {
     const PAGE = 1000
     let all = [], from = 0
     while (true) {
-      const { data, error } = await supabase
-        .from('cassa_movimenti')
-        .select('destination, shift_num, tipo, importo')
-        .range(from, from + PAGE - 1)
+      const { data, error } = await supabase.from('cassa_movimenti').select('destination, shift_num, tipo, importo').range(from, from + PAGE - 1)
       if (error) { console.error('Errore caricamento cassa_movimenti:', error); break }
       all = all.concat(data || [])
       if (!data || data.length < PAGE) break
@@ -45,7 +38,7 @@ export default function FornitoriTab() {
   async function load() {
     setLoading(true)
     const [f, m] = await Promise.all([
-      supabase.from('fornitori_pagamenti').select('*').order('data_prevista', { ascending: true, nullsFirst: false }),
+      supabase.from('fornitori_pagamenti').select('*').order('nome'),
       loadTuttiMovimenti(),
     ])
     setFornitori(f.data || [])
@@ -59,15 +52,16 @@ export default function FornitoriTab() {
       .reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : -Number(m.importo)), 0)
   }
 
-  async function salvaFornitore(e) {
+  async function salva(e) {
     e.preventDefault()
-    if (!form.nome.trim() || !form.importo) return
+    if (!form.nome.trim()) return
     const payload = {
       nome: form.nome.trim(),
       destination: form.destination || null,
       shift_num: form.shift_num ? Number(form.shift_num) : null,
       importo: Number(form.importo) || 0,
       data_prevista: form.data_prevista || null,
+      data_pagamento: form.data_pagamento || null,
       note: form.note || null,
       gratis: !!form.gratis,
     }
@@ -76,17 +70,8 @@ export default function FornitoriTab() {
     setShowForm(false); setEditing(null); setForm(blankForm())
     load()
   }
-
-  async function segnaPagato(row, data) {
-    await supabase.from('fornitori_pagamenti').update({ data_pagamento: data }).eq('id', row.id)
-    load()
-  }
-  async function annullaPagato(row) {
-    await supabase.from('fornitori_pagamenti').update({ data_pagamento: null }).eq('id', row.id)
-    load()
-  }
   async function elimina(row) {
-    if (!window.confirm(`Eliminare "${row.nome}"?`)) return
+    if (!window.confirm(`Eliminare "${row.nome}" · ${row.shift_num ? shiftLabel(row.destination, row.shift_num) : 'trasversale'}?`)) return
     await supabase.from('fornitori_pagamenti').delete().eq('id', row.id)
     load()
   }
@@ -94,126 +79,143 @@ export default function FornitoriTab() {
     setEditing(row)
     setForm({
       nome: row.nome, destination: row.destination || '', shift_num: row.shift_num ?? '',
-      importo: row.importo, data_prevista: row.data_prevista || oggiISO(), note: row.note || '', gratis: row.gratis,
+      importo: row.importo, data_prevista: row.data_prevista || oggiISO(), data_pagamento: row.data_pagamento || '',
+      note: row.note || '', gratis: row.gratis,
     })
     setShowForm(true)
   }
+  function apriNuovaCella(nome, dest, shift) {
+    setEditing(null)
+    setForm({ ...blankForm(), nome: nome || '', destination: dest || '', shift_num: shift ?? '' })
+    setShowForm(true)
+  }
 
-  const filtered = fornitori.filter(f => {
-    if (filterDest && f.destination && f.destination !== filterDest) return false
-    if (filterDest && !f.destination) return false // trasversali: mostro solo in "Tutte"
-    if (filterShift != null && f.shift_num != null && f.shift_num !== filterShift) return false
-    return true
-  })
-  const daPagare = filtered.filter(f => !f.data_pagamento && !f.gratis).sort((a, b) => (a.data_prevista || '9999').localeCompare(b.data_prevista || '9999'))
-  const pagati = filtered.filter(f => f.data_pagamento)
-  const gratis = filtered.filter(f => f.gratis && !f.data_pagamento)
-
-  const saldoAttuale = saldoReale(filterDest, filterShift)
-  let saldoCorrente = saldoAttuale
-  const proiezione = daPagare.map(f => {
-    saldoCorrente -= Number(f.importo)
-    return { ...f, saldoDopo: saldoCorrente }
-  })
-  const vaInRosso = proiezione.some(p => p.saldoDopo < 0)
-  const primoRosso = proiezione.find(p => p.saldoDopo < 0)
-
+  // ---- Vista a tabella: righe = nomi fornitore, colonne = turni della meta selezionata ----
   const turniMeta = filterDest ? (SHIFTS[filterDest] || []) : []
+  const fornitoriMeta = fornitori.filter(f => f.destination === filterDest)
+  const nomiRighe = [...new Set(fornitoriMeta.map(f => f.nome))].sort((a, b) => a.localeCompare(b))
+  const trasversali = fornitori.filter(f => !f.destination)
+
+  function cella(nome, shiftNum) {
+    return fornitoriMeta.find(f => f.nome === nome && f.shift_num === shiftNum)
+  }
+
+  const saldoAttuale = saldoReale(filterDest, null)
+  const daPagareTutti = fornitori.filter(f => !f.data_pagamento && !f.gratis && (!filterDest || f.destination === filterDest || !f.destination))
+  const totDaPagare = daPagareTutti.reduce((t, f) => t + Number(f.importo), 0)
+  const saldoFinale = saldoAttuale - totDaPagare
+  const vaInRosso = saldoFinale < 0
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Caricamento...</div>
 
   return (
     <div>
-      {/* Filtro meta */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         <button onClick={() => setFilterDest(null)} style={chipStyle(!filterDest)}>Tutte le mete</button>
         {DESTINATIONS.map(d => (
           <button key={d.id} onClick={() => setFilterDest(d.id)} style={chipStyle(filterDest === d.id)}>{d.flag} {d.name}</button>
         ))}
       </div>
 
-      {/* Filtro turno: solo se una meta e' selezionata */}
-      {filterDest && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-          <button onClick={() => setFilterShift(null)} style={chipStyle(filterShift == null, true)}>Tutti i turni (sommati)</button>
-          {turniMeta.map(s => (
-            <button key={s.num} onClick={() => setFilterShift(s.num)} style={chipStyle(filterShift === s.num, true)}>{shiftLabel(filterDest, s.num)}</button>
-          ))}
-        </div>
-      )}
-      {!filterDest && <div style={{ marginBottom: 20 }} />}
-
-      {/* ===== SALDO — un solo numero grande, chiaro ===== */}
+      {/* ===== SALDO ===== */}
       <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 16, padding: 24, marginBottom: 20, textAlign: 'center' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-          Saldo cassa reale oggi{filterDest ? ' · ' + DESTINATIONS.find(d => d.id === filterDest).name : ''}{filterShift ? ' ' + filterShift : filterDest ? ' (tutti i turni)' : ''}
+          Saldo cassa reale oggi{filterDest ? ' · ' + DESTINATIONS.find(d => d.id === filterDest).name + ' (tutti i turni)' : ''}
         </div>
         <div style={{ fontSize: 42, fontWeight: 800, color: saldoAttuale >= 0 ? '#16A34A' : '#DC2626', lineHeight: 1 }}>{fmtEur(saldoAttuale)}</div>
 
-        {daPagare.length > 0 && (
+        {totDaPagare > 0 && (
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: '0.5px solid var(--border)', display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Da pagare (pianificato)</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>-{fmtEur(daPagare.reduce((t, f) => t + Number(f.importo), 0))}</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>-{fmtEur(totDaPagare)}</div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Resterebbe dopo tutti i pagamenti</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: saldoCorrente >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoCorrente)}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: saldoFinale >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoFinale)}</div>
             </div>
           </div>
         )}
-
         {vaInRosso && (
-          <div style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '8px 14px', fontSize: 12.5, color: '#B91C1C', textAlign: 'left' }}>
+          <div style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '8px 14px', fontSize: 12.5, color: '#B91C1C' }}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-            <span>Se paghi tutto nell'ordine previsto, la cassa va in rosso a partire da <b>{primoRosso.nome}</b> ({fmtData(primoRosso.data_prevista)}).</span>
+            <span>Pagando tutto quello pianificato, la cassa andrebbe in rosso.</span>
           </div>
         )}
       </div>
 
-      {/* Elenco pagamenti pianificati non ancora fatti, con saldo progressivo */}
-      {daPagare.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Ordine dei pagamenti in sospeso</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Fornitori & pagamenti</div>
+        <button onClick={() => apriNuovaCella('', filterDest, '')} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+          <Plus size={15} /> Nuovo fornitore
+        </button>
+      </div>
+
+      {!filterDest ? (
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-tertiary)', fontSize: 13.5, background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12 }}>
+          Seleziona una meta qui sopra per vedere la tabella fornitori × turni.
+        </div>
+      ) : (
+        <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'auto' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ background: 'var(--bg-secondary)' }}>
+                <th style={thStyle}>Fornitore</th>
+                {turniMeta.map(s => <th key={s.num} style={{ ...thStyle, textAlign: 'center', minWidth: 90 }}>{shiftLabel(filterDest, s.num)}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {nomiRighe.length === 0 && (
+                <tr><td colSpan={turniMeta.length + 1} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)' }}>Nessun fornitore per questa meta. Aggiungine uno con "Nuovo fornitore".</td></tr>
+              )}
+              {nomiRighe.map((nome, i) => (
+                <tr key={nome} style={{ borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                  <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>{nome}</td>
+                  {turniMeta.map(s => {
+                    const c = cella(nome, s.num)
+                    return (
+                      <td key={s.num} style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                        onClick={() => c ? apriModifica(c) : apriNuovaCella(nome, filterDest, s.num)}>
+                        {!c ? <span style={{ color: 'var(--border)' }}>—</span>
+                          : c.gratis ? <span style={cellBadge('#64748B', '#F1F5F9')}>FREE</span>
+                          : c.data_pagamento ? <span style={cellBadge('#16A34A', '#DCFCE7')}>{fmtDataBreve(c.data_pagamento)}</span>
+                          : <span style={cellBadge('#B91C1C', '#FEE2E2')}>NO</span>}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {trasversali.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Pagamenti trasversali (non legati a un turno)</div>
           <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-            {proiezione.map((p, i) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{p.nome}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>previsto {fmtData(p.data_prevista)}{p.note ? ' · ' + p.note : ''}</div>
+            {trasversali.map((f, i) => (
+              <div key={f.id} onClick={() => apriModifica(f)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none', cursor: 'pointer' }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{f.nome}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{f.data_pagamento ? 'pagato il ' + fmtDataBreve(f.data_pagamento) : 'da pagare'}{f.note ? ' · ' + f.note : ''}</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-                  <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>-{fmtEur(p.importo)}</span>
-                  <span style={{ fontSize: 14, fontWeight: 800, color: p.saldoDopo >= 0 ? '#16A34A' : '#DC2626', minWidth: 90, textAlign: 'right' }}>{fmtEur(p.saldoDopo)}</span>
-                </div>
+                <div style={{ fontSize: 13.5, fontWeight: 700 }}>{f.gratis ? 'FREE' : fmtEur(f.importo)}</div>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ===== FORNITORI & PAGAMENTI ===== */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Fornitori & pagamenti</div>
-        <button onClick={() => { setEditing(null); setForm({ ...blankForm(), destination: filterDest || '', shift_num: filterShift || '' }); setShowForm(true) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
-          <Plus size={15} /> Nuovo pagamento
-        </button>
-      </div>
-
-      {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-tertiary)', fontSize: 13.5 }}>Nessun fornitore registrato qui.</div>
-      )}
-
-      <FornitoriLista titolo="Da pagare" righe={daPagare} colore="#DC2626" onPagato={segnaPagato} onModifica={apriModifica} onElimina={elimina} />
-      <FornitoriLista titolo="Pagati" righe={pagati} colore="#16A34A" pagatoView onAnnulla={annullaPagato} onModifica={apriModifica} onElimina={elimina} />
-      {gratis.length > 0 && <FornitoriLista titolo="Gratis (nessun costo)" righe={gratis} colore="#64748B" onModifica={apriModifica} onElimina={elimina} />}
-
       {showForm && (
         <div onClick={() => { setShowForm(false); setEditing(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
-          <form onClick={e => e.stopPropagation()} onSubmit={salvaFornitore} style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <form onClick={e => e.stopPropagation()} onSubmit={salva} style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ fontSize: 15, fontWeight: 700 }}>{editing ? 'Modifica pagamento' : 'Nuovo pagamento fornitore'}</div>
-              <button type="button" onClick={() => { setShowForm(false); setEditing(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                {editing && <button type="button" onClick={() => { elimina(editing); setShowForm(false); setEditing(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 12, fontWeight: 700 }}>Elimina</button>}
+                <button type="button" onClick={() => { setShowForm(false); setEditing(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
+              </div>
             </div>
 
             <label style={labelStyle}>Nome fornitore
@@ -227,7 +229,7 @@ export default function FornitoriTab() {
                   {DESTINATIONS.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </label>
-              <label style={{ ...labelStyle, flex: 1 }}>Turno (opzionale)
+              <label style={{ ...labelStyle, flex: 1 }}>Turno
                 <select value={form.shift_num} onChange={e => setForm({ ...form, shift_num: e.target.value })} style={inputStyle} disabled={!form.destination}>
                   <option value="">—</option>
                   {form.destination && SHIFTS[form.destination]?.map(s => <option key={s.num} value={s.num}>{shiftLabel(form.destination, s.num)}</option>)}
@@ -237,12 +239,16 @@ export default function FornitoriTab() {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <label style={{ ...labelStyle, flex: 1 }}>Importo (€)
-                <input required type="number" step="0.01" value={form.importo} onChange={e => setForm({ ...form, importo: e.target.value })} style={inputStyle} />
+                <input type="number" step="0.01" value={form.importo} onChange={e => setForm({ ...form, importo: e.target.value })} style={inputStyle} />
               </label>
               <label style={{ ...labelStyle, flex: 1 }}>Data prevista
                 <input type="date" value={form.data_prevista} onChange={e => setForm({ ...form, data_prevista: e.target.value })} style={inputStyle} />
               </label>
             </div>
+
+            <label style={labelStyle}>Data pagamento reale (lascia vuoto se non ancora pagato)
+              <input type="date" value={form.data_pagamento} onChange={e => setForm({ ...form, data_pagamento: e.target.value })} style={inputStyle} />
+            </label>
 
             <label style={labelStyle}>Note (opzionale)
               <input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="es. saldo w3, anticipo..." style={inputStyle} />
@@ -263,48 +269,13 @@ export default function FornitoriTab() {
   )
 }
 
-function FornitoriLista({ titolo, righe, colore, pagatoView, onPagato, onAnnulla, onModifica, onElimina }) {
-  const [dataPagamento, setDataPagamento] = useState({})
-  if (!righe.length) return null
-  return (
-    <div style={{ marginBottom: 18 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: colore, textTransform: 'uppercase', marginBottom: 8 }}>{titolo} ({righe.length})</div>
-      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-        {righe.map((f, i) => (
-          <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{f.nome} {f.destination && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 12 }}>· {DESTINATIONS.find(d => d.id === f.destination)?.name}{f.shift_num ? ' ' + f.shift_num : ''}</span>}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                {pagatoView ? 'pagato il ' + fmtData(f.data_pagamento) : 'previsto ' + fmtData(f.data_prevista)}
-                {f.note ? ' · ' + f.note : ''}
-              </div>
-            </div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>{f.gratis ? 'FREE' : fmtEur(f.importo)}</div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              {!pagatoView && !f.gratis && (
-                <>
-                  <input type="date" value={dataPagamento[f.id] || oggiISO()} onChange={e => setDataPagamento(p => ({ ...p, [f.id]: e.target.value }))} style={{ fontSize: 11, padding: '5px 6px', borderRadius: 6, border: '1px solid var(--border)', width: 118 }} />
-                  <button onClick={() => onPagato(f, dataPagamento[f.id] || oggiISO())} title="Segna come pagato" style={iconBtnStyle('#16A34A')}><Check size={14} /></button>
-                </>
-              )}
-              {pagatoView && (
-                <button onClick={() => onAnnulla(f)} title="Segna come NON pagato" style={iconBtnStyle('#D97706')}>↺</button>
-              )}
-              <button onClick={() => onModifica(f)} title="Modifica" style={iconBtnStyle('var(--text-secondary)')}>✎</button>
-              <button onClick={() => onElimina(f)} title="Elimina" style={iconBtnStyle('#DC2626')}><Trash2 size={13} /></button>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
+function chipStyle(active) {
+  return { padding: '6px 13px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer', background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)') }
 }
-
-function chipStyle(active, small) {
-  return { padding: small ? '5px 11px' : '6px 13px', borderRadius: 999, fontSize: small ? 11.5 : 12, fontWeight: 700, cursor: 'pointer', background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)') }
+function cellBadge(color, bg) {
+  return { display: 'inline-block', padding: '3px 9px', borderRadius: 6, fontWeight: 700, fontSize: 11.5, color, background: bg }
 }
-function iconBtnStyle(color) {
-  return { width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', color, border: 'none', cursor: 'pointer', fontSize: 13 }
-}
+const thStyle = { padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }
+const tdStyle = { padding: '9px 14px' }
 const labelStyle = { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }
 const inputStyle = { padding: '9px 11px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13.5, fontFamily: 'inherit' }
