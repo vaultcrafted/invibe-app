@@ -4,10 +4,10 @@ import { Sparkles, X } from 'lucide-react'
 import AiAssistantTab from './AiAssistantTab'
 
 export default function AiAssistantFab() {
-  const { isAdmin } = useAuth()
+  const { isFullAccess } = useAuth()
   const [open, setOpen] = useState(false)
 
-  if (!isAdmin) return null // stesso livello di accesso della tab Assistente AI nel pannello Admin
+  if (!isFullAccess) return null // solo Bobo/Sonia (ufficio), non tutto lo staff
 
   return (
     <>
