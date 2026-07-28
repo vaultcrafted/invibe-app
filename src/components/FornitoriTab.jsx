@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
-import { Plus, X, Check, Trash2, AlertTriangle, Pencil } from 'lucide-react'
+import { Plus, X, Check, Trash2, AlertTriangle, ChevronDown } from 'lucide-react'
 
 const fmtEur = (n) => '€ ' + Math.round(n || 0).toLocaleString('it-IT')
 const fmtData = (d) => d ? new Date(d + 'T00:00:00').toLocaleDateString('it-IT', { day: '2-digit', month: 'short' }) : '—'
@@ -9,9 +9,10 @@ const oggiISO = () => new Date().toISOString().slice(0, 10)
 
 export default function FornitoriTab() {
   const [fornitori, setFornitori] = useState([])
-  const [saldi, setSaldi] = useState([]) // righe da get_cassa_saldi(): {destination, shift_num, saldo, ...}
+  const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDest, setFilterDest] = useState(null)
+  const [filterShift, setFilterShift] = useState(null) // null = tutti i turni della meta, sommati
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -21,24 +22,41 @@ export default function FornitoriTab() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => { setFilterShift(null) }, [filterDest]) // cambiando meta, resetto il turno scelto
+
+  // Carica TUTTI i movimenti di cassa, superando il limite di default di 1000 righe per
+  // richiesta (paginando finché non arrivano meno righe di quelle chieste).
+  async function loadTuttiMovimenti() {
+    const PAGE = 1000
+    let all = [], from = 0
+    while (true) {
+      const { data, error } = await supabase
+        .from('cassa_movimenti')
+        .select('destination, shift_num, tipo, importo')
+        .range(from, from + PAGE - 1)
+      if (error) { console.error('Errore caricamento cassa_movimenti:', error); break }
+      all = all.concat(data || [])
+      if (!data || data.length < PAGE) break
+      from += PAGE
+    }
+    return all
+  }
 
   async function load() {
     setLoading(true)
-    const [{ data: f }, { data: s }] = await Promise.all([
+    const [f, m] = await Promise.all([
       supabase.from('fornitori_pagamenti').select('*').order('data_prevista', { ascending: true, nullsFirst: false }),
-      supabase.rpc('get_cassa_saldi'),
+      loadTuttiMovimenti(),
     ])
-    setFornitori(f || [])
-    setSaldi(s || [])
+    setFornitori(f.data || [])
+    setMovimenti(m)
     setLoading(false)
   }
 
-  // Saldo cassa REALE attuale (calcolato dal database, mai sbagliato per limiti di righe),
-  // per una meta (tutte le sue righe/turni sommate) o per tutte le mete insieme.
-  function saldoReale(dest) {
-    return saldi
-      .filter(r => !dest || r.destination === dest)
-      .reduce((t, r) => t + Number(r.saldo || 0), 0)
+  function saldoReale(dest, shift) {
+    return movimenti
+      .filter(m => (!dest || m.destination === dest) && (shift == null || m.shift_num === shift))
+      .reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : -Number(m.importo)), 0)
   }
 
   async function salvaFornitore(e) {
@@ -80,121 +98,115 @@ export default function FornitoriTab() {
     })
     setShowForm(true)
   }
-  function apriNuovo() {
-    setEditing(null)
-    setForm({ ...blankForm(), destination: filterDest || '' })
-    setShowForm(true)
-  }
 
-  const filtered = fornitori.filter(f => !filterDest || f.destination === filterDest || !f.destination)
+  const filtered = fornitori.filter(f => {
+    if (filterDest && f.destination && f.destination !== filterDest) return false
+    if (filterDest && !f.destination) return false // trasversali: mostro solo in "Tutte"
+    if (filterShift != null && f.shift_num != null && f.shift_num !== filterShift) return false
+    return true
+  })
   const daPagare = filtered.filter(f => !f.data_pagamento && !f.gratis).sort((a, b) => (a.data_prevista || '9999').localeCompare(b.data_prevista || '9999'))
-  const pagati = filtered.filter(f => f.data_pagamento).sort((a, b) => (b.data_pagamento || '').localeCompare(a.data_pagamento || ''))
+  const pagati = filtered.filter(f => f.data_pagamento)
   const gratis = filtered.filter(f => f.gratis && !f.data_pagamento)
 
-  const saldoAttuale = saldoReale(filterDest)
-  const totalePianificato = daPagare.reduce((t, f) => t + Number(f.importo), 0)
-  let corrente = saldoAttuale
-  const proiezione = daPagare.map(f => { corrente -= Number(f.importo); return { ...f, saldoDopo: corrente } })
-  const saldoFinale = corrente
+  const saldoAttuale = saldoReale(filterDest, filterShift)
+  let saldoCorrente = saldoAttuale
+  const proiezione = daPagare.map(f => {
+    saldoCorrente -= Number(f.importo)
+    return { ...f, saldoDopo: saldoCorrente }
+  })
   const vaInRosso = proiezione.some(p => p.saldoDopo < 0)
   const primoRosso = proiezione.find(p => p.saldoDopo < 0)
 
-  // dettaglio per turno, solo per la meta selezionata (aiuta a capire "da dove viene" il numero)
-  const dettaglioTurni = filterDest ? saldi.filter(r => r.destination === filterDest).sort((a, b) => (a.shift_num || 0) - (b.shift_num || 0)) : []
+  const turniMeta = filterDest ? (SHIFTS[filterDest] || []) : []
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Caricamento...</div>
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        <button onClick={() => setFilterDest(null)} style={chipStyle(!filterDest)}>Tutte</button>
+      {/* Filtro meta */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <button onClick={() => setFilterDest(null)} style={chipStyle(!filterDest)}>Tutte le mete</button>
         {DESTINATIONS.map(d => (
           <button key={d.id} onClick={() => setFilterDest(d.id)} style={chipStyle(filterDest === d.id)}>{d.flag} {d.name}</button>
         ))}
       </div>
 
-      {/* ===== SALDO — un solo numero grande, ben visibile ===== */}
-      <div style={{ background: vaInRosso ? '#FEF2F2' : 'var(--bg-primary)', border: '1px solid ' + (vaInRosso ? '#FCA5A5' : 'var(--border)'), borderRadius: 16, padding: 22, marginBottom: 16, textAlign: 'center' }}>
-        <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-          Cassa {filterDest ? DESTINATIONS.find(d => d.id === filterDest).name : '(tutte le mete)'} — quanto hai davvero oggi
+      {/* Filtro turno: solo se una meta e' selezionata */}
+      {filterDest && (
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+          <button onClick={() => setFilterShift(null)} style={chipStyle(filterShift == null, true)}>Tutti i turni (sommati)</button>
+          {turniMeta.map(s => (
+            <button key={s.num} onClick={() => setFilterShift(s.num)} style={chipStyle(filterShift === s.num, true)}>{shiftLabel(filterDest, s.num)}</button>
+          ))}
         </div>
-        <div style={{ fontSize: 40, fontWeight: 800, color: saldoAttuale >= 0 ? '#16A34A' : '#DC2626', margin: '4px 0' }}>{fmtEur(saldoAttuale)}</div>
+      )}
+      {!filterDest && <div style={{ marginBottom: 20 }} />}
 
-        {totalePianificato > 0 && (
-          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-            Hai <strong>{fmtEur(totalePianificato)}</strong> di pagamenti in programma non ancora fatti.
-            Dopo averli fatti tutti, ti resterebbero <strong style={{ color: saldoFinale >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoFinale)}</strong>.
+      {/* ===== SALDO — un solo numero grande, chiaro ===== */}
+      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 16, padding: 24, marginBottom: 20, textAlign: 'center' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
+          Saldo cassa reale oggi{filterDest ? ' · ' + DESTINATIONS.find(d => d.id === filterDest).name : ''}{filterShift ? ' ' + filterShift : filterDest ? ' (tutti i turni)' : ''}
+        </div>
+        <div style={{ fontSize: 42, fontWeight: 800, color: saldoAttuale >= 0 ? '#16A34A' : '#DC2626', lineHeight: 1 }}>{fmtEur(saldoAttuale)}</div>
+
+        {daPagare.length > 0 && (
+          <div style={{ marginTop: 18, paddingTop: 18, borderTop: '0.5px solid var(--border)', display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Da pagare (pianificato)</div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>-{fmtEur(daPagare.reduce((t, f) => t + Number(f.importo), 0))}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Resterebbe dopo tutti i pagamenti</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: saldoCorrente >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoCorrente)}</div>
+            </div>
           </div>
         )}
 
         {vaInRosso && (
-          <div style={{ display: 'inline-flex', gap: 8, alignItems: 'center', background: '#FEE2E2', borderRadius: 10, padding: '8px 14px', marginTop: 12, fontSize: 12.5, fontWeight: 700, color: '#B91C1C' }}>
-            <AlertTriangle size={15} /> Attenzione: pagando "{primoRosso.nome}" ({fmtData(primoRosso.data_prevista)}) andresti in rosso
+          <div style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '8px 14px', fontSize: 12.5, color: '#B91C1C', textAlign: 'left' }}>
+            <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+            <span>Se paghi tutto nell'ordine previsto, la cassa va in rosso a partire da <b>{primoRosso.nome}</b> ({fmtData(primoRosso.data_prevista)}).</span>
           </div>
-        )}
-
-        {filterDest && dettaglioTurni.length > 0 && (
-          <details style={{ marginTop: 14, fontSize: 12, color: 'var(--text-tertiary)' }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Vedi il dettaglio per turno</summary>
-            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', maxWidth: 320, marginLeft: 'auto', marginRight: 'auto' }}>
-              {dettaglioTurni.map(r => (
-                <div key={r.shift_num} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>{shiftLabel(filterDest, r.shift_num)} ({r.movimenti} movimenti)</span>
-                  <strong style={{ color: r.saldo >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(r.saldo)}</strong>
-                </div>
-              ))}
-            </div>
-          </details>
         )}
       </div>
 
-      {/* ===== PAGAMENTI IN PROGRAMMA (solo se ce ne sono) ===== */}
+      {/* Elenco pagamenti pianificati non ancora fatti, con saldo progressivo */}
       {daPagare.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase', marginBottom: 8 }}>Da pagare, in ordine di data</div>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: 8 }}>Ordine dei pagamenti in sospeso</div>
           <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
             {proiezione.map((p, i) => (
-              <RigaFornitore key={p.id} f={p} isFirst={i === 0} colore="#DC2626" sottotitolo={'previsto ' + fmtData(p.data_prevista)}
-                extra={<span style={{ fontSize: 12, color: p.saldoDopo >= 0 ? '#16A34A' : '#DC2626', fontWeight: 600 }}>resta {fmtEur(p.saldoDopo)}</span>}
-                onSegnaPagato={segnaPagato} onModifica={apriModifica} onElimina={elimina} />
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '10px 16px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{p.nome}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>previsto {fmtData(p.data_prevista)}{p.note ? ' · ' + p.note : ''}</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+                  <span style={{ fontSize: 13, color: 'var(--text-tertiary)' }}>-{fmtEur(p.importo)}</span>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: p.saldoDopo >= 0 ? '#16A34A' : '#DC2626', minWidth: 90, textAlign: 'right' }}>{fmtEur(p.saldoDopo)}</span>
+                </div>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ===== STORICO PAGATI (comprimibile, non ingombra) ===== */}
-      {pagati.length > 0 && (
-        <details style={{ marginBottom: 20 }}>
-          <summary style={{ fontSize: 11.5, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase', marginBottom: 8, cursor: 'pointer' }}>Già pagati ({pagati.length})</summary>
-          <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginTop: 8 }}>
-            {pagati.map(f => (
-              <RigaFornitore key={f.id} f={f} colore="#16A34A" sottotitolo={'pagato il ' + fmtData(f.data_pagamento)}
-                onAnnulla={annullaPagato} onModifica={apriModifica} onElimina={elimina} />
-            ))}
-          </div>
-        </details>
-      )}
-
-      {gratis.length > 0 && (
-        <details style={{ marginBottom: 20 }}>
-          <summary style={{ fontSize: 11.5, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', marginBottom: 8, cursor: 'pointer' }}>Gratis ({gratis.length})</summary>
-          <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginTop: 8 }}>
-            {gratis.map(f => (
-              <RigaFornitore key={f.id} f={f} colore="#64748B" sottotitolo="nessun costo" onModifica={apriModifica} onElimina={elimina} />
-            ))}
-          </div>
-        </details>
-      )}
+      {/* ===== FORNITORI & PAGAMENTI ===== */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Fornitori & pagamenti</div>
+        <button onClick={() => { setEditing(null); setForm({ ...blankForm(), destination: filterDest || '', shift_num: filterShift || '' }); setShowForm(true) }} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+          <Plus size={15} /> Nuovo pagamento
+        </button>
+      </div>
 
       {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-tertiary)', fontSize: 13.5 }}>
-          Nessun pagamento fornitore ancora registrato{filterDest ? ' per ' + DESTINATIONS.find(d => d.id === filterDest).name : ''}.
-        </div>
+        <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-tertiary)', fontSize: 13.5 }}>Nessun fornitore registrato qui.</div>
       )}
 
-      <button onClick={apriNuovo} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '13px', borderRadius: 12, background: 'var(--iv-blue)', color: '#fff', fontSize: 14, fontWeight: 700, border: 'none', cursor: 'pointer', marginTop: 8 }}>
-        <Plus size={17} /> Nuovo pagamento fornitore
-      </button>
+      <FornitoriLista titolo="Da pagare" righe={daPagare} colore="#DC2626" onPagato={segnaPagato} onModifica={apriModifica} onElimina={elimina} />
+      <FornitoriLista titolo="Pagati" righe={pagati} colore="#16A34A" pagatoView onAnnulla={annullaPagato} onModifica={apriModifica} onElimina={elimina} />
+      {gratis.length > 0 && <FornitoriLista titolo="Gratis (nessun costo)" righe={gratis} colore="#64748B" onModifica={apriModifica} onElimina={elimina} />}
 
       {showForm && (
         <div onClick={() => { setShowForm(false); setEditing(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
@@ -238,7 +250,7 @@ export default function FornitoriTab() {
 
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               <input type="checkbox" checked={form.gratis} onChange={e => setForm({ ...form, gratis: e.target.checked })} />
-              Gratis questa volta (nessun costo)
+              Gratis questa volta (FREE, nessun costo)
             </label>
 
             <button type="submit" style={{ marginTop: 6, padding: '11px', borderRadius: 10, background: 'var(--iv-blue)', color: '#fff', fontWeight: 700, border: 'none', cursor: 'pointer', fontSize: 14 }}>
@@ -251,39 +263,48 @@ export default function FornitoriTab() {
   )
 }
 
-function RigaFornitore({ f, colore, sottotitolo, extra, isFirst, onSegnaPagato, onAnnulla, onModifica, onElimina }) {
-  const [data, setData] = useState(oggiISO())
+function FornitoriLista({ titolo, righe, colore, pagatoView, onPagato, onAnnulla, onModifica, onElimina }) {
+  const [dataPagamento, setDataPagamento] = useState({})
+  if (!righe.length) return null
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', borderTop: !isFirst && !onAnnulla && !extra ? '0.5px solid var(--border)' : (isFirst ? 'none' : '0.5px solid var(--border)') }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600 }}>
-          {f.nome}
-          {f.destination && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 12 }}> · {DESTINATIONS.find(d => d.id === f.destination)?.name}{f.shift_num ? ' ' + f.shift_num : ''}</span>}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{sottotitolo}{f.note ? ' · ' + f.note : ''}</div>
-      </div>
-      {extra}
-      <div style={{ fontSize: 13.5, fontWeight: 700, flexShrink: 0, minWidth: 60, textAlign: 'right' }}>{f.gratis ? 'FREE' : fmtEur(f.importo)}</div>
-      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        {onSegnaPagato && (
-          <>
-            <input type="date" value={data} onChange={e => setData(e.target.value)} style={{ fontSize: 11, padding: '5px 6px', borderRadius: 6, border: '1px solid var(--border)', width: 110 }} />
-            <button onClick={() => onSegnaPagato(f, data)} title="Segna come pagato" style={iconBtnStyle('#16A34A')}><Check size={14} /></button>
-          </>
-        )}
-        {onAnnulla && <button onClick={() => onAnnulla(f)} title="Segna come NON pagato" style={iconBtnStyle('#D97706')}>↺</button>}
-        <button onClick={() => onModifica(f)} title="Modifica" style={iconBtnStyle('var(--text-secondary)')}><Pencil size={13} /></button>
-        <button onClick={() => onElimina(f)} title="Elimina" style={iconBtnStyle('#DC2626')}><Trash2 size={13} /></button>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: colore, textTransform: 'uppercase', marginBottom: 8 }}>{titolo} ({righe.length})</div>
+      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+        {righe.map((f, i) => (
+          <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{f.nome} {f.destination && <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', fontSize: 12 }}>· {DESTINATIONS.find(d => d.id === f.destination)?.name}{f.shift_num ? ' ' + f.shift_num : ''}</span>}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                {pagatoView ? 'pagato il ' + fmtData(f.data_pagamento) : 'previsto ' + fmtData(f.data_prevista)}
+                {f.note ? ' · ' + f.note : ''}
+              </div>
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, flexShrink: 0 }}>{f.gratis ? 'FREE' : fmtEur(f.importo)}</div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              {!pagatoView && !f.gratis && (
+                <>
+                  <input type="date" value={dataPagamento[f.id] || oggiISO()} onChange={e => setDataPagamento(p => ({ ...p, [f.id]: e.target.value }))} style={{ fontSize: 11, padding: '5px 6px', borderRadius: 6, border: '1px solid var(--border)', width: 118 }} />
+                  <button onClick={() => onPagato(f, dataPagamento[f.id] || oggiISO())} title="Segna come pagato" style={iconBtnStyle('#16A34A')}><Check size={14} /></button>
+                </>
+              )}
+              {pagatoView && (
+                <button onClick={() => onAnnulla(f)} title="Segna come NON pagato" style={iconBtnStyle('#D97706')}>↺</button>
+              )}
+              <button onClick={() => onModifica(f)} title="Modifica" style={iconBtnStyle('var(--text-secondary)')}>✎</button>
+              <button onClick={() => onElimina(f)} title="Elimina" style={iconBtnStyle('#DC2626')}><Trash2 size={13} /></button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
 }
 
-function chipStyle(active) {
-  return { padding: '7px 14px', borderRadius: 999, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)') }
+function chipStyle(active, small) {
+  return { padding: small ? '5px 11px' : '6px 13px', borderRadius: 999, fontSize: small ? 11.5 : 12, fontWeight: 700, cursor: 'pointer', background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: active ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)') }
 }
 function iconBtnStyle(color) {
-  return { width: 27, height: 27, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', color, border: 'none', cursor: 'pointer' }
+  return { width: 26, height: 26, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-secondary)', color, border: 'none', cursor: 'pointer', fontSize: 13 }
 }
 const labelStyle = { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }
 const inputStyle = { padding: '9px 11px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13.5, fontFamily: 'inherit' }
