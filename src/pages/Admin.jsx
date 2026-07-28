@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PaxContentTab from '../components/PaxContentTab'
 import AiAssistantTab from '../components/AiAssistantTab'
+import FornitoriTab from '../components/FornitoriTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search, SlidersHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
@@ -363,6 +364,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
         <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
+        <button className={'tab ' + (tab === 'fornitori' ? 'active' : '')} onClick={() => setTab('fornitori')}>📊 Previsione Cassa</button>
         <button className={'tab ' + (tab === 'ai' ? 'active' : '')} onClick={() => setTab('ai')}>🤖 Assistente AI</button>
       </div>
       </div>
@@ -455,6 +457,7 @@ export default function Admin() {
       {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} onRefresh={fetchIncassi} />}
       {tab === 'cassa' && <CassaTab />}
       {tab === 'pax' && <PaxContentTab scope={scopeShifts} />}
+      {tab === 'fornitori' && <FornitoriTab />}
       {tab === 'ai' && <AiAssistantTab />}
     </div>
   )
