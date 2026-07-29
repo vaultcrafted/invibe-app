@@ -31,7 +31,9 @@ export default function GroupList() {
   const [groups, setGroups] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [svcFilter, setSvcFilter] = useState(null)   // id servizio da filtrare, o 'prebook_esc'
+  // Lista di filtri attivi, combinati in AND (es. 'no:qta_ssp' + 'no:qta_pazuzu'
+  // = chi non ha ne' l'SSP ne' il Pazuzu). Vuota = nessun filtro.
+  const [svcFilters, setSvcFilters] = useState([])
   const [filterOpen, setFilterOpen] = useState(false)
 
   const dest = DESTINATIONS.find(d => d.id === destId)
@@ -63,16 +65,7 @@ export default function GroupList() {
       const q = search.toLowerCase()
       return g.capogruppo_display?.toLowerCase().includes(q) || String(g.capogruppo_code || '').toLowerCase().includes(q)
     })
-    .filter(g => {
-      if (!svcFilter) return true
-      if (svcFilter === 'prebook_esc') return g.prebook && Number(g.prebook.escursioni) > 0
-      if (svcFilter === 'prebook_ssp') return g.prebook && Number(g.prebook.ssp) > 0
-      const negate = svcFilter.startsWith('no:')
-      const svId = svcFilter.replace(/^(has:|no:)/, '')
-      const sv = getServices(destId).find(s => s.id === svId)
-      if (!sv) return true
-      return negate ? !isServiceOn(g, sv) : isPaid(g, sv)
-    })
+    .filter(g => svcFilters.every(f => passaFiltro(g, f, destId)))
     .sort((a, b) => {
       const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
       const nb = parseInt(capogruppoCode(b.capogruppo_code)) || Infinity
@@ -105,11 +98,14 @@ export default function GroupList() {
 
   // Conteggio del filtro: per i filtri su un servizio conta la QUANTITÀ effettiva
   // (prenotazioni/incassi reali), non la dimensione dei gruppi.
+  // Con piu' filtri attivi la "quantita' del servizio" non ha un significato unico:
+  // in quel caso si mostrano persone/gruppi, non un totale di pezzi.
   let filterCount = null, countLabel = ''
-  if (svcFilter === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); countLabel = 'prenotate' }
-  else if (svcFilter === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); countLabel = 'prenotate' }
-  else if (svcFilter && svcFilter.startsWith('has:')) {
-    const sv = getServices(destId).find(s => s.id === svcFilter.replace('has:', ''))
+  const solo = svcFilters.length === 1 ? svcFilters[0] : null
+  if (solo === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); countLabel = 'prenotate' }
+  else if (solo === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); countLabel = 'prenotate' }
+  else if (solo && solo.startsWith('has:')) {
+    const sv = getServices(destId).find(s => s.id === solo.replace('has:', ''))
     if (sv) { filterCount = filtered.reduce((s, g) => s + svQty(g, sv), 0); countLabel = 'presi' }
   }
 
@@ -122,7 +118,7 @@ export default function GroupList() {
         ? <>{filterCount} {countLabel}</>
         : <>{fPeople} persone</>} · <span className="dot-m">{fMales}M</span> <span className="dot-f">{fFemales}F</span>
         {(fMaggiorenni + fMinorenni) > 0 && <> · <span style={{ color: '#0891B2', fontWeight: 600 }}>{fMaggiorenni} magg.</span> <span style={{ color: '#EA580C', fontWeight: 600 }}>{fMinorenni} min.</span></>}
-        {svcFilter ? ' · filtro attivo' : ''}</div>
+        {svcFilters.length === 1 ? ' · filtro attivo' : svcFilters.length > 1 ? ` · ${svcFilters.length} filtri attivi` : ''}</div>
       <div className="search-bar">
         <Search size={15} color="var(--text-tertiary)" />
         <input placeholder="Cerca capogruppo o codice..." value={search} onChange={e => setSearch(e.target.value)} />
@@ -131,13 +127,17 @@ export default function GroupList() {
       <div style={{ padding: '2px 16px 8px', display: 'flex', gap: 8, alignItems: 'center' }}>
         <button onClick={() => setFilterOpen(true)} style={{
           flex: 1, display: 'flex', alignItems: 'center', gap: 9, padding: '11px 14px', borderRadius: 12, cursor: 'pointer',
-          background: svcFilter ? 'var(--iv-blue-light)' : 'var(--bg-secondary)',
-          border: '0.5px solid ' + (svcFilter ? 'var(--iv-blue)' : 'var(--border)'),
-          color: svcFilter ? 'var(--iv-blue)' : 'var(--text-secondary)', fontSize: 14, fontWeight: 600,
+          background: svcFilters.length ? 'var(--iv-blue-light)' : 'var(--bg-secondary)',
+          border: '0.5px solid ' + (svcFilters.length ? 'var(--iv-blue)' : 'var(--border)'),
+          color: svcFilters.length ? 'var(--iv-blue)' : 'var(--text-secondary)', fontSize: 14, fontWeight: 600,
         }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 5h16M7 12h10M10 19h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-          <span style={{ flex: 1, textAlign: 'left' }}>{svcFilter ? filterLabel(svcFilter, destId) : 'Filtra per servizio'}</span>
-          {svcFilter && <span onClick={e => { e.stopPropagation(); setSvcFilter(null) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
+          <span style={{ flex: 1, textAlign: 'left' }}>{
+            svcFilters.length === 0 ? 'Filtra per servizio'
+              : svcFilters.length === 1 ? filterLabel(svcFilters[0], destId)
+              : svcFilters.map(f => filterLabel(f, destId)).join(' + ')
+          }</span>
+          {svcFilters.length > 0 && <span onClick={e => { e.stopPropagation(); setSvcFilters([]) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
       </div>
       {/* Legenda colori */}
@@ -163,13 +163,32 @@ export default function GroupList() {
       {filterOpen && (
         <FilterSheet
           destId={destId}
-          current={svcFilter}
-          onPick={(v) => { setSvcFilter(v); setFilterOpen(false) }}
+          selected={svcFilters}
+          count={filtered.length}
+          onToggle={(v) => setSvcFilters(prev => {
+            if (v === null) return []
+            if (prev.includes(v)) return prev.filter(x => x !== v)
+            // "ha preso X" e "senza X" si escludono: tenere entrambi darebbe 0 risultati
+            const opposto = v.startsWith('no:') ? v.replace('no:', 'has:')
+                          : v.startsWith('has:') ? v.replace('has:', 'no:') : null
+            return [...prev.filter(x => x !== opposto), v]
+          })}
           onClose={() => setFilterOpen(false)}
         />
       )}
     </div>
   )
+}
+
+// Un gruppo passa un singolo filtro? (i filtri si combinano in AND)
+function passaFiltro(g, f, destId) {
+  if (f === 'prebook_esc') return g.prebook && Number(g.prebook.escursioni) > 0
+  if (f === 'prebook_ssp') return g.prebook && Number(g.prebook.ssp) > 0
+  const negate = f.startsWith('no:')
+  const svId = f.replace(/^(has:|no:)/, '')
+  const sv = getServices(destId).find(s => s.id === svId)
+  if (!sv) return true
+  return negate ? !isServiceOn(g, sv) : isPaid(g, sv)
 }
 
 function filterLabel(v, destId) {
@@ -182,14 +201,14 @@ function filterLabel(v, destId) {
   return v.startsWith('no:') ? 'Senza ' + name : name
 }
 
-function FilterSheet({ destId, current, onPick, onClose }) {
+function FilterSheet({ destId, selected, count, onToggle, onClose }) {
   const svcList = getServices(destId)
   const Pill = ({ value, label, tone }) => {
-    const active = current === value
+    const active = selected.includes(value)
     const c = tone === 'green' ? '#15803D' : tone === 'red' ? '#B91C1C' : tone === 'grey' ? '#64748B' : 'var(--iv-blue)'
     const bg = tone === 'green' ? '#DCFCE7' : tone === 'red' ? '#FEE2E2' : tone === 'grey' ? '#F1F5F9' : 'var(--iv-blue-light)'
     return (
-      <button onClick={() => onPick(value)} style={{
+      <button onClick={() => onToggle(value)} style={{
         padding: '9px 14px', borderRadius: 999, fontSize: 13, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
         background: active ? c : bg + '99', color: active ? '#fff' : c,
         border: '0.5px solid ' + (active ? c : bg),
@@ -211,9 +230,13 @@ function FilterSheet({ destId, current, onPick, onClose }) {
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'var(--bg-secondary)', border: 'none', borderRadius: 10, width: 32, height: 32, fontSize: 18, color: 'var(--text-secondary)', cursor: 'pointer' }}>×</button>
         </div>
 
-        <button onClick={() => onPick(null)} style={{
+        <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.45 }}>
+          Puoi sceglierne piu' di uno: i filtri si sommano.
+        </div>
+
+        <button onClick={() => onToggle(null)} style={{
           width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 12, marginBottom: 18, cursor: 'pointer', fontSize: 14, fontWeight: 600,
-          background: !current ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !current ? '#fff' : 'var(--text-primary)', border: 'none',
+          background: !selected.length ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !selected.length ? '#fff' : 'var(--text-primary)', border: 'none',
         }}>Tutti i gruppi</button>
 
         <Group title="Prenotazioni">
@@ -226,6 +249,12 @@ function FilterSheet({ destId, current, onPick, onClose }) {
         <Group title="Chi non ha preso">
           {svcList.map(sv => <Pill key={'n' + sv.id} value={'no:' + sv.id} label={'Senza ' + sv.label} tone="grey" />)}
         </Group>
+
+        <button onClick={onClose} style={{
+          position: 'sticky', bottom: 0, width: '100%', padding: '14px', borderRadius: 13, border: 'none', cursor: 'pointer',
+          background: 'var(--iv-blue)', color: '#fff', fontSize: 15, fontWeight: 700,
+          boxShadow: '0 -6px 18px rgba(255,255,255,0.9)',
+        }}>Mostra {count} {count === 1 ? 'gruppo' : 'gruppi'}</button>
       </div>
     </div>
   )
