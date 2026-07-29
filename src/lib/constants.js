@@ -116,6 +116,11 @@ export const PRICE_OVERRIDES = {
   G4: { gal_vega: 25 },
   G5: { gal_vega: 25 },
   P1: { pag_pizza: 25 },
+  // Solo Pazuzu: 30€ su C1/C2, 35€ da C3 in poi (deciso il 30/07/2026).
+  C3: { qta_pazuzu: 35 },
+  C4: { qta_pazuzu: 35 },
+  C5: { qta_pazuzu: 35 },
+  C6: { qta_pazuzu: 35 },
   // Cantante extra: 10€ solo per P1 (prezzo base sopra); da P2 in poi è 20€.
   P2: { pag_cantante_extra: 20 },
   P3: { pag_cantante_extra: 20 },
