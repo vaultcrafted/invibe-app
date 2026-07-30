@@ -83,6 +83,30 @@ export default function FornitoriTab() {
     await supabase.from('fornitori_pagamenti').delete().eq('id', row.id)
     load()
   }
+  // Elimina l'intera riga di un fornitore (tutte le sue voci su tutti i turni della meta).
+  // Serve soprattutto per le righe che non hanno nessuna cella valorizzata: prima
+  // erano impossibili da togliere, perche' l'unico modo di aprire l'editor era
+  // cliccare su una cella esistente.
+  async function eliminaFornitore(nome) {
+    const voci = fornitori.filter(f => f.nome === nome && f.destination === filterDest)
+    const quante = voci.filter(v => v.shift_num != null).length
+    const msg = quante > 0
+      ? `Eliminare "${nome}" e tutti i suoi ${quante} pagamenti su questa meta?`
+      : `Eliminare la riga "${nome}"?`
+    if (!window.confirm(msg)) return
+    await supabase.from('fornitori_pagamenti').delete()
+      .eq('destination', filterDest).eq('nome', nome)
+    load()
+  }
+
+  // Apre l'editor sul nome della riga: se c'e' gia' una voce la modifica,
+  // altrimenti ne prepara una nuova con quel nome.
+  function apriRiga(nome) {
+    const esistente = fornitori.find(f => f.nome === nome && f.destination === filterDest)
+    if (esistente) apriModifica(esistente)
+    else apriNuovaCella(nome, filterDest, '')
+  }
+
   function apriModifica(row) {
     setEditing(row)
     setForm({
@@ -180,7 +204,17 @@ export default function FornitoriTab() {
               )}
               {nomiRighe.map((nome, i) => (
                 <tr key={nome} style={{ borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
-                  <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>{nome}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span onClick={() => apriRiga(nome)} title="Modifica"
+                        style={{ cursor: 'pointer' }}>{nome}</span>
+                      <button onClick={() => eliminaFornitore(nome)} title={'Elimina la riga "' + nome + '"'}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
+                                 fontSize: 15, lineHeight: 1, padding: '2px 4px', borderRadius: 6 }}
+                        onMouseEnter={ev => { ev.currentTarget.style.color = '#DC2626'; ev.currentTarget.style.background = '#FEE2E2' }}
+                        onMouseLeave={ev => { ev.currentTarget.style.color = 'var(--text-tertiary)'; ev.currentTarget.style.background = 'none' }}>×</button>
+                    </span>
+                  </td>
                   {turniMeta.map(s => {
                     const c = cella(nome, s.num)
                     return (
