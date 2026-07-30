@@ -194,6 +194,10 @@ export default function FornitoriTab() {
   const totIncassiEntro = incassiEntro.reduce((t, e) => t + Number(e.importo), 0)
   const totIncassiOltre = entrateAperte.reduce((t, e) => t + Number(e.importo), 0) - totIncassiEntro
 
+  // Contanti di oggi + entrate attese - uscite dovute, tutto entro la data scelta.
+  const saldoAllaData = saldoAttuale + totIncassiEntro - totEntro
+  const vaInRosso = saldoAllaData < 0
+
   function spostaData(giorni) {
     const d = new Date(dataLimite + 'T12:00:00')
     d.setDate(d.getDate() + giorni)
