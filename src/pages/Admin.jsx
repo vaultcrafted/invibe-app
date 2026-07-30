@@ -874,6 +874,8 @@ function IncassiTab({ data, loading, onRefresh }) {
   const [filterDest, setFilterDest] = useState(null)
   const [filterShift, setFilterShift] = useState(null)
   const [viewMode, setViewMode] = useState('euro') // 'euro' | 'quantita' | 'percentuale'
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState('cognome')  // 'cognome' | 'codice'
 
   if (loading || !data) return <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)' }}><div className="spinner" style={{ margin: '0 auto 12px' }} />Carico incassi...</div>
 
@@ -969,8 +971,26 @@ function IncassiTab({ data, loading, onRefresh }) {
   const groups = data.filter(g => {
     if (filterDest && g.destination !== filterDest) return false
     if (filterShift && g.shift_num !== filterShift) return false
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      const nome = (g.capogruppo_display || '').toLowerCase()
+      const cod = String(g.capogruppo_code || '').toLowerCase()
+      if (!nome.includes(q) && !cod.includes(q)) return false
+    }
     return true
   })
+
+  // Ordinamento delle righe dentro ogni turno: per cognome o per codice prenotazione.
+  function ordinaGruppi(lista) {
+    return [...lista].sort((a, b) => {
+      if (sortBy === 'codice') {
+        const na = parseInt(capogruppoCode(a.capogruppo_code)) || Infinity
+        const nb = parseInt(capogruppoCode(b.capogruppo_code)) || Infinity
+        if (na !== nb) return na - nb
+      }
+      return (a.capogruppo_display || '').localeCompare(b.capogruppo_display || '', 'it')
+    })
+  }
 
   // Struttura: per meta → per turno → gruppi
   const dests = [...new Set(groups.map(g => g.destination))]
@@ -1048,6 +1068,34 @@ function IncassiTab({ data, loading, onRefresh }) {
 
       {/* Legenda */}
       <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      {/* Ricerca capogruppo + ordinamento — valgono per tutte le mete e tutti i turni */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: '1 1 240px', minWidth: 200,
+                      background: 'var(--bg-secondary)', border: '0.5px solid var(--border)', borderRadius: 10, padding: '7px 11px' }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="var(--text-tertiary)" strokeWidth="2"/><path d="m20 20-3.5-3.5" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round"/></svg>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Cerca capogruppo o codice…"
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 12.5, color: 'var(--text-primary)' }} />
+          {search && <button onClick={() => setSearch('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: 16, lineHeight: 1 }}>×</button>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ordina:</span>
+          {[['cognome', 'Cognome'], ['codice', 'Codice']].map(([val, lab]) => (
+            <button key={val} onClick={() => setSortBy(val)} style={{
+              padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+              background: sortBy === val ? 'var(--iv-blue)' : 'var(--bg-secondary)',
+              color: sortBy === val ? '#fff' : 'var(--text-secondary)',
+              border: '0.5px solid ' + (sortBy === val ? 'var(--iv-blue)' : 'var(--border)'),
+            }}>{lab}</button>
+          ))}
+        </div>
+        {search.trim() && (
+          <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+            {groups.length} {groups.length === 1 ? 'gruppo trovato' : 'gruppi trovati'} · i totali si riferiscono alla ricerca
+          </span>
+        )}
+      </div>
+
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: 'var(--iv-blue)', fontWeight: 700 }}>blu</span> = già pagato in prebooking (conteggio, non €)</span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><span style={{ color: '#16A34A', fontWeight: 700 }}>+N</span> = extra acquistato in meta oltre al prebooking (si somma al totale)</span>
         <span>€ = incassato in meta (cassa)</span>
@@ -1108,7 +1156,7 @@ function IncassiTab({ data, loading, onRefresh }) {
                     </tr>
                   )
                   // Righe gruppo
-                  sGroups.forEach(g => {
+                  ordinaGruppi(sGroups).forEach(g => {
                     const n = g.num_partecipanti || 0
                     const tot = rowTotal(g)
                     rows.push(
