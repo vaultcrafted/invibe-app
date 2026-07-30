@@ -14,8 +14,8 @@ export default function FornitoriTab() {
   const [filterDest, setFilterDest] = useState(DESTINATIONS[0].id)
   const [dataLimite, setDataLimite] = useState(oggiISO())
   const [mostraElenco, setMostraElenco] = useState(false)
-  const [previsioni, setPrevisioni] = useState([])
-  const [prenotazioni, setPrenotazioni] = useState([])
+  const [entrate, setEntrate] = useState([])
+  const [formEntrata, setFormEntrata] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -41,16 +41,14 @@ export default function FornitoriTab() {
 
   async function load() {
     setLoading(true)
-    const [f, m, prev, pren] = await Promise.all([
+    const [f, m, prev] = await Promise.all([
       supabase.from('fornitori_pagamenti').select('*').order('nome'),
       loadTuttiMovimenti(),
-      supabase.rpc('incassi_previsti'),
-      supabase.from('pax_prenotazioni').select('destination, shift_num, servizio, quantita').eq('stato', 'nuova'),
+      supabase.from('entrate_previste').select('*').order('data_prevista'),
     ])
     setFornitori(f.data || [])
     setMovimenti(m)
-    setPrevisioni(prev.data || [])
-    setPrenotazioni(pren.data || [])
+    setEntrate(prev.data || [])
     setLoading(false)
   }
 
@@ -115,6 +113,34 @@ export default function FornitoriTab() {
     else apriNuovaCella(nome, filterDest, '')
   }
 
+  async function salvaEntrata() {
+    const e = formEntrata
+    if (!e.descrizione.trim() || !e.data_prevista) return
+    const payload = {
+      descrizione: e.descrizione.trim(),
+      destination: e.destination || filterDest || null,
+      shift_num: e.shift_num === '' ? null : Number(e.shift_num),
+      importo: Number(e.importo) || 0,
+      data_prevista: e.data_prevista,
+      data_incasso: e.data_incasso || null,
+      note: e.note || null,
+    }
+    if (e.id) await supabase.from('entrate_previste').update(payload).eq('id', e.id)
+    else await supabase.from('entrate_previste').insert(payload)
+    setFormEntrata(null); load()
+  }
+
+  async function eliminaEntrata(e) {
+    if (!window.confirm(`Eliminare l'entrata "${e.descrizione}" da ${fmtEur(Number(e.importo))}?`)) return
+    await supabase.from('entrate_previste').delete().eq('id', e.id)
+    setFormEntrata(null); load()
+  }
+
+  function nuovaEntrata() {
+    setFormEntrata({ descrizione: '', destination: filterDest, shift_num: '', importo: '',
+                     data_prevista: oggiISO(), data_incasso: '', note: '' })
+  }
+
   function apriModifica(row) {
     setEditing(row)
     setForm({
@@ -159,73 +185,14 @@ export default function FornitoriTab() {
   const totSenzaData = senzaData.reduce((t, f) => t + Number(f.importo), 0)
   const totOltre = daPagareTutti.reduce((t, f) => t + Number(f.importo), 0) - totEntro - totSenzaData
 
-  // ===== INCASSI PREVISTI =====
-  // Solo cio' che e' ragionevolmente certo, non una stima di vendite:
-  //  1. tassa di soggiorno: obbligatoria, la paga ogni pax -> (pax - gia' incassati) x prezzo
-  //  2. SSP gia' prenotato ma da riscuotere in contanti (nei turni NON bonifico)
-  //  3. prenotazioni fatte dai capogruppo nell'app pax, ancora da riscuotere
-  // Restano fuori gli extra venduti sul posto (54, Montecristo, ecc.): non prevedibili.
-  // I soldi si considerano incassati all'INIZIO del turno (check-in), o oggi se e' gia' partito.
+  // ===== ENTRATE PREVISTE (inserite a mano dall'ufficio) =====
   const oggi = oggiISO()
-
-  function prezzoDi(dest, shift, filtro) {
-    const sv = getServices(dest, shift).find(filtro)
-    return sv ? { id: sv.id, prezzo: sv.prezzo || 0 } : null
-  }
-
-  const incassiPrevisti = (() => {
-    const out = []
-    for (const r of previsioni) {
-      if (filterDest && r.destination !== filterDest) continue
-      const turno = (SHIFTS[r.destination] || []).find(t => t.num === r.shift_num)
-      if (!turno || turno.end < oggi) continue          // turno gia' finito: niente da prevedere
-      const quando = turno.start > oggi ? turno.start : oggi
-
-      const tassa = prezzoDi(r.destination, r.shift_num, sv => sv.id.includes('tassa'))
-      if (tassa) {
-        const pezzi = Math.max(0, Number(r.pax) - Number(r.tassa_incassata))
-        if (pezzi > 0) out.push({ quando, voce: 'Tassa di soggiorno', dettaglio: pezzi + ' pax',
-                                  importo: pezzi * tassa.prezzo, dest: r.destination, shift: r.shift_num })
-      }
-
-      const ssp = prezzoDi(r.destination, r.shift_num, sv => sv.label === 'SSP')
-      if (ssp && !isPrebookingPagato(ssp.id, r.destination, r.shift_num)) {
-        const pezzi = Math.max(0, Number(r.ssp_prebook) - Number(r.ssp_incassato))
-        if (pezzi > 0) out.push({ quando, voce: 'SSP prenotati da riscuotere', dettaglio: pezzi + ' pz',
-                                  importo: pezzi * ssp.prezzo, dest: r.destination, shift: r.shift_num })
-      }
-    }
-
-    // prenotazioni dall'app pax, ancora da riscuotere
-    const perTurno = {}
-    for (const p of prenotazioni) {
-      if (filterDest && p.destination !== filterDest) continue
-      const turno = (SHIFTS[p.destination] || []).find(t => t.num === p.shift_num)
-      if (!turno || turno.end < oggi) continue
-      const sv = getServices(p.destination, p.shift_num).find(x => x.id === p.servizio)
-      if (!sv) continue
-      const k = p.destination + '|' + p.shift_num
-      if (!perTurno[k]) perTurno[k] = { quando: turno.start > oggi ? turno.start : oggi,
-                                        voce: 'Prenotazioni dall\'app pax', dettaglio: '0 servizi',
-                                        importo: 0, n: 0, dest: p.destination, shift: p.shift_num }
-      perTurno[k].importo += Number(p.quantita) * (sv.prezzo || 0)
-      perTurno[k].n += 1
-    }
-    for (const k in perTurno) {
-      perTurno[k].dettaglio = perTurno[k].n + (perTurno[k].n === 1 ? ' servizio' : ' servizi')
-      out.push(perTurno[k])
-    }
-
-    return out.sort((a, b) => a.quando.localeCompare(b.quando))
-  })()
-
-  const incassiEntro = incassiPrevisti.filter(i => i.quando <= dataLimite)
-  const totIncassiEntro = incassiEntro.reduce((t, i) => t + i.importo, 0)
-  const totIncassiOltre = incassiPrevisti.reduce((t, i) => t + i.importo, 0) - totIncassiEntro
-
-  // Quello che conta: contanti di oggi + entrate attese - uscite dovute, entro la data scelta.
-  const saldoAllaData = saldoAttuale + totIncassiEntro - totEntro
-  const vaInRosso = saldoAllaData < 0
+  const entrateAperte = entrate.filter(e => !e.data_incasso && (!filterDest || e.destination === filterDest || !e.destination))
+  const incassiEntro = entrateAperte
+    .filter(e => e.data_prevista && e.data_prevista <= dataLimite)
+    .sort((a, b) => a.data_prevista.localeCompare(b.data_prevista))
+  const totIncassiEntro = incassiEntro.reduce((t, e) => t + Number(e.importo), 0)
+  const totIncassiOltre = entrateAperte.reduce((t, e) => t + Number(e.importo), 0) - totIncassiEntro
 
   function spostaData(giorni) {
     const d = new Date(dataLimite + 'T12:00:00')
@@ -322,17 +289,15 @@ export default function FornitoriTab() {
               {mostraElenco && (
                 <div style={{ marginTop: 10, textAlign: 'left', maxWidth: 460, margin: '10px auto 0',
                               border: '0.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                  {incassiEntro.map((inc, i) => (
-                    <div key={'in' + i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                  {incassiEntro.map((e, i) => (
+                    <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                           fontSize: 12.5, background: '#F0FDF4', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
                       <span style={{ color: 'var(--text-tertiary)', minWidth: 46, fontWeight: 600 }}>
-                        {inc.quando.slice(8, 10)}/{inc.quando.slice(5, 7)}
+                        {e.data_prevista.slice(8, 10)}/{e.data_prevista.slice(5, 7)}
                       </span>
-                      <span style={{ flex: 1, fontWeight: 600 }}>{inc.voce}
-                        <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · {inc.dettaglio}</span>
-                      </span>
-                      <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{shiftLabel(inc.dest, inc.shift)}</span>
-                      <span style={{ fontWeight: 700, color: '#16A34A' }}>+{fmtEur(inc.importo)}</span>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{e.descrizione}</span>
+                      {e.shift_num && <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{shiftLabel(e.destination, e.shift_num)}</span>}
+                      <span style={{ fontWeight: 700, color: '#16A34A' }}>+{fmtEur(Number(e.importo))}</span>
                     </div>
                   ))}
                   {daPagareEntro.map((f, i) => (
@@ -357,6 +322,39 @@ export default function FornitoriTab() {
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
             <span>Con i pagamenti entro questa data, la cassa va in rosso.</span>
           </div>
+        )}
+      </div>
+
+      {/* ===== ENTRATE PREVISTE ===== */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Entrate previste</div>
+        <button onClick={nuovaEntrata} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10, background: '#16A34A', color: '#fff', fontSize: 12.5, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
+          <Plus size={15} /> Nuova entrata
+        </button>
+      </div>
+
+      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
+        {entrateAperte.length === 0 && entrate.filter(e => e.data_incasso && (!filterDest || e.destination === filterDest)).length === 0 ? (
+          <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            Nessuna entrata prevista. Aggiungine una con "Nuova entrata": per esempio "Tasse di soggiorno C4" al 31/07.
+          </div>
+        ) : (
+          entrate
+            .filter(e => !filterDest || e.destination === filterDest || !e.destination)
+            .map((e, i) => (
+              <div key={e.id} onClick={() => setFormEntrata({ ...e, shift_num: e.shift_num ?? '', data_incasso: e.data_incasso || '', note: e.note || '' })}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', fontSize: 13, cursor: 'pointer',
+                         borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
+                         opacity: e.data_incasso ? 0.55 : 1 }}>
+                <span style={{ color: 'var(--text-tertiary)', minWidth: 50, fontWeight: 600 }}>
+                  {e.data_prevista ? e.data_prevista.slice(8, 10) + '/' + e.data_prevista.slice(5, 7) : '—'}
+                </span>
+                <span style={{ flex: 1, fontWeight: 600, textDecoration: e.data_incasso ? 'line-through' : 'none' }}>{e.descrizione}</span>
+                {e.shift_num && <span style={{ color: 'var(--text-tertiary)', fontSize: 11.5 }}>{shiftLabel(e.destination, e.shift_num)}</span>}
+                {e.data_incasso && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803D', background: '#DCFCE7', padding: '2px 8px', borderRadius: 20 }}>INCASSATA</span>}
+                <span style={{ fontWeight: 700, color: e.data_incasso ? 'var(--text-tertiary)' : '#16A34A', minWidth: 76, textAlign: 'right' }}>+{fmtEur(Number(e.importo))}</span>
+              </div>
+            ))
         )}
       </div>
 
@@ -429,6 +427,54 @@ export default function FornitoriTab() {
                 <div style={{ fontSize: 13.5, fontWeight: 700 }}>{f.gratis ? 'FREE' : fmtEur(f.importo)}</div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {formEntrata && (
+        <div onClick={() => setFormEntrata(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 20 }}>
+          <div onClick={ev => ev.stopPropagation()} style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 22, width: '100%', maxWidth: 420, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>{formEntrata.id ? 'Modifica entrata' : 'Nuova entrata prevista'}</div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+                {formEntrata.id && <button type="button" onClick={() => eliminaEntrata(formEntrata)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC2626', fontSize: 12, fontWeight: 700 }}>Elimina</button>}
+                <button type="button" onClick={() => setFormEntrata(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
+              </div>
+            </div>
+
+            <label style={labEntrata}>Descrizione</label>
+            <input value={formEntrata.descrizione} onChange={ev => setFormEntrata({ ...formEntrata, descrizione: ev.target.value })}
+              placeholder="es. Tasse di soggiorno C4" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} autoFocus />
+
+            <label style={labEntrata}>Importo (€)</label>
+            <input type="number" inputMode="decimal" value={formEntrata.importo}
+              onChange={ev => setFormEntrata({ ...formEntrata, importo: ev.target.value })} placeholder="0" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+
+            <label style={labEntrata}>Quando lo incasso</label>
+            <input type="date" value={formEntrata.data_prevista}
+              onChange={ev => setFormEntrata({ ...formEntrata, data_prevista: ev.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+
+            <label style={labEntrata}>Turno (facoltativo)</label>
+            <select value={formEntrata.shift_num} onChange={ev => setFormEntrata({ ...formEntrata, shift_num: ev.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}>
+              <option value="">Nessuno / trasversale</option>
+              {(SHIFTS[formEntrata.destination || filterDest] || []).map(t => (
+                <option key={t.num} value={t.num}>{shiftLabel(formEntrata.destination || filterDest, t.num)} · {t.label}</option>
+              ))}
+            </select>
+
+            <label style={labEntrata}>Gia' incassata il (lasciare vuoto se non ancora)</label>
+            <input type="date" value={formEntrata.data_incasso}
+              onChange={ev => setFormEntrata({ ...formEntrata, data_incasso: ev.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+            <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: -6, marginBottom: 12 }}>
+              Compilando questa data l'entrata esce dalla previsione: i soldi sono gia' in cassa.
+            </div>
+
+            <label style={labEntrata}>Note</label>
+            <input value={formEntrata.note} onChange={ev => setFormEntrata({ ...formEntrata, note: ev.target.value })} placeholder="facoltative" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+
+            <button onClick={salvaEntrata} style={{ width: '100%', marginTop: 8, padding: 13, borderRadius: 11, background: '#16A34A', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
+              {formEntrata.id ? 'Salva modifiche' : 'Aggiungi entrata'}
+            </button>
           </div>
         </div>
       )}
@@ -512,5 +558,6 @@ function cellBadge(color, bg) {
 }
 const thStyle = { padding: '10px 14px', textAlign: 'left', fontWeight: 700, fontSize: 11, textTransform: 'uppercase', color: 'var(--text-secondary)', borderBottom: '1px solid var(--border)' }
 const tdStyle = { padding: '9px 14px' }
+const labEntrata = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5, marginTop: 12 }
 const labelStyle = { display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }
 const inputStyle = { padding: '9px 11px', borderRadius: 9, border: '1px solid var(--border)', fontSize: 13.5, fontFamily: 'inherit' }
