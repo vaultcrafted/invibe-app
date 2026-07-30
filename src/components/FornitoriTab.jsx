@@ -11,7 +11,7 @@ export default function FornitoriTab() {
   const [fornitori, setFornitori] = useState([])
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filterDest, setFilterDest] = useState(null)
+  const [filterDest, setFilterDest] = useState(DESTINATIONS[0].id)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -26,7 +26,7 @@ export default function FornitoriTab() {
     const PAGE = 1000
     let all = [], from = 0
     while (true) {
-      const { data, error } = await supabase.from('cassa_movimenti').select('destination, shift_num, tipo, importo').range(from, from + PAGE - 1)
+      const { data, error } = await supabase.from('cassa_movimenti').select('destination, shift_num, tipo, importo, metodo').range(from, from + PAGE - 1)
       if (error) { console.error('Errore caricamento cassa_movimenti:', error); break }
       all = all.concat(data || [])
       if (!data || data.length < PAGE) break
@@ -46,8 +46,16 @@ export default function FornitoriTab() {
     setLoading(false)
   }
 
+  // Solo CASH: e' il contante che il Capo Meta ha fisicamente in mano.
+  // Wivawallet, bonifici e carte arrivano sul conto e non stanno nella cassa,
+  // quindi sommarli darebbe un saldo che non corrisponde a nulla di reale.
+  function isCash(m) {
+    return String(m.metodo || 'Cash').trim().toUpperCase() === 'CASH'
+  }
+
   function saldoReale(dest, shift) {
     return movimenti
+      .filter(m => isCash(m))
       .filter(m => (!dest || m.destination === dest) && (shift == null || m.shift_num === shift))
       .reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : -Number(m.importo)), 0)
   }
@@ -111,7 +119,6 @@ export default function FornitoriTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        <button onClick={() => setFilterDest(null)} style={chipStyle(!filterDest)}>Tutte le mete</button>
         {DESTINATIONS.map(d => (
           <button key={d.id} onClick={() => setFilterDest(d.id)} style={chipStyle(filterDest === d.id)}>{d.flag} {d.name}</button>
         ))}
@@ -120,9 +127,12 @@ export default function FornitoriTab() {
       {/* ===== SALDO ===== */}
       <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 16, padding: 24, marginBottom: 20, textAlign: 'center' }}>
         <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 8 }}>
-          Saldo cassa reale oggi{filterDest ? ' · ' + DESTINATIONS.find(d => d.id === filterDest).name + ' (tutti i turni)' : ''}
+          Contanti in cassa oggi{filterDest ? ' · ' + DESTINATIONS.find(d => d.id === filterDest).name + ' (tutti i turni)' : ''}
         </div>
         <div style={{ fontSize: 42, fontWeight: 800, color: saldoAttuale >= 0 ? '#16A34A' : '#DC2626', lineHeight: 1 }}>{fmtEur(saldoAttuale)}</div>
+        <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 7 }}>
+          solo contanti — Wivawallet, bonifici e carte non sono conteggiati
+        </div>
 
         {totDaPagare > 0 && (
           <div style={{ marginTop: 18, paddingTop: 18, borderTop: '0.5px solid var(--border)', display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
