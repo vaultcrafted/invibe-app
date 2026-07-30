@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, shiftLabel, getServices, isPrebookingPagato } from '../lib/constants'
 import { Plus, X, AlertTriangle } from 'lucide-react'
 
 const fmtEur = (n) => '€ ' + Math.round(n || 0).toLocaleString('it-IT')
@@ -14,6 +14,8 @@ export default function FornitoriTab() {
   const [filterDest, setFilterDest] = useState(DESTINATIONS[0].id)
   const [dataLimite, setDataLimite] = useState(oggiISO())
   const [mostraElenco, setMostraElenco] = useState(false)
+  const [previsioni, setPrevisioni] = useState([])
+  const [prenotazioni, setPrenotazioni] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -39,12 +41,16 @@ export default function FornitoriTab() {
 
   async function load() {
     setLoading(true)
-    const [f, m] = await Promise.all([
+    const [f, m, prev, pren] = await Promise.all([
       supabase.from('fornitori_pagamenti').select('*').order('nome'),
       loadTuttiMovimenti(),
+      supabase.rpc('incassi_previsti'),
+      supabase.from('pax_prenotazioni').select('destination, shift_num, servizio, quantita').eq('stato', 'nuova'),
     ])
     setFornitori(f.data || [])
     setMovimenti(m)
+    setPrevisioni(prev.data || [])
+    setPrenotazioni(pren.data || [])
     setLoading(false)
   }
 
@@ -145,14 +151,81 @@ export default function FornitoriTab() {
     .filter(f => f.data_prevista && f.data_prevista <= dataLimite)
     .sort((a, b) => a.data_prevista.localeCompare(b.data_prevista))
   const totEntro = daPagareEntro.reduce((t, f) => t + Number(f.importo), 0)
-  const saldoAllaData = saldoAttuale - totEntro
-  const vaInRosso = saldoAllaData < 0
+
 
   // Pagamenti senza data prevista: non entrano nel conto (non si sa quando cadono)
   // ma vanno segnalati, altrimenti il numero sembra piu' rassicurante di quanto sia.
   const senzaData = daPagareTutti.filter(f => !f.data_prevista)
   const totSenzaData = senzaData.reduce((t, f) => t + Number(f.importo), 0)
   const totOltre = daPagareTutti.reduce((t, f) => t + Number(f.importo), 0) - totEntro - totSenzaData
+
+  // ===== INCASSI PREVISTI =====
+  // Solo cio' che e' ragionevolmente certo, non una stima di vendite:
+  //  1. tassa di soggiorno: obbligatoria, la paga ogni pax -> (pax - gia' incassati) x prezzo
+  //  2. SSP gia' prenotato ma da riscuotere in contanti (nei turni NON bonifico)
+  //  3. prenotazioni fatte dai capogruppo nell'app pax, ancora da riscuotere
+  // Restano fuori gli extra venduti sul posto (54, Montecristo, ecc.): non prevedibili.
+  // I soldi si considerano incassati all'INIZIO del turno (check-in), o oggi se e' gia' partito.
+  const oggi = oggiISO()
+
+  function prezzoDi(dest, shift, filtro) {
+    const sv = getServices(dest, shift).find(filtro)
+    return sv ? { id: sv.id, prezzo: sv.prezzo || 0 } : null
+  }
+
+  const incassiPrevisti = (() => {
+    const out = []
+    for (const r of previsioni) {
+      if (filterDest && r.destination !== filterDest) continue
+      const turno = (SHIFTS[r.destination] || []).find(t => t.num === r.shift_num)
+      if (!turno || turno.end < oggi) continue          // turno gia' finito: niente da prevedere
+      const quando = turno.start > oggi ? turno.start : oggi
+
+      const tassa = prezzoDi(r.destination, r.shift_num, sv => sv.id.includes('tassa'))
+      if (tassa) {
+        const pezzi = Math.max(0, Number(r.pax) - Number(r.tassa_incassata))
+        if (pezzi > 0) out.push({ quando, voce: 'Tassa di soggiorno', dettaglio: pezzi + ' pax',
+                                  importo: pezzi * tassa.prezzo, dest: r.destination, shift: r.shift_num })
+      }
+
+      const ssp = prezzoDi(r.destination, r.shift_num, sv => sv.label === 'SSP')
+      if (ssp && !isPrebookingPagato(ssp.id, r.destination, r.shift_num)) {
+        const pezzi = Math.max(0, Number(r.ssp_prebook) - Number(r.ssp_incassato))
+        if (pezzi > 0) out.push({ quando, voce: 'SSP prenotati da riscuotere', dettaglio: pezzi + ' pz',
+                                  importo: pezzi * ssp.prezzo, dest: r.destination, shift: r.shift_num })
+      }
+    }
+
+    // prenotazioni dall'app pax, ancora da riscuotere
+    const perTurno = {}
+    for (const p of prenotazioni) {
+      if (filterDest && p.destination !== filterDest) continue
+      const turno = (SHIFTS[p.destination] || []).find(t => t.num === p.shift_num)
+      if (!turno || turno.end < oggi) continue
+      const sv = getServices(p.destination, p.shift_num).find(x => x.id === p.servizio)
+      if (!sv) continue
+      const k = p.destination + '|' + p.shift_num
+      if (!perTurno[k]) perTurno[k] = { quando: turno.start > oggi ? turno.start : oggi,
+                                        voce: 'Prenotazioni dall\'app pax', dettaglio: '0 servizi',
+                                        importo: 0, n: 0, dest: p.destination, shift: p.shift_num }
+      perTurno[k].importo += Number(p.quantita) * (sv.prezzo || 0)
+      perTurno[k].n += 1
+    }
+    for (const k in perTurno) {
+      perTurno[k].dettaglio = perTurno[k].n + (perTurno[k].n === 1 ? ' servizio' : ' servizi')
+      out.push(perTurno[k])
+    }
+
+    return out.sort((a, b) => a.quando.localeCompare(b.quando))
+  })()
+
+  const incassiEntro = incassiPrevisti.filter(i => i.quando <= dataLimite)
+  const totIncassiEntro = incassiEntro.reduce((t, i) => t + i.importo, 0)
+  const totIncassiOltre = incassiPrevisti.reduce((t, i) => t + i.importo, 0) - totIncassiEntro
+
+  // Quello che conta: contanti di oggi + entrate attese - uscite dovute, entro la data scelta.
+  const saldoAllaData = saldoAttuale + totIncassiEntro - totEntro
+  const vaInRosso = saldoAllaData < 0
 
   function spostaData(giorni) {
     const d = new Date(dataLimite + 'T12:00:00')
@@ -203,6 +276,15 @@ export default function FornitoriTab() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>
+                Incassi previsti
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#16A34A' }}>+{fmtEur(totIncassiEntro)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {incassiEntro.length} {incassiEntro.length === 1 ? 'voce' : 'voci'}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>
                 Da pagare entro
               </div>
               <div style={{ fontSize: 20, fontWeight: 700 }}>{totEntro > 0 ? '-' : ''}{fmtEur(totEntro)}</div>
@@ -225,20 +307,34 @@ export default function FornitoriTab() {
               {totSenzaData > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}>
                 {fmtEur(totSenzaData)} senza data prevista, non conteggiati.
               </span>}
+              {totIncassiOltre > 0 && <span> Dopo la data sono attesi altri {fmtEur(totIncassiOltre)} di incassi.</span>}
             </div>
           )}
 
-          {daPagareEntro.length > 0 && (
+          {(daPagareEntro.length > 0 || incassiEntro.length > 0) && (
             <>
               <button onClick={() => setMostraElenco(v => !v)} style={{
                 marginTop: 12, background: 'none', border: 'none', cursor: 'pointer',
                 color: 'var(--iv-blue)', fontSize: 12, fontWeight: 700 }}>
-                {mostraElenco ? 'Nascondi i pagamenti' : 'Vedi quali pagamenti'}
+                {mostraElenco ? 'Nascondi il dettaglio' : 'Vedi entrate e uscite'}
               </button>
 
               {mostraElenco && (
                 <div style={{ marginTop: 10, textAlign: 'left', maxWidth: 460, margin: '10px auto 0',
                               border: '0.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  {incassiEntro.map((inc, i) => (
+                    <div key={'in' + i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                          fontSize: 12.5, background: '#F0FDF4', borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                      <span style={{ color: 'var(--text-tertiary)', minWidth: 46, fontWeight: 600 }}>
+                        {inc.quando.slice(8, 10)}/{inc.quando.slice(5, 7)}
+                      </span>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{inc.voce}
+                        <span style={{ color: 'var(--text-tertiary)', fontWeight: 400 }}> · {inc.dettaglio}</span>
+                      </span>
+                      <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{shiftLabel(inc.dest, inc.shift)}</span>
+                      <span style={{ fontWeight: 700, color: '#16A34A' }}>+{fmtEur(inc.importo)}</span>
+                    </div>
+                  ))}
                   {daPagareEntro.map((f, i) => (
                     <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
                           fontSize: 12.5, borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
