@@ -12,6 +12,8 @@ export default function FornitoriTab() {
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDest, setFilterDest] = useState(DESTINATIONS[0].id)
+  const [dataLimite, setDataLimite] = useState(oggiISO())
+  const [mostraElenco, setMostraElenco] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -133,10 +135,36 @@ export default function FornitoriTab() {
   }
 
   const saldoAttuale = saldoReale(filterDest, null)
+
+  // Tutto cio' che non e' ancora stato pagato e non e' gratis.
   const daPagareTutti = fornitori.filter(f => !f.data_pagamento && !f.gratis && (!filterDest || f.destination === filterDest || !f.destination))
-  const totDaPagare = daPagareTutti.reduce((t, f) => t + Number(f.importo), 0)
-  const saldoFinale = saldoAttuale - totDaPagare
-  const vaInRosso = saldoFinale < 0
+
+  // Solo i pagamenti con scadenza ENTRO la data scelta: e' la domanda vera
+  // ("quanto mi resta il 6 agosto?"), non "quanto resta a fine stagione".
+  const daPagareEntro = daPagareTutti
+    .filter(f => f.data_prevista && f.data_prevista <= dataLimite)
+    .sort((a, b) => a.data_prevista.localeCompare(b.data_prevista))
+  const totEntro = daPagareEntro.reduce((t, f) => t + Number(f.importo), 0)
+  const saldoAllaData = saldoAttuale - totEntro
+  const vaInRosso = saldoAllaData < 0
+
+  // Pagamenti senza data prevista: non entrano nel conto (non si sa quando cadono)
+  // ma vanno segnalati, altrimenti il numero sembra piu' rassicurante di quanto sia.
+  const senzaData = daPagareTutti.filter(f => !f.data_prevista)
+  const totSenzaData = senzaData.reduce((t, f) => t + Number(f.importo), 0)
+  const totOltre = daPagareTutti.reduce((t, f) => t + Number(f.importo), 0) - totEntro - totSenzaData
+
+  function spostaData(giorni) {
+    const d = new Date(dataLimite + 'T12:00:00')
+    d.setDate(d.getDate() + giorni)
+    setDataLimite(d.toISOString().slice(0, 10))
+  }
+  function ultimaScadenza() {
+    const date = daPagareTutti.map(f => f.data_prevista).filter(Boolean).sort()
+    return date.length ? date[date.length - 1] : oggiISO()
+  }
+  const fmtGiorno = iso => new Date(iso + 'T12:00:00')
+    .toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Caricamento...</div>
 
@@ -158,22 +186,80 @@ export default function FornitoriTab() {
           solo contanti — Wivawallet, bonifici e carte non sono conteggiati
         </div>
 
-        {totDaPagare > 0 && (
-          <div style={{ marginTop: 18, paddingTop: 18, borderTop: '0.5px solid var(--border)', display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
+        {/* ===== PROIEZIONE A UNA DATA ===== */}
+        <div style={{ marginTop: 20, paddingTop: 18, borderTop: '0.5px solid var(--border)' }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 600 }}>Cosa mi resta al</span>
+            <input type="date" value={dataLimite} onChange={e => setDataLimite(e.target.value)}
+              style={{ padding: '7px 11px', borderRadius: 9, border: '0.5px solid var(--border)',
+                       background: 'var(--bg-secondary)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }} />
+            <button onClick={() => setDataLimite(oggiISO())} style={miniBtn(dataLimite === oggiISO())}>Oggi</button>
+            <button onClick={() => spostaData(7)} style={miniBtn(false)}>+7 giorni</button>
+            <button onClick={() => spostaData(30)} style={miniBtn(false)}>+30 giorni</button>
+            <button onClick={() => setDataLimite(ultimaScadenza())} style={miniBtn(dataLimite === ultimaScadenza())}>Fino all'ultima</button>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Da pagare (pianificato)</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>-{fmtEur(totDaPagare)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>
+                Da pagare entro
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 700 }}>{totEntro > 0 ? '-' : ''}{fmtEur(totEntro)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
+                {daPagareEntro.length} {daPagareEntro.length === 1 ? 'pagamento' : 'pagamenti'}
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>Resterebbe dopo tutti i pagamenti</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: saldoFinale >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoFinale)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', fontWeight: 700, textTransform: 'uppercase' }}>
+                Resterebbe in cassa
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 800, color: saldoAllaData >= 0 ? '#16A34A' : '#DC2626' }}>{fmtEur(saldoAllaData)}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{fmtGiorno(dataLimite)}</div>
             </div>
           </div>
-        )}
+
+          {(totOltre > 0 || totSenzaData > 0) && (
+            <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+              {totOltre > 0 && <span>Dopo questa data restano {fmtEur(totOltre)} da pagare. </span>}
+              {totSenzaData > 0 && <span style={{ color: '#B45309', fontWeight: 600 }}>
+                {fmtEur(totSenzaData)} senza data prevista, non conteggiati.
+              </span>}
+            </div>
+          )}
+
+          {daPagareEntro.length > 0 && (
+            <>
+              <button onClick={() => setMostraElenco(v => !v)} style={{
+                marginTop: 12, background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--iv-blue)', fontSize: 12, fontWeight: 700 }}>
+                {mostraElenco ? 'Nascondi i pagamenti' : 'Vedi quali pagamenti'}
+              </button>
+
+              {mostraElenco && (
+                <div style={{ marginTop: 10, textAlign: 'left', maxWidth: 460, margin: '10px auto 0',
+                              border: '0.5px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+                  {daPagareEntro.map((f, i) => (
+                    <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                          fontSize: 12.5, borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                      <span style={{ color: 'var(--text-tertiary)', minWidth: 46, fontWeight: 600 }}>
+                        {f.data_prevista.slice(8, 10)}/{f.data_prevista.slice(5, 7)}
+                      </span>
+                      <span style={{ flex: 1, fontWeight: 600 }}>{f.nome}</span>
+                      {f.shift_num && <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>{shiftLabel(f.destination, f.shift_num)}</span>}
+                      <span style={{ fontWeight: 700 }}>{fmtEur(Number(f.importo))}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         {vaInRosso && (
           <div style={{ marginTop: 14, display: 'inline-flex', gap: 8, alignItems: 'center', background: '#FEF2F2', border: '1px solid #FCA5A5', borderRadius: 10, padding: '8px 14px', fontSize: 12.5, color: '#B91C1C' }}>
             <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-            <span>Pagando tutto quello pianificato, la cassa andrebbe in rosso.</span>
+            <span>Con i pagamenti entro questa data, la cassa va in rosso.</span>
           </div>
         )}
       </div>
@@ -311,6 +397,15 @@ export default function FornitoriTab() {
       )}
     </div>
   )
+}
+
+function miniBtn(active) {
+  return {
+    padding: '6px 11px', borderRadius: 8, fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+    background: active ? 'var(--iv-blue)' : 'var(--bg-secondary)',
+    color: active ? '#fff' : 'var(--text-secondary)',
+    border: '0.5px solid ' + (active ? 'var(--iv-blue)' : 'var(--border)'),
+  }
 }
 
 function chipStyle(active) {
