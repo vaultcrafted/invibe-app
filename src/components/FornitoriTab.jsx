@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
-import { DESTINATIONS, SHIFTS, shiftLabel, getServices, isPrebookingPagato } from '../lib/constants'
+import { DESTINATIONS, SHIFTS, shiftLabel } from '../lib/constants'
 import { Plus, X, AlertTriangle } from 'lucide-react'
 
 const fmtEur = (n) => '€ ' + Math.round(n || 0).toLocaleString('it-IT')
