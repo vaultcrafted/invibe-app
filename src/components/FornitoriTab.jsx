@@ -166,6 +166,26 @@ export default function FornitoriTab() {
     return fornitoriMeta.find(f => f.nome === nome && f.shift_num === shiftNum)
   }
 
+  // ---- Stessa vista a tabella per le entrate: righe = descrizione, colonne = turni ----
+  const entrateMeta = entrate.filter(e => e.destination === filterDest)
+  const nomiEntrate = [...new Set(entrateMeta.map(e => e.descrizione))].sort((a, b) => a.localeCompare(b))
+
+  function cellaEntrata(desc, shiftNum) {
+    return entrateMeta.find(e => e.descrizione === desc && e.shift_num === shiftNum)
+  }
+
+  function nuovaEntrataCella(desc, shiftNum) {
+    setFormEntrata({ descrizione: desc || '', destination: filterDest, shift_num: shiftNum ?? '',
+                     importo: '', data_prevista: oggiISO(), data_incasso: '', note: '' })
+  }
+
+  async function eliminaRigaEntrata(desc) {
+    const quante = entrateMeta.filter(e => e.descrizione === desc).length
+    if (!window.confirm(`Eliminare "${desc}" e le sue ${quante} voci su questa meta?`)) return
+    await supabase.from('entrate_previste').delete().eq('destination', filterDest).eq('descrizione', desc)
+    load()
+  }
+
   const saldoAttuale = saldoReale(filterDest, null)
 
   // Tutto cio' che non e' ancora stato pagato e non e' gratis.
@@ -337,29 +357,59 @@ export default function FornitoriTab() {
         </button>
       </div>
 
-      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'hidden', marginBottom: 24 }}>
-        {entrateAperte.length === 0 && entrate.filter(e => e.data_incasso && (!filterDest || e.destination === filterDest)).length === 0 ? (
-          <div style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-            Nessuna entrata prevista. Aggiungine una con "Nuova entrata": per esempio "Tasse di soggiorno C4" al 31/07.
-          </div>
-        ) : (
-          entrate
-            .filter(e => !filterDest || e.destination === filterDest || !e.destination)
-            .map((e, i) => (
-              <div key={e.id} onClick={() => setFormEntrata({ ...e, shift_num: e.shift_num ?? '', data_incasso: e.data_incasso || '', note: e.note || '' })}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', fontSize: 13, cursor: 'pointer',
-                         borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
-                         opacity: e.data_incasso ? 0.55 : 1 }}>
-                <span style={{ color: 'var(--text-tertiary)', minWidth: 50, fontWeight: 600 }}>
-                  {e.data_prevista ? e.data_prevista.slice(8, 10) + '/' + e.data_prevista.slice(5, 7) : '—'}
-                </span>
-                <span style={{ flex: 1, fontWeight: 600, textDecoration: e.data_incasso ? 'line-through' : 'none' }}>{e.descrizione}</span>
-                {e.shift_num && <span style={{ color: 'var(--text-tertiary)', fontSize: 11.5 }}>{shiftLabel(e.destination, e.shift_num)}</span>}
-                {e.data_incasso && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15803D', background: '#DCFCE7', padding: '2px 8px', borderRadius: 20 }}>INCASSATA</span>}
-                <span style={{ fontWeight: 700, color: e.data_incasso ? 'var(--text-tertiary)' : '#16A34A', minWidth: 76, textAlign: 'right' }}>+{fmtEur(Number(e.importo))}</span>
-              </div>
-            ))
-        )}
+      <div style={{ background: 'var(--bg-primary)', border: '0.5px solid var(--border)', borderRadius: 12, overflow: 'auto', marginBottom: 24 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: 12.5 }}>
+          <thead>
+            <tr style={{ background: 'var(--bg-secondary)' }}>
+              <th style={thStyle}>Entrata</th>
+              {turniMeta.map(t => <th key={t.num} style={{ ...thStyle, textAlign: 'center', minWidth: 90 }}>{shiftLabel(filterDest, t.num)}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {nomiEntrate.length === 0 && (
+              <tr><td colSpan={turniMeta.length + 1} style={{ padding: '20px 16px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                Nessuna entrata prevista. Aggiungine una con "Nuova entrata": per esempio "Tasse di soggiorno" su C4.
+              </td></tr>
+            )}
+            {nomiEntrate.map((desc, i) => (
+              <tr key={desc} style={{ borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                <td style={{ ...tdStyle, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <span onClick={() => {
+                      const e = entrateMeta.find(x => x.descrizione === desc)
+                      if (e) setFormEntrata({ ...e, shift_num: e.shift_num ?? '', data_incasso: e.data_incasso || '', note: e.note || '' })
+                      else nuovaEntrataCella(desc, '')
+                    }} title="Modifica" style={{ cursor: 'pointer' }}>{desc}</span>
+                    <button onClick={() => eliminaRigaEntrata(desc)} title={'Elimina la riga "' + desc + '"'}
+                      style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-tertiary)',
+                               fontSize: 15, lineHeight: 1, padding: '2px 4px', borderRadius: 6 }}
+                      onMouseEnter={ev => { ev.currentTarget.style.color = '#DC2626'; ev.currentTarget.style.background = '#FEE2E2' }}
+                      onMouseLeave={ev => { ev.currentTarget.style.color = 'var(--text-tertiary)'; ev.currentTarget.style.background = 'none' }}>×</button>
+                  </span>
+                </td>
+                {turniMeta.map(t => {
+                  const e = cellaEntrata(desc, t.num)
+                  return (
+                    <td key={t.num} style={{ ...tdStyle, textAlign: 'center', cursor: 'pointer' }}
+                      onClick={() => e
+                        ? setFormEntrata({ ...e, shift_num: e.shift_num ?? '', data_incasso: e.data_incasso || '', note: e.note || '' })
+                        : nuovaEntrataCella(desc, t.num)}>
+                      {!e ? <span style={{ color: 'var(--border)' }}>—</span>
+                        : e.data_incasso
+                          ? <span style={cellBadge('#15803D', '#DCFCE7')}>{fmtEur(Number(e.importo))}</span>
+                          : <span style={cellBadge('#B45309', '#FEF3C7')}>{fmtEur(Number(e.importo))}</span>}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: -14, marginBottom: 22, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <span><span style={{ ...cellBadge('#B45309', '#FEF3C7'), marginRight: 5 }}>importo</span> da incassare, entra nella previsione</span>
+        <span><span style={{ ...cellBadge('#15803D', '#DCFCE7'), marginRight: 5 }}>importo</span> gia' incassata, esce dalla previsione</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
