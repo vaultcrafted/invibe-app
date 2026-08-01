@@ -106,6 +106,8 @@ export const SERVICES_PAG = [
   { id: 'pag_vida_bonifico', label: 'Vida (bonifico)', prezzo: 15 },
   { id: 'pag_vida_sun', label: 'Vida Sun', prezzo: 11 },
   { id: 'pag_cantante_extra', label: 'Cantante extra', prezzo: 10 },
+  { id: 'pag_cantante_extra_2', label: 'Cantante extra 2', prezzo: 30 },
+  { id: 'pag_cantante_extra_3', label: 'Cantante extra 3', prezzo: 0 },
   { id: 'pag_pizza', label: 'Pizza', prezzo: 20 },     // P1 = 25 (override per turno)
 ]
 
@@ -121,12 +123,14 @@ export const PRICE_OVERRIDES = {
   C4: { qta_pazuzu: 35 },
   C5: { qta_pazuzu: 35 },
   C6: { qta_pazuzu: 35 },
-  // Cantante extra: 10€ solo per P1 (prezzo base sopra); da P2 in poi è 20€.
+  // Cantante extra: 10€ su P1, 20€ su P2.
+  // Da P3 in poi i cantanti sono TRE: 25€, 30€ e il terzo ancora da definire.
+  // P1 e P2 restano ai vecchi prezzi: cambiarli ricalcolerebbe incassi gia' chiusi.
   P2: { pag_cantante_extra: 20 },
-  P3: { pag_cantante_extra: 20 },
-  P4: { pag_cantante_extra: 20 },
-  P5: { pag_cantante_extra: 20 },
-  P6: { pag_cantante_extra: 20 },
+  P3: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
+  P4: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
+  P5: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
+  P6: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
 }
 
 // Prezzi caricati dal database (tabella servizi_prezzi). Se null, si usano i prezzi del codice.
@@ -266,6 +270,8 @@ export const SHEET_SERVIZIO_MAP = {
   pag_vida_bonifico: 'VIDA BONIFICO in meta',
   pag_vida_sun: 'VIDA SUN',
   pag_cantante_extra: 'Cantante extra',
+  pag_cantante_extra_2: 'Cantante extra 2',
+  pag_cantante_extra_3: 'Cantante extra 3',
   pag_pizza: 'Pizza',
 }
 
