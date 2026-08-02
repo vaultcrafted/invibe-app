@@ -1758,20 +1758,6 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
           : `${movVisibili.length} movimenti su ${movimenti.length} totali (con questi filtri)`}
       </div>
 
-      {/* Movimenti che stanno nell'app ma NON risultano sul foglio: finche' sono
-          qui, la rendicontazione e' incompleta. Restano in evidenza apposta. */}
-      {movimenti.some(m => m.sheet_ok === false) && (
-        <div style={{
-          marginTop: 8, background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B',
-          borderRadius: 10, padding: '10px 12px', fontSize: 13, fontWeight: 600
-        }}>
-          ⚠️ {movimenti.filter(m => m.sheet_ok === false).length} movimenti non ancora scritti sul foglio
-          <div style={{ fontWeight: 400, fontSize: 11.5, marginTop: 3 }}>
-            Sono salvati nell'app ma non risultano sulla rendicontazione. Vengono ritentati da soli;
-            se restano qui, vanno aggiunti a mano sul foglio.
-          </div>
-        </div>
-      )}
 
       {canEditCassa && (
         <button onClick={openForm} style={{ padding: '12px', borderRadius: 12, background: 'var(--iv-blue)', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, cursor: 'pointer', width: 'fit-content', paddingLeft: 20, paddingRight: 20 }}>
@@ -1854,18 +1840,12 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
           return (
             <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
                  borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
-                 background: m.sheet_ok === false ? '#FEF2F2' : undefined,
-                 borderLeft: m.sheet_ok === false ? '3px solid #DC2626' : '3px solid transparent' }}>
+ }}>
               {isEntrata ? <ArrowDownCircle size={18} color="#16A34A" style={{ flexShrink: 0 }} /> : <ArrowUpCircle size={18} color="#DC2626" style={{ flexShrink: 0 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
                   {m.categoria}
                   <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 20, background: (METODO_COLORS[mMet] || '#64748B') + '18', color: METODO_COLORS[mMet] || '#64748B' }}>{mMet}</span>
-                  {m.sheet_ok === false && (
-                    <span style={{ fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', padding: '1px 7px', borderRadius: 20, background: '#FEE2E2', color: '#991B1B' }}>
-                      non sul foglio
-                    </span>
-                  )}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 1 }}>
                   {dataFmt}{oraFmt ? ` · ${oraFmt}` : ''}{m.descrizione ? ` · ${m.descrizione}` : ''}{m.inserito_da ? ` · ${m.inserito_da}` : ''}
