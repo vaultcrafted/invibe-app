@@ -96,7 +96,13 @@ export function enqueueUpdate(table, match, payload, opts = {}) {
 
 // INSERT. sheet = array di payload per syncToSheet (opzionale, stesso meccanismo di retry di enqueueUpdate).
 export function enqueueInsert(table, row, opts = {}) {
-  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet: marchiaCassa(opts.sheet) || null, ts: Date.now() }
+  const sheet = marchiaCassa(opts.sheet) || null
+  // Il movimento e la sua riga sul foglio devono portare la STESSA etichetta:
+  // e' cosi' che l'app sa, dopo, se quella riga e' davvero arrivata.
+  if (table === 'cassa_movimenti' && sheet && sheet[0] && sheet[0].movId) {
+    row = { ...row, sheet_mov_id: sheet[0].movId, sheet_ok: false }
+  }
+  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
@@ -172,6 +178,10 @@ async function verificaScrittura(s) {
       .eq('mov_id', s.movId)
     const n = (data || []).length
     const capo = s.descrizione || s.categoria || 'movimento'
+    if (n === 1) {
+      // Confermato: la riga c'e', ed e' una sola.
+      await supabase.from('cassa_movimenti').update({ sheet_ok: true }).eq('sheet_mov_id', s.movId)
+    }
     if (n === 0) {
       aggiungiAvviso(
         'NON scritto sul foglio: ' + capo,
