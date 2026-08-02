@@ -262,14 +262,15 @@ export default function GroupDetail() {
         .from('cassa_movimenti')
         .select('id, importo, descrizione, categoria, data, metodo, sheet_mov_id')
         .match(match)
+      const metodiTolti = new Set()
       for (const row of (rows || [])) {
-        enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
-          __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
-          movId: row.sheet_mov_id || undefined,
-          tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
-          categoria: row.categoria || '', metodo: row.metodo || 'Cash', data: row.data || '',
-        }] })
+        enqueueDelete('cassa_movimenti', { id: row.id })
+        metodiTolti.add(row.metodo || 'Cash')
       }
+      // Il foglio si allinea con un comando solo per metodo: "questo servizio
+      // ora vale zero", che svuota la sua riga.
+      const svc = getServices(group.destination, group.shift_num).find(x => x.id === serviceId)
+      if (svc) metodiTolti.forEach(m => sincronizzaFoglio(serviceId, m, 0, svc))
     } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
   }
 
@@ -291,12 +292,7 @@ export default function GroupDetail() {
         const rowQty = Math.round((Number(row.importo) / prezzo) * 100) / 100
         if (rowQty <= remaining + 1e-6) {
           // Questo movimento va rimosso per intero
-          enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
-            __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
-            movId: row.sheet_mov_id || undefined,
-            tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
-            categoria: row.categoria || '', metodo, data: row.data || '',
-          }] })
+          enqueueDelete('cassa_movimenti', { id: row.id })
           remaining -= rowQty
         } else {
           // Correggo per intero: sottraggo solo la parte necessaria, stessa data originale
@@ -305,19 +301,34 @@ export default function GroupDetail() {
           // e cambio il numero. Prima erano due comandi separati (cancella +
           // riaggiungi): se il primo falliva e il secondo riusciva, restavano
           // due righe. Ripetuto qualche volta, diventavano sette.
-          enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto }, { sheet: [
-            {
-              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num,
-              azione: row.sheet_mov_id ? 'correggi' : 'add',
-              movId: row.sheet_mov_id || undefined,
-              tipoMov: 'entrata', importo: nuovoImporto, descrizione: row.descrizione || '',
-              categoria: row.categoria || '', metodo, data: row.data || '',
-            },
-          ] })
+          enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto })
           remaining = 0
         }
       }
     } catch (e) { /* offline o errore: il foglio è best-effort, Supabase resta la fonte di verità */ }
+  }
+
+  // Dice al foglio quanto vale ADESSO un servizio di questo gruppo per un metodo,
+  // invece di mandare i singoli aumenti e diminuzioni.
+  //
+  // Prima ogni clic sul contatore era un comando a se': 5 pax, poi 7, poi 10,
+  // piu' i cambi di metodo — otto comandi, otto righe sul foglio. Nessun
+  // controllo antiduplicati poteva evitarlo, perche' erano comandi DIVERSI.
+  //
+  // Ora ne parte uno solo con il totale: il foglio tiene una riga per servizio e
+  // la aggiorna. Che arrivi una volta o venti, il risultato e' lo stesso.
+  function sincronizzaFoglio(serviceId, metodo, qtyTotale, svc) {
+    if (!metodo) return
+    const prezzo = svc.prezzo
+    const categoria = cassaCategoriaForService(serviceId, svc.label)
+    const descrizione = `${capogruppoCode(group.capogruppo_code)} ${group.capogruppo_display} · ${svc.label}`.trim()
+    enqueueSheetOnly([{
+      __kind: 'cassa', destination: group.destination, shift_num: group.shift_num,
+      azione: 'sincronizza', tipoMov: 'entrata',
+      importo: (qtyTotale || 0) * prezzo,
+      descrizione, categoria, metodo,
+      data: new Date().toISOString().slice(0, 10),
+    }])
   }
 
   // Sincronizza SOLO un metodo per un servizio alla quantità data (usata sia dal flusso
@@ -337,11 +348,13 @@ export default function GroupDetail() {
         categoria, importo: delta * prezzo, metodo, descrizione,
         inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
         group_id: groupId, servizio_id: serviceId, auto: true,
-      }, { sheet: [{ __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: delta * prezzo, descrizione, categoria, metodo, data }] })
+      })
     } else if (delta < -0.001) {
       // Riduzione: correggo/cancello i movimenti già registrati, NON creo un'uscita.
       await reduceRegisteredAmount(serviceId, metodo, -delta, prezzo)
     }
+    // In ogni caso allineo il foglio allo stato finale, con un comando solo.
+    sincronizzaFoglio(serviceId, metodo, newQty, svc)
   }
 
   async function syncCassaEntrata(serviceId, metodo, qty) {
@@ -372,8 +385,11 @@ export default function GroupDetail() {
           categoria, importo: newQty * prezzo, metodo, descrizione,
           inserito_da: profile ? `${profile.nome} ${profile.cognome}`.trim() : 'App',
           group_id: groupId, servizio_id: serviceId, auto: true,
-        }, { sheet: [{ __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add', tipoMov: 'entrata', importo: newQty * prezzo, descrizione, categoria, metodo, data }] })
+        })
       }
+      // Il nuovo metodo prende il valore pieno; il vecchio e' gia' stato
+      // azzerato da removeAllRegistered.
+      sincronizzaFoglio(serviceId, metodo, newQty, svc)
     } else if (!metodo) {
       // Servizio spento del tutto (o metodo tolto): rimuovo TUTTO quanto era registrato per
       // questo servizio in cassa, qualsiasi sia il metodo (copre anche movimenti pre-esistenti
