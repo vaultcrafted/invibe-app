@@ -317,7 +317,19 @@ export default function GroupDetail() {
   //
   // Ora ne parte uno solo con il totale: il foglio tiene una riga per servizio e
   // la aggiorna. Che arrivi una volta o venti, il risultato e' lo stesso.
+  // Un solo comando per servizio+metodo, anche se l'utente clicca piu' volte:
+  // il precedente viene annullato e parte solo l'ultimo, mezzo secondo dopo
+  // l'ultimo clic. Senza questo, salire da 5 a 10 con il contatore mandava
+  // cinque comandi.
+  const timerSync = useRef({})
   function sincronizzaFoglio(serviceId, metodo, qtyTotale, svc) {
+    if (!metodo) return
+    const chiave = serviceId + '|' + metodo
+    clearTimeout(timerSync.current[chiave])
+    timerSync.current[chiave] = setTimeout(() => inviaSincronizza(serviceId, metodo, qtyTotale, svc), 500)
+  }
+
+  function inviaSincronizza(serviceId, metodo, qtyTotale, svc) {
     if (!metodo) return
     const prezzo = svc.prezzo
     const categoria = cassaCategoriaForService(serviceId, svc.label)
