@@ -26,6 +26,22 @@ function notify() {
 }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8) }
 
+// Marchia ogni payload di CASSA con un codice unico e stabile.
+// Serve perche' una scrittura verso il foglio puo' essere ritentata piu' volte:
+// dalla coda locale, dal cron ogni 5 minuti, o perche' Google ha risposto con un
+// errore pur avendo gia' scritto. Senza un codice, l'unico modo per riconoscere
+// un ritentativo era confrontare importo e descrizione — e due incassi identici
+// ma veri risultavano indistinguibili da un duplicato.
+// Con il codice, Apps Script lo registra nel database prima di scrivere: se
+// esiste gia', la riga c'e' e non la riscrive.
+function marchiaCassa(payloads) {
+  if (!Array.isArray(payloads)) return payloads
+  payloads.forEach(p => {
+    if (p && p.__kind === 'cassa' && !p.movId) p.movId = uid()
+  })
+  return payloads
+}
+
 export function getState() {
   const pending = load().length
   return {
@@ -45,7 +61,7 @@ export function subscribe(cb) {
 
 // UPDATE con collasso per dedupKey (l'ultimo valore vince). sheet = array di payload per syncToSheet (opzionale).
 export function enqueueUpdate(table, match, payload, opts = {}) {
-  const op = { id: uid(), type: 'update', table, match, payload, dedupKey: opts.dedupKey || null, sheet: opts.sheet || null, ts: Date.now() }
+  const op = { id: uid(), type: 'update', table, match, payload, dedupKey: opts.dedupKey || null, sheet: marchiaCassa(opts.sheet) || null, ts: Date.now() }
   const q = load()
   const next = op.dedupKey ? q.filter(o => o.dedupKey !== op.dedupKey) : q.slice()
   next.push(op)
@@ -56,14 +72,14 @@ export function enqueueUpdate(table, match, payload, opts = {}) {
 
 // INSERT. sheet = array di payload per syncToSheet (opzionale, stesso meccanismo di retry di enqueueUpdate).
 export function enqueueInsert(table, row, opts = {}) {
-  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet: opts.sheet || null, ts: Date.now() }
+  const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet: marchiaCassa(opts.sheet) || null, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
 }
 
 export function enqueueDelete(table, match, opts = {}) {
-  const op = { id: uid(), type: 'delete', table, match, dedupKey: null, sheet: opts.sheet || null, ts: Date.now() }
+  const op = { id: uid(), type: 'delete', table, match, dedupKey: null, sheet: marchiaCassa(opts.sheet) || null, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
@@ -74,7 +90,7 @@ export function enqueueDelete(table, match, opts = {}) {
 // immediato se il DB fallisce), ma si vuole comunque che il sync verso il foglio Google riprovi
 // automaticamente se fallisce, invece di essere "spara e spera".
 export function enqueueSheetOnly(sheetPayloads) {
-  const op = { id: uid(), type: 'sheet-retry', sheet: sheetPayloads, sheetRetryCount: 0, dedupKey: null, ts: Date.now() }
+  const op = { id: uid(), type: 'sheet-retry', sheet: marchiaCassa(sheetPayloads), sheetRetryCount: 0, dedupKey: null, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
   flush()
   return op.id
