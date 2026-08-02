@@ -260,11 +260,12 @@ export default function GroupDetail() {
       if (metodoHint) match.metodo = metodoHint
       const { data: rows } = await supabase
         .from('cassa_movimenti')
-        .select('id, importo, descrizione, categoria, data, metodo')
+        .select('id, importo, descrizione, categoria, data, metodo, sheet_mov_id')
         .match(match)
       for (const row of (rows || [])) {
         enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
           __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+          movId: row.sheet_mov_id || undefined,
           tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
           categoria: row.categoria || '', metodo: row.metodo || 'Cash', data: row.data || '',
         }] })
@@ -282,7 +283,7 @@ export default function GroupDetail() {
     try {
       const { data: rows } = await supabase
         .from('cassa_movimenti')
-        .select('id, importo, descrizione, categoria, data')
+        .select('id, importo, descrizione, categoria, data, sheet_mov_id')
         .match({ group_id: groupId, servizio_id: serviceId, metodo, tipo: 'entrata', auto: true })
         .order('created_at', { ascending: false })
       for (const row of (rows || [])) {
@@ -292,6 +293,7 @@ export default function GroupDetail() {
           // Questo movimento va rimosso per intero
           enqueueDelete('cassa_movimenti', { id: row.id }, { sheet: [{
             __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
+            movId: row.sheet_mov_id || undefined,
             tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
             categoria: row.categoria || '', metodo, data: row.data || '',
           }] })
@@ -299,14 +301,15 @@ export default function GroupDetail() {
         } else {
           // Correggo per intero: sottraggo solo la parte necessaria, stessa data originale
           const nuovoImporto = Number(row.importo) - remaining * prezzo
+          // UNA sola operazione sul foglio: vado sulla riga di questo movimento
+          // e cambio il numero. Prima erano due comandi separati (cancella +
+          // riaggiungi): se il primo falliva e il secondo riusciva, restavano
+          // due righe. Ripetuto qualche volta, diventavano sette.
           enqueueUpdate('cassa_movimenti', { id: row.id }, { importo: nuovoImporto }, { sheet: [
             {
-              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'elimina',
-              tipoMov: 'entrata', importo: row.importo, descrizione: row.descrizione || '',
-              categoria: row.categoria || '', metodo, data: row.data || '',
-            },
-            {
-              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num, azione: 'add',
+              __kind: 'cassa', destination: group.destination, shift_num: group.shift_num,
+              azione: row.sheet_mov_id ? 'correggi' : 'add',
+              movId: row.sheet_mov_id || undefined,
               tipoMov: 'entrata', importo: nuovoImporto, descrizione: row.descrizione || '',
               categoria: row.categoria || '', metodo, data: row.data || '',
             },

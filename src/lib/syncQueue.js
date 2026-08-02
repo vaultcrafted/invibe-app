@@ -171,6 +171,9 @@ async function sendSheetPayload(s) {
 // la riga non e' mai arrivata; se ce ne fossero due, sarebbe un duplicato.
 async function verificaScrittura(s) {
   if (!s || !s.movId) return
+  // Solo per le AGGIUNTE. Su una cancellazione il registro viene giustamente
+  // svuotato, e cercare la riga darebbe un falso allarme "non scritto".
+  if (String(s.azione || 'add').toLowerCase() !== 'add') return
   try {
     const { data } = await supabase
       .from('cassa_sheet_scritture')
