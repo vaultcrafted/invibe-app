@@ -1618,10 +1618,21 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
   const [triedSave, setTriedSave] = useState(false)
+  const [confronto, setConfronto] = useState(null)   // totale letto DAL FOGLIO
 
   const dest = DESTINATIONS.find(d => d.id === destination)
 
-  useEffect(() => { load() }, [destination, shiftNum])
+  useEffect(() => { load(); caricaConfronto() }, [destination, shiftNum])
+
+  // Legge il totale che Apps Script ha letto dal foglio. E' un confronto fra
+  // due numeri, non una deduzione: se dice che divergono, divergono davvero.
+  async function caricaConfronto() {
+    const prefissi = { pag: 'P', corfu: 'C', zante: 'Z', gallipoli: 'G', sardegna: 'S' }
+    const turno = (prefissi[destination] || '') + shiftNum
+    const { data } = await supabase.from('cassa_confronto')
+      .select('righe_foglio, totale_foglio, aggiornato_at').eq('turno', turno).maybeSingle()
+    setConfronto(data || null)
+  }
 
   async function load() {
     setLoading(true)
@@ -1751,6 +1762,35 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--iv-blue)', marginTop: 4 }}>€{(totEntrate - totUscite).toFixed(2)}</div>
         </div>
       </div>
+
+      {(() => {
+        if (!confronto) return null
+        const saldoApp = totEntrate - totUscite
+        const diff = Number(confronto.totale_foglio) - saldoApp
+        const righeDiff = Number(confronto.righe_foglio) - movimenti.length
+        if (Math.abs(diff) < 0.01 && righeDiff === 0) return null
+        const quando = confronto.aggiornato_at
+          ? new Date(confronto.aggiornato_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+          : ''
+        return (
+          <div style={{
+            marginBottom: 10, background: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E',
+            borderRadius: 10, padding: '11px 13px', fontSize: 13
+          }}>
+            <div style={{ fontWeight: 700 }}>
+              ⚠️ Il foglio non coincide con l'app
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12.5 }}>
+              Foglio: <b>€{Number(confronto.totale_foglio).toFixed(2)}</b> su {confronto.righe_foglio} righe ·
+              App: <b>€{saldoApp.toFixed(2)}</b> su {movimenti.length} righe
+              {Math.abs(diff) >= 0.01 && <> · differenza <b>€{diff.toFixed(2)}</b></>}
+            </div>
+            <div style={{ marginTop: 3, fontSize: 11, opacity: .85 }}>
+              Confronto del {quando}. Controlla la rendicontazione di questo turno.
+            </div>
+          </div>
+        )
+      })()}
 
       <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-tertiary)' }}>
         {movVisibili.length === movimenti.length
