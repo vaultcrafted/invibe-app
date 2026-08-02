@@ -158,7 +158,12 @@ async function sendSheetPayload(s) {
     }
     // Riuscito. Controllo cosa e' successo davvero sul foglio: Apps Script
     // registra ogni scrittura in cassa_sheet_scritture con la riga esatta.
-    await verificaScrittura(s)
+    // VERIFICA DISATTIVATA. Si basa sul registro cassa_sheet_scritture, che
+    // Apps Script al momento non riesce a compilare: il risultato erano avvisi
+    // "non scritto sul foglio" su righe che invece c'erano. Un avviso che
+    // sbaglia e' peggio di nessun avviso, perche' insegna a ignorarlo.
+    // Da riattivare solo quando il registro si popola davvero.
+    // await verificaScrittura(s)
   } else {
     // Fallback raro (RLS/offline sulla insert): meglio tentare comunque alla vecchia maniera
     // che perdere del tutto il tentativo immediato.
