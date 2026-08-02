@@ -9,6 +9,8 @@ import { syncToSheet, sendCassaToSheet } from './sheetsSync'
 
 const KEY = 'invibe_sync_queue_v1'
 const listeners = new Set()
+const avvisiListeners = new Set()
+let avvisi = []      // avvisi visibili all'utente sulle scritture verso il foglio
 let flushing = false
 let batchTotal = 0   // picco della coda nel lotto corrente (per la percentuale)
 
@@ -53,6 +55,28 @@ export function getState() {
     syncing: flushing,
   }
 }
+// --- AVVISI sulle scritture verso il foglio -------------------------------
+// Finora un movimento poteva non arrivare sul foglio senza che nessuno lo
+// sapesse: la coda riprovava in silenzio e, se non ce la faceva, la differenza
+// si scopriva solo giorni dopo confrontando i totali. Da qui in poi l'utente
+// lo vede subito.
+export function subscribeAvvisi(cb) {
+  avvisiListeners.add(cb)
+  cb(avvisi)
+  return () => avvisiListeners.delete(cb)
+}
+function notificaAvvisi() {
+  avvisiListeners.forEach(cb => { try { cb(avvisi) } catch (e) {} })
+}
+function aggiungiAvviso(testo, dettaglio) {
+  avvisi = [...avvisi, { id: uid(), testo, dettaglio: dettaglio || '', ts: Date.now() }].slice(-5)
+  notificaAvvisi()
+}
+export function scartaAvviso(id) {
+  avvisi = avvisi.filter(a => a.id !== id)
+  notificaAvvisi()
+}
+
 export function subscribe(cb) {
   listeners.add(cb)
   cb(getState())
@@ -126,11 +150,38 @@ async function sendSheetPayload(s) {
     if (error || !data || data.succeeded !== 1) {
       throw new Error((data && data.error) || error?.message || 'sync foglio non confermato, il cron lo riprenderà')
     }
+    // Riuscito. Controllo cosa e' successo davvero sul foglio: Apps Script
+    // registra ogni scrittura in cassa_sheet_scritture con la riga esatta.
+    await verificaScrittura(s)
   } else {
     // Fallback raro (RLS/offline sulla insert): meglio tentare comunque alla vecchia maniera
     // che perdere del tutto il tentativo immediato.
     await sendCassaToSheet(s)
   }
+}
+
+// Dopo una scrittura riuscita, controlla nel registro che sia finita UNA sola
+// riga sul foglio. Il registro e' scritto da Apps Script: se il codice non c'e',
+// la riga non e' mai arrivata; se ce ne fossero due, sarebbe un duplicato.
+async function verificaScrittura(s) {
+  if (!s || !s.movId) return
+  try {
+    const { data } = await supabase
+      .from('cassa_sheet_scritture')
+      .select('mov_id,riga,turno')
+      .eq('mov_id', s.movId)
+    const n = (data || []).length
+    const capo = s.descrizione || s.categoria || 'movimento'
+    if (n === 0) {
+      aggiungiAvviso(
+        'NON scritto sul foglio: ' + capo,
+        'Il movimento e\' salvato nell\'app ma la riga non risulta sulla rendicontazione. Verra\' ritentato: se l\'avviso torna, aggiungila a mano.')
+    } else if (n > 1) {
+      aggiungiAvviso(
+        'Scritto piu\' volte sul foglio: ' + capo,
+        'Risultano ' + n + ' righe per lo stesso movimento. Vanno tolte le copie in eccesso.')
+    }
+  } catch (e) { /* la verifica non deve mai bloccare il salvataggio */ }
 }
 
 export async function flush() {

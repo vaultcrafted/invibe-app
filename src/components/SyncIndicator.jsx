@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { subscribe } from '../lib/syncQueue'
+import { subscribe, subscribeAvvisi, scartaAvviso } from '../lib/syncQueue'
 
 export default function SyncIndicator() {
   const [state, setState] = useState({ pending: 0, online: true, syncing: false, total: 0, done: 0, percent: 100 })
+  const [avvisi, setAvvisi] = useState([])
   const [justSynced, setJustSynced] = useState(false)
   const [animPct, setAnimPct] = useState(0)
   const prevPending = useRef(0)
@@ -20,7 +21,8 @@ export default function SyncIndicator() {
       prevPending.current = st.pending
       setState(st)
     })
-    return () => { unsub(); clearTimeout(timer.current) }
+    const unsubAvvisi = subscribeAvvisi(setAvvisi)
+    return () => { unsub(); unsubAvvisi(); clearTimeout(timer.current) }
   }, [])
 
   const { pending, online, syncing, total, done, percent } = state
@@ -39,8 +41,32 @@ export default function SyncIndicator() {
     return () => clearInterval(anim.current)
   }, [online, pending, total])
 
+  // Gli AVVISI hanno la precedenza: segnalano un movimento che non e' arrivato
+  // sul foglio, o che ci e' arrivato piu' volte. Restano finche' non li si chiude.
+  const bannerAvvisi = avvisi.length > 0 && (
+    <div style={{ position: 'fixed', left: 12, right: 12, bottom: 12, zIndex: 9999,
+                  display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {avvisi.map(a => (
+        <div key={a.id} style={{
+          background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B',
+          borderRadius: 12, padding: '12px 14px', boxShadow: '0 4px 14px rgba(0,0,0,.15)',
+          display: 'flex', gap: 10, alignItems: 'flex-start'
+        }}>
+          <span style={{ fontSize: 18, lineHeight: '20px' }}>⚠️</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>{a.testo}</div>
+            {a.dettaglio && <div style={{ fontSize: 12, marginTop: 3, opacity: .9 }}>{a.dettaglio}</div>}
+          </div>
+          <button onClick={() => scartaAvviso(a.id)}
+                  style={{ background: 'transparent', border: 0, color: '#991B1B',
+                           fontSize: 20, lineHeight: '20px', cursor: 'pointer', padding: 0 }}>×</button>
+        </div>
+      ))}
+    </div>
+  )
+
   // Niente da mostrare se: online, niente in coda, e nessuna conferma in corso
-  if (online && pending === 0 && !justSynced) return null
+  if (online && pending === 0 && !justSynced) return bannerAvvisi || null
 
   let bg, color, border, label
   if (!online) {
@@ -58,6 +84,9 @@ export default function SyncIndicator() {
   const showBar = online && pending > 0
 
   return (
+    <>
+      {bannerAvvisi}
+
     <div style={{
       position: 'fixed', zIndex: 150,
       bottom: 'calc(76px + env(safe-area-inset-bottom))',
@@ -86,5 +115,6 @@ export default function SyncIndicator() {
       )}
       <style>{`@keyframes syncPulse{0%,100%{opacity:1}50%{opacity:.3}}`}</style>
     </div>
+    </>
   )
 }
