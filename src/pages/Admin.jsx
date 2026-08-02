@@ -1654,7 +1654,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
       tipo: form.tipo,
       categoria: form.categoria, importo: amount,
       descrizione: form.descrizione || null, inserito_da: 'Ufficio', metodo: form.metodo || 'Cash',
-      sheet_mov_id: movId, sheet_ok: false,
+      sheet_mov_id: movId,
     })
     setSaving(false)
     if (error) { setSaveError(error.message); return }

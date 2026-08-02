@@ -100,7 +100,10 @@ export function enqueueInsert(table, row, opts = {}) {
   // Il movimento e la sua riga sul foglio devono portare la STESSA etichetta:
   // e' cosi' che l'app sa, dopo, se quella riga e' davvero arrivata.
   if (table === 'cassa_movimenti' && sheet && sheet[0] && sheet[0].movId) {
-    row = { ...row, sheet_mov_id: sheet[0].movId, sheet_ok: false }
+    // sheet_ok resta al suo default (true): la conferma automatica e'
+    // disattivata, e marcarli "da confermare" senza nessuno che li confermi
+    // lasciava ogni movimento nuovo in rosso per sempre.
+    row = { ...row, sheet_mov_id: sheet[0].movId }
   }
   const op = { id: uid(), type: 'insert', table, payload: row, dedupKey: null, sheet, ts: Date.now() }
   const q = load(); q.push(op); persist(q)
