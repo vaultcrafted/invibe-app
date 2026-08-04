@@ -419,7 +419,18 @@ export default function FornitoriTab() {
                       {!e ? <span style={{ color: 'var(--border)' }}>—</span>
                         : e.data_incasso
                           ? <span style={cellBadge('#15803D', '#DCFCE7')}>{fmtEur(Number(e.importo))}</span>
-                          : <span style={cellBadge('#B45309', '#FEF3C7')}>{fmtEur(Number(e.importo))}</span>}
+                          : (
+                            // Da incassare: sotto l'importo la data prevista.
+                            <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                              <span style={cellBadge('#B45309', '#FEF3C7')}>{fmtEur(Number(e.importo))}</span>
+                              {e.data_prevista && (
+                                <span style={{ fontSize: 9.5, fontWeight: 600,
+                                               color: e.data_prevista < oggiISO() ? '#B91C1C' : 'var(--text-tertiary)' }}>
+                                  {fmtDataBreve(e.data_prevista)}
+                                </span>
+                              )}
+                            </span>
+                          )}
                     </td>
                   )
                 })}
@@ -479,7 +490,19 @@ export default function FornitoriTab() {
                         {!c ? <span style={{ color: 'var(--border)' }}>—</span>
                           : c.gratis ? <span style={cellBadge('#64748B', '#F1F5F9')}>FREE</span>
                           : c.data_pagamento ? <span style={cellBadge('#16A34A', '#DCFCE7')}>{fmtDataBreve(c.data_pagamento)}</span>
-                          : <span style={cellBadge('#B91C1C', '#FEE2E2')}>NO</span>}
+                          : (
+                            // Non ancora pagato: sotto il NO la scadenza, cosi' si
+                            // vede subito cosa incombe senza aprire la riga.
+                            <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                              <span style={cellBadge('#B91C1C', '#FEE2E2')}>NO</span>
+                              {c.data_prevista && (
+                                <span style={{ fontSize: 9.5, fontWeight: 600,
+                                               color: c.data_prevista < oggiISO() ? '#B91C1C' : 'var(--text-tertiary)' }}>
+                                  {fmtDataBreve(c.data_prevista)}
+                                </span>
+                              )}
+                            </span>
+                          )}
                       </td>
                     )
                   })}
