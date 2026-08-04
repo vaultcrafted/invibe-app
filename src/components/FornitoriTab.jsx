@@ -231,9 +231,15 @@ export default function FornitoriTab() {
     d.setDate(d.getDate() + giorni)
     setDataLimite(d.toISOString().slice(0, 10))
   }
+  // Ultima scadenza da proiettare, oppure null se su questa meta non c'e'
+  // niente in programma. Prima si ripiegava su oggi: cosi' "Fino all'ultima"
+  // valeva quanto "Oggi" e i due pulsanti risultavano accesi entrambi.
   function ultimaScadenza() {
-    const date = daPagareTutti.map(f => f.data_prevista).filter(Boolean).sort()
-    return date.length ? date[date.length - 1] : oggiISO()
+    const date = [
+      ...daPagareTutti.map(f => f.data_prevista),
+      ...(entrate || []).filter(e => !e.data_incasso).map(e => e.data_prevista),
+    ].filter(Boolean).sort()
+    return date.length ? date[date.length - 1] : null
   }
   const fmtGiorno = iso => new Date(iso + 'T12:00:00')
     .toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -269,7 +275,15 @@ export default function FornitoriTab() {
             <button onClick={() => setDataLimite(oggiISO())} style={miniBtn(dataLimite === oggiISO())}>Oggi</button>
             <button onClick={() => spostaData(7)} style={miniBtn(false)}>+7 giorni</button>
             <button onClick={() => spostaData(30)} style={miniBtn(false)}>+30 giorni</button>
-            <button onClick={() => setDataLimite(ultimaScadenza())} style={miniBtn(dataLimite === ultimaScadenza())}>Fino all'ultima</button>
+            {(() => {
+              const ultima = ultimaScadenza()
+              if (!ultima) return null   // niente in programma: il pulsante non avrebbe senso
+              return (
+                <button onClick={() => setDataLimite(ultima)} style={miniBtn(dataLimite === ultima)}>
+                  Fino all'ultima
+                </button>
+              )
+            })()}
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: 32, flexWrap: 'wrap' }}>
