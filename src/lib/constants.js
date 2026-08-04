@@ -128,7 +128,8 @@ export const PRICE_OVERRIDES = {
   // P1 e P2 restano ai vecchi prezzi: cambiarli ricalcolerebbe incassi gia' chiusi.
   P2: { pag_cantante_extra: 20 },
   P3: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
-  P4: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
+  // P4 ha prezzi suoi: 15 / 20 / 25 (decisi il 4 ago, riportati anche sul foglio).
+  P4: { pag_cantante_extra: 15, pag_cantante_extra_2: 20, pag_cantante_extra_3: 25 },
   P5: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
   P6: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 0 },
 }
