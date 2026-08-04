@@ -13,7 +13,6 @@ import Admin from './pages/Admin'
 import Account from './pages/Account'
 import Dbd from './pages/Dbd'
 import DbdAdmin from './pages/DbdAdmin'
-import Cassa from './pages/Cassa'
 import StaffList from './pages/StaffList'
 import StaffProfile from './pages/StaffProfile'
 import WeeklyVote from './pages/WeeklyVote'
@@ -58,7 +57,9 @@ function AppShell() {
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
           <Route path="/dbd" element={<ProtectedRoute><Dbd /></ProtectedRoute>} />
           <Route path="/dbd-admin" element={<AdminRoute><DbdAdmin /></AdminRoute>} />
-          <Route path="/cassa" element={<AdminRoute><Cassa /></AdminRoute>} />
+          {/* La Cassa vive nel pannello admin, dove si puo' anche modificare.
+              Il vecchio recap in sola lettura era un doppione. */}
+          <Route path="/cassa" element={<Navigate to="/admin?tab=cassa" replace />} />
           <Route path="/staff-list" element={<ProtectedRoute><StaffList /></ProtectedRoute>} />
           <Route path="/staff/:staffId" element={<ProtectedRoute><StaffProfile /></ProtectedRoute>} />
           <Route path="/weekly-vote/:destId/:shiftNum" element={<ProtectedRoute><WeeklyVote /></ProtectedRoute>} />

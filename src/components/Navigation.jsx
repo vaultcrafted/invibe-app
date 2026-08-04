@@ -22,7 +22,9 @@ const NAV_ITEMS = [
     )
   },
   {
-    id: 'cassa', label: 'Cassa', path: '/cassa', adminOnly: true,
+    // Porta alla Cassa del pannello admin, dove si puo' anche modificare:
+    // il vecchio recap in sola lettura era un doppione.
+    id: 'cassa', label: 'Cassa', path: '/admin?tab=cassa', adminOnly: true,
     icon: (active) => (
       <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
         <rect x="2" y="6" width="20" height="14" rx="3" stroke={active ? '#1E6BF1' : 'currentColor'} strokeWidth="2"/>
@@ -74,6 +76,12 @@ export default function Navigation() {
 
   function isActive(item) {
     if (item.path === '/') return location.pathname === '/'
+    // Voci con parametro (es. /admin?tab=cassa): conta anche cosa c'e' dopo il ?,
+    // altrimenti resterebbero spente pur essendo la pagina aperta.
+    if (item.path.indexOf('?') >= 0) {
+      const [p, q] = item.path.split('?')
+      return location.pathname === p && location.search.indexOf(q) >= 0
+    }
     return location.pathname.startsWith(item.path)
   }
 

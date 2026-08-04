@@ -25,7 +25,10 @@ export default function Admin() {
   // Si parte da una home con tutte le sezioni. Prima si atterrava su Import
   // Excel, che e' l'operazione piu' rara e la piu' delicata: la prima cosa che
   // si vedeva aprendo il pannello era un pulsante per sovrascrivere i dati.
-  const [tab, setTab] = useState('home')
+  // Con ?tab=cassa si apre direttamente su una scheda: serve alla voce Cassa
+  // del menu laterale, che porta qui invece che al vecchio recap.
+  const tabIniziale = new URLSearchParams(window.location.search).get('tab')
+  const [tab, setTab] = useState(tabIniziale || 'home')
   const [importing, setImporting] = useState(false)
   const [importLog, setImportLog] = useState([])
   const [progress, setProgress] = useState(null)
