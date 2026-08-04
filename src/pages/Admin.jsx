@@ -1570,7 +1570,9 @@ function CassaTab() {
   const totUscite = filtered.filter(m => m.tipo === 'uscita').reduce((t, m) => t + Number(m.importo), 0)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    // Stessi margini delle altre schede: senza, i filtri restavano incollati
+    // alla barra del menu e tagliati a sinistra dalla barra laterale.
+    <div style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Meta:</span>
         <button onClick={() => setFilterDest(null)} style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: !filterDest ? 'var(--iv-blue)' : 'var(--bg-secondary)', color: !filterDest ? '#fff' : 'var(--text-secondary)', border: '0.5px solid ' + (!filterDest ? 'var(--iv-blue)' : 'var(--border)') }}>Tutte</button>

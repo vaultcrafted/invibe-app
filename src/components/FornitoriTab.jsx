@@ -247,7 +247,7 @@ export default function FornitoriTab() {
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Caricamento...</div>
 
   return (
-    <div>
+    <div style={{ padding: '14px 16px 36px' }}>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
         {DESTINATIONS.map(d => (
           <button key={d.id} onClick={() => setFilterDest(d.id)} style={chipStyle(filterDest === d.id)}>{d.flag} {d.name}</button>
