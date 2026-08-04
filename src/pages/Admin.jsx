@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PaxContentTab from '../components/PaxContentTab'
-import AiAssistantTab from '../components/AiAssistantTab'
 import FornitoriTab from '../components/FornitoriTab'
 import PrenotazioniPaxTab from '../components/PrenotazioniPaxTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search, SlidersHorizontal } from 'lucide-react'
@@ -371,7 +370,6 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'prenotazioni' ? 'active' : '')} onClick={() => setTab('prenotazioni')}>🎟️ Prenotazioni</button>
         <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
         <button className={'tab ' + (tab === 'fornitori' ? 'active' : '')} onClick={() => setTab('fornitori')}>📊 Previsione Cassa</button>
-        <button className={'tab ' + (tab === 'ai' ? 'active' : '')} onClick={() => setTab('ai')}>🤖 Assistente AI</button>
       </div>
       </div>
 
@@ -393,7 +391,6 @@ export default function Admin() {
           { titolo: 'Staff', voci: [
             { id: 'staff', icona: '👥', nome: 'Staff', desc: 'Persone e assegnazioni', tinta: '#7C3AED' },
             { id: 'premi', icona: '🏆', nome: 'Premi', desc: 'Voti e classifiche',     tinta: '#7C3AED' },
-            { id: 'ai',    icona: '🤖', nome: 'Assistente AI', desc: 'Domande sui dati', tinta: '#7C3AED' },
           ]},
           ...(canImport ? [{ titolo: 'Manutenzione', voci: [
             { id: 'import', icona: '📥', nome: 'Import Excel', desc: 'Carica il FILE CM · sovrascrive i partecipanti', tinta: '#D97706', attenzione: true },
@@ -533,7 +530,6 @@ export default function Admin() {
       {tab === 'prenotazioni' && <PrenotazioniPaxTab />}
       {tab === 'pax' && <PaxContentTab scope={scopeShifts} />}
       {tab === 'fornitori' && <FornitoriTab />}
-      {tab === 'ai' && <AiAssistantTab />}
     </div>
   )
 }
