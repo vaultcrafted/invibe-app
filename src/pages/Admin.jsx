@@ -375,38 +375,73 @@ export default function Admin() {
       </div>
       </div>
 
-      {tab === 'home' && (
-        <div style={{ padding: 16 }}>
-          <div style={{
-            display: 'grid', gap: 12,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))'
-          }}>
-            {[
-              { id: 'cassa',        icona: '👛', nome: 'Cassa',           desc: 'Entrate e uscite per turno' },
-              { id: 'incassi',      icona: '💰', nome: 'Incassi',         desc: 'Venduto per gruppo e servizio' },
-              { id: 'fornitori',    icona: '📊', nome: 'Previsione Cassa', desc: 'Cosa entra e cosa esce' },
-              { id: 'prenotazioni', icona: '🎟️', nome: 'Prenotazioni',    desc: 'Prenotato dai gruppi' },
-              { id: 'stats',        icona: '📈', nome: 'Statistiche',     desc: 'Numeri della stagione' },
-              { id: 'premi',        icona: '🏆', nome: 'Premi',           desc: 'Voti e classifiche' },
-              { id: 'staff',        icona: '👥', nome: 'Staff',           desc: 'Persone e assegnazioni' },
-              { id: 'pax',          icona: '📱', nome: 'Contenuti pax',   desc: 'Cosa vedono i partecipanti' },
-              { id: 'ai',           icona: '🤖', nome: 'Assistente AI',   desc: 'Domande sui dati' },
-              ...(canImport ? [{ id: 'import', icona: '📥', nome: 'Import Excel', desc: 'Carica il FILE CM', delicata: true }] : []),
-            ].map(v => (
-              <button key={v.id} onClick={() => setTab(v.id)} className="card"
-                style={{
-                  padding: 16, textAlign: 'left', cursor: 'pointer', border: 'none',
-                  borderLeft: v.delicata ? '3px solid #F59E0B' : '3px solid transparent',
-                  display: 'flex', flexDirection: 'column', gap: 6, font: 'inherit',
-                }}>
-                <div style={{ fontSize: 26, lineHeight: '30px' }}>{v.icona}</div>
-                <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)' }}>{v.nome}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.35 }}>{v.desc}</div>
-              </button>
-            ))}
+      {tab === 'home' && (() => {
+        // Le sezioni sono raggruppate per quello che ci si viene a fare, non
+        // elencate tutte alla pari: aprendo il pannello si cerca quasi sempre
+        // un numero, non un'impostazione.
+        const gruppi = [
+          { titolo: 'Soldi', voci: [
+            { id: 'cassa',     icona: '👛', nome: 'Cassa',            desc: 'Entrate e uscite, turno per turno', tinta: '#059669' },
+            { id: 'incassi',   icona: '💰', nome: 'Incassi',          desc: 'Venduto per gruppo e servizio',     tinta: '#059669' },
+            { id: 'fornitori', icona: '📊', nome: 'Previsione Cassa', desc: 'Cosa entra, cosa esce, cosa resta', tinta: '#059669' },
+          ]},
+          { titolo: 'Turni e gruppi', voci: [
+            { id: 'prenotazioni', icona: '🎟️', nome: 'Prenotazioni', desc: 'Prenotato dai gruppi',      tinta: '#1E6BF1' },
+            { id: 'stats',        icona: '📈', nome: 'Statistiche',  desc: 'Numeri della stagione',     tinta: '#1E6BF1' },
+            { id: 'pax',          icona: '📱', nome: 'Contenuti pax', desc: 'Cosa vedono i partecipanti', tinta: '#1E6BF1' },
+          ]},
+          { titolo: 'Staff', voci: [
+            { id: 'staff', icona: '👥', nome: 'Staff', desc: 'Persone e assegnazioni', tinta: '#7C3AED' },
+            { id: 'premi', icona: '🏆', nome: 'Premi', desc: 'Voti e classifiche',     tinta: '#7C3AED' },
+            { id: 'ai',    icona: '🤖', nome: 'Assistente AI', desc: 'Domande sui dati', tinta: '#7C3AED' },
+          ]},
+          ...(canImport ? [{ titolo: 'Manutenzione', voci: [
+            { id: 'import', icona: '📥', nome: 'Import Excel', desc: 'Carica il FILE CM · sovrascrive i partecipanti', tinta: '#D97706', attenzione: true },
+          ]}] : []),
+        ]
+
+        return (
+          <div style={{ padding: '22px 16px 40px' }}>
+            <div style={{ maxWidth: 980, margin: '0 auto' }}>
+              {gruppi.map(g => (
+                <div key={g.titolo} style={{ marginBottom: 26 }}>
+                  <div style={{
+                    fontSize: 11, fontWeight: 800, letterSpacing: '.07em', textTransform: 'uppercase',
+                    color: 'var(--text-tertiary)', marginBottom: 10, paddingLeft: 2,
+                  }}>{g.titolo}</div>
+
+                  <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))' }}>
+                    {g.voci.map(v => (
+                      <button
+                        key={v.id}
+                        onClick={() => setTab(v.id)}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = v.tinta; e.currentTarget.style.transform = 'translateY(-1px)' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none' }}
+                        style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left',
+                          background: v.attenzione ? '#FFFBEB' : 'var(--bg-primary)',
+                          border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
+                          padding: '14px 15px', cursor: 'pointer', font: 'inherit', width: '100%',
+                          transition: 'border-color .15s, transform .15s',
+                        }}>
+                        <div style={{
+                          width: 40, height: 40, flexShrink: 0, borderRadius: 11,
+                          background: v.tinta + '14', display: 'flex', alignItems: 'center',
+                          justifyContent: 'center', fontSize: 20, lineHeight: 1,
+                        }}>{v.icona}</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{v.nome}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{v.desc}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {canImport && tab === 'import' && (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
