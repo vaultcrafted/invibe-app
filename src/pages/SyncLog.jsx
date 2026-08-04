@@ -9,6 +9,10 @@ const SCRIPTS = {
   prebook:  { label: 'Prebooking', color: '#D97706', emoji: '🎟️' },
   rooming:  { label: 'Rooming', color: '#7C3AED', emoji: '🛏️' },
   prezzi:   { label: 'Prezzi', color: '#0D9488', emoji: '💶' },
+  // Controllo e sistemazione delle casse. Usano lo stesso indirizzo dei prezzi,
+  // cambia solo il lavoro richiesto.
+  cassacheck: { label: 'Controlla casse', color: '#0F766E', emoji: '🔎' },
+  cassafix:   { label: 'Sistema doppioni', color: '#B45309', emoji: '🧹' },
 }
 const scriptInfo = (s) => SCRIPTS[s] || { label: s, color: '#64748B', emoji: '⚙️' }
 
