@@ -23,7 +23,10 @@ export default function Admin() {
   const scopeShifts = isFullAccess ? null : (profile?.assigned_shifts || [])
   const scopeSet = scopeShifts ? new Set(scopeShifts.map(s => `${s.destination}__${s.shift_num}`)) : null
   const inScope = (dest, num) => !scopeSet || scopeSet.has(`${dest}__${num}`)
-  const [tab, setTab] = useState(canImport ? 'import' : 'staff')
+  // Si parte da una home con tutte le sezioni. Prima si atterrava su Import
+  // Excel, che e' l'operazione piu' rara e la piu' delicata: la prima cosa che
+  // si vedeva aprendo il pannello era un pulsante per sovrascrivere i dati.
+  const [tab, setTab] = useState('home')
   const [importing, setImporting] = useState(false)
   const [importLog, setImportLog] = useState([])
   const [progress, setProgress] = useState(null)
@@ -358,6 +361,7 @@ export default function Admin() {
       <div className="sticky-header">
       <Topbar showBack={true} showAvatar={false} />
       <div className="tabs">
+        <button className={'tab ' + (tab === 'home' ? 'active' : '')} onClick={() => setTab('home')}>🏠 Home</button>
         {canImport && <button className={'tab ' + (tab === 'import' ? 'active' : '')} onClick={() => setTab('import')}>Import Excel</button>}
         <button className={'tab ' + (tab === 'staff' ? 'active' : '')} onClick={() => setTab('staff')}>Staff</button>
         <button className={'tab ' + (tab === 'stats' ? 'active' : '')} onClick={() => setTab('stats')}>Statistiche</button>
@@ -370,6 +374,39 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'ai' ? 'active' : '')} onClick={() => setTab('ai')}>🤖 Assistente AI</button>
       </div>
       </div>
+
+      {tab === 'home' && (
+        <div style={{ padding: 16 }}>
+          <div style={{
+            display: 'grid', gap: 12,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))'
+          }}>
+            {[
+              { id: 'cassa',        icona: '👛', nome: 'Cassa',           desc: 'Entrate e uscite per turno' },
+              { id: 'incassi',      icona: '💰', nome: 'Incassi',         desc: 'Venduto per gruppo e servizio' },
+              { id: 'fornitori',    icona: '📊', nome: 'Previsione Cassa', desc: 'Cosa entra e cosa esce' },
+              { id: 'prenotazioni', icona: '🎟️', nome: 'Prenotazioni',    desc: 'Prenotato dai gruppi' },
+              { id: 'stats',        icona: '📈', nome: 'Statistiche',     desc: 'Numeri della stagione' },
+              { id: 'premi',        icona: '🏆', nome: 'Premi',           desc: 'Voti e classifiche' },
+              { id: 'staff',        icona: '👥', nome: 'Staff',           desc: 'Persone e assegnazioni' },
+              { id: 'pax',          icona: '📱', nome: 'Contenuti pax',   desc: 'Cosa vedono i partecipanti' },
+              { id: 'ai',           icona: '🤖', nome: 'Assistente AI',   desc: 'Domande sui dati' },
+              ...(canImport ? [{ id: 'import', icona: '📥', nome: 'Import Excel', desc: 'Carica il FILE CM', delicata: true }] : []),
+            ].map(v => (
+              <button key={v.id} onClick={() => setTab(v.id)} className="card"
+                style={{
+                  padding: 16, textAlign: 'left', cursor: 'pointer', border: 'none',
+                  borderLeft: v.delicata ? '3px solid #F59E0B' : '3px solid transparent',
+                  display: 'flex', flexDirection: 'column', gap: 6, font: 'inherit',
+                }}>
+                <div style={{ fontSize: 26, lineHeight: '30px' }}>{v.icona}</div>
+                <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-primary)' }}>{v.nome}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', lineHeight: 1.35 }}>{v.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {canImport && tab === 'import' && (
         <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
