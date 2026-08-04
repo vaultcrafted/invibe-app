@@ -1700,7 +1700,8 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
     const prefissi = { pag: 'P', corfu: 'C', zante: 'Z', gallipoli: 'G', sardegna: 'S' }
     const turno = (prefissi[destination] || '') + shiftNum
     const { data } = await supabase.from('cassa_confronto')
-      .select('righe_foglio, totale_foglio, aggiornato_at').eq('turno', turno).maybeSingle()
+      .select('righe_foglio, totale_foglio, righe_cash, totale_cash, righe_altro, totale_altro, aggiornato_at')
+      .eq('turno', turno).maybeSingle()
     setConfronto(data || null)
   }
 
@@ -1835,10 +1836,38 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
 
       {(() => {
         if (!confronto) return null
-        const saldoApp = totEntrate - totUscite
-        const diff = Number(confronto.totale_foglio) - saldoApp
-        const righeDiff = Number(confronto.righe_foglio) - movimenti.length
+
+        // Il foglio ha due blocchi: CASH e BONIFICO/CARTA. Bonifico, Scalapay e
+        // Wivawallet finiscono tutti e tre nel secondo, quindi il foglio non li
+        // distingue: per quei filtri si confronta il blocco intero, e lo si dice.
+        const nonCash = ['Bonifico', 'Scalapay', 'Wivawallet']
+        let etichetta, totFoglio, righeFoglio, movApp, avvisoBlocco = null
+
+        if (filtroMetodo === 'Cash') {
+          etichetta = 'in contanti'
+          totFoglio = Number(confronto.totale_cash)
+          righeFoglio = confronto.righe_cash
+          movApp = movimenti.filter(m => (m.metodo || 'Cash') === 'Cash')
+        } else if (nonCash.includes(filtroMetodo)) {
+          etichetta = 'nel blocco bonifico/carta'
+          totFoglio = Number(confronto.totale_altro)
+          righeFoglio = confronto.righe_altro
+          movApp = movimenti.filter(m => nonCash.includes(m.metodo || 'Cash'))
+          avvisoBlocco = 'Sul foglio bonifico, Scalapay e Wivawallet stanno nello stesso blocco: il confronto vale per tutti e tre insieme.'
+        } else {
+          etichetta = 'in tutto'
+          totFoglio = Number(confronto.totale_foglio)
+          righeFoglio = confronto.righe_foglio
+          movApp = movimenti
+        }
+
+        if (totFoglio == null || isNaN(totFoglio)) return null   // dato non ancora rilevato
+
+        const saldoApp = movApp.reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : -Number(m.importo)), 0)
+        const diff = totFoglio - saldoApp
+        const righeDiff = Number(righeFoglio) - movApp.length
         if (Math.abs(diff) < 0.01 && righeDiff === 0) return null
+
         const quando = confronto.aggiornato_at
           ? new Date(confronto.aggiornato_at).toLocaleString('it-IT', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
           : ''
@@ -1847,14 +1876,13 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
             marginBottom: 10, background: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E',
             borderRadius: 10, padding: '11px 13px', fontSize: 13
           }}>
-            <div style={{ fontWeight: 700 }}>
-              ⚠️ Il foglio non coincide con l'app
-            </div>
+            <div style={{ fontWeight: 700 }}>⚠️ Il foglio non coincide con l'app {etichetta}</div>
             <div style={{ marginTop: 4, fontSize: 12.5 }}>
-              Foglio: <b>€{Number(confronto.totale_foglio).toFixed(2)}</b> su {confronto.righe_foglio} righe ·
-              App: <b>€{saldoApp.toFixed(2)}</b> su {movimenti.length} righe
+              Foglio: <b>€{totFoglio.toFixed(2)}</b> su {righeFoglio} righe ·
+              App: <b>€{saldoApp.toFixed(2)}</b> su {movApp.length} righe
               {Math.abs(diff) >= 0.01 && <> · differenza <b>€{diff.toFixed(2)}</b></>}
             </div>
+            {avvisoBlocco && <div style={{ marginTop: 3, fontSize: 11, opacity: .85 }}>{avvisoBlocco}</div>}
             <div style={{ marginTop: 3, fontSize: 11, opacity: .85 }}>
               Confronto del {quando}. Controlla la rendicontazione di questo turno.
             </div>
