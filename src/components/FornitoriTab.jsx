@@ -16,6 +16,7 @@ export default function FornitoriTab() {
   const [mostraElenco, setMostraElenco] = useState(false)
   const [entrate, setEntrate] = useState([])
   const [formEntrata, setFormEntrata] = useState(null)
+  const [erroreEntrata, setErroreEntrata] = useState(null)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(blankForm())
@@ -116,6 +117,13 @@ export default function FornitoriTab() {
   async function salvaEntrata() {
     const e = formEntrata
     if (!e.descrizione.trim() || !e.data_prevista) return
+    // Il turno e' obbligatorio: un'entrata prevista senza turno non finisce in
+    // nessuna cassa e resta invisibile nei conti del turno a cui appartiene.
+    if (e.shift_num === '' || e.shift_num == null) {
+      setErroreEntrata('Scegli il turno')
+      return
+    }
+    setErroreEntrata(null)
     const payload = {
       descrizione: e.descrizione.trim(),
       destination: e.destination || filterDest || null,
@@ -508,9 +516,9 @@ export default function FornitoriTab() {
             <input type="date" value={formEntrata.data_prevista}
               onChange={ev => setFormEntrata({ ...formEntrata, data_prevista: ev.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
 
-            <label style={labEntrata}>Turno (facoltativo)</label>
+            <label style={labEntrata}>Turno</label>
             <select value={formEntrata.shift_num} onChange={ev => setFormEntrata({ ...formEntrata, shift_num: ev.target.value })} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}>
-              <option value="">Nessuno / trasversale</option>
+              <option value="">— scegli un turno —</option>
               {(SHIFTS[formEntrata.destination || filterDest] || []).map(t => (
                 <option key={t.num} value={t.num}>{shiftLabel(formEntrata.destination || filterDest, t.num)} · {t.label}</option>
               ))}
@@ -525,6 +533,13 @@ export default function FornitoriTab() {
 
             <label style={labEntrata}>Note</label>
             <input value={formEntrata.note} onChange={ev => setFormEntrata({ ...formEntrata, note: ev.target.value })} placeholder="facoltative" style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
+
+            {erroreEntrata && (
+              <div style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#991B1B',
+                            borderRadius: 9, padding: '9px 11px', fontSize: 12.5, fontWeight: 600, marginTop: 4 }}>
+                {erroreEntrata}
+              </div>
+            )}
 
             <button onClick={salvaEntrata} style={{ width: '100%', marginTop: 8, padding: 13, borderRadius: 11, background: '#16A34A', color: '#fff', border: 'none', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
               {formEntrata.id ? 'Salva modifiche' : 'Aggiungi entrata'}
