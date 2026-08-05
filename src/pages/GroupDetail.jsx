@@ -545,7 +545,12 @@ export default function GroupDetail() {
                   // sotto gestiscono SOLO questa quantità extra, che si somma a quella prenotata (non la sostituisce).
                   const prebPagatoNonEsc = prebPagato && (prebooked || 0) > 0
                   const confQty = showEscConf ? (group.escursioni_conf != null ? group.escursioni_conf : prebEsc) : qty
-                  const shownActive = active || prebPagatoNonEsc || showEscConf
+                  // Il toggle segue la QUANTITA', perche' e' quello che comanda.
+                  // Prima si accendeva anche solo perche' il servizio era pagato
+                  // in prebooking: su Gallipoli comparivano toggle accesi accanto
+                  // a uno zero. Che il prebooking sia pagato lo dicono gia' le due
+                  // etichette accanto al nome del servizio.
+                  const shownActive = active
                   const svMetodoRaw = (group.servizi_metodo || {})[sv.id]
                   const isSplitMetodo = !!svMetodoRaw && typeof svMetodoRaw === 'object'
                   const metodoBreakdown = isSplitMetodo ? svMetodoRaw : (svMetodoRaw ? { [svMetodoRaw]: qty } : {})
