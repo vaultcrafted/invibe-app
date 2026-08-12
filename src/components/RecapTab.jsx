@@ -4,40 +4,30 @@ import { DESTINATIONS } from '../lib/constants'
 
 const PREFISSI = { pag: 'P', corfu: 'C', zante: 'Z', gallipoli: 'G', sardegna: 'S' }
 const eur = n => '€' + Number(n || 0).toLocaleString('it-IT', { maximumFractionDigits: 0 })
+const eur2 = n => '€' + Number(n || 0).toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-// Le categorie raggruppate in famiglie, per leggere il recap a colpo d'occhio.
-// I giroconti stanno a parte apposta: sono le rimanenze che passano da una week
-// all'altra, quasi mezzo milione di euro che gira, e mischiarli col resto
-// renderebbe illeggibile ogni totale.
-const GESTIONE = ['Rimborso spesa', 'Spesa', 'Rimborsi', 'Bolt', 'Benzina', 'Rimborso wifi', 'Transfer aeroporto']
+// I giroconti sono le rimanenze che passano da una week all'altra: centinaia di
+// migliaia di euro che girano senza essere ne' guadagno ne' costo. Restano
+// esclusi dai totali, altrimenti ogni numero perde senso.
 const GIRO = ['Cassa (week precedente)', 'Cassa (week successiva)']
-
-const FAMIGLIE = [
-  { id: 'servizi',  nome: 'Servizi venduti',    tinta: '#059669',
-    test: c => !GESTIONE.includes(c) && !GIRO.includes(c) && c !== 'Altro' },
-  { id: 'gestione', nome: 'Spese di gestione',  tinta: '#D97706', test: c => GESTIONE.includes(c) },
-  { id: 'altro',    nome: 'Altro',              tinta: '#7C3AED', test: c => c === 'Altro' },
-  { id: 'giro',     nome: 'Giroconti di cassa', tinta: '#64748B', test: c => GIRO.includes(c) },
-]
-const famigliaDi = cat => (FAMIGLIE.find(f => f.test(cat || '')) || FAMIGLIE[0]).id
+const GESTIONE = ['Rimborso spesa', 'Spesa', 'Rimborsi', 'Bolt', 'Benzina', 'Rimborso wifi', 'Transfer aeroporto']
 
 export default function RecapTab() {
   const [movimenti, setMovimenti] = useState([])
   const [loading, setLoading] = useState(true)
   const [meta, setMeta] = useState(null)
   const [turno, setTurno] = useState(null)
-  const [chiuse, setChiuse] = useState({})
+  const [dettaglio, setDettaglio] = useState(null)   // categoria aperta
 
   useEffect(() => { carica() }, [])
 
   async function carica() {
     setLoading(true)
-    // Supabase restituisce al massimo 1000 righe per volta: senza paginare i
-    // totali risultano parziali e il recap privo di senso.
+    // Supabase restituisce max 1000 righe: senza paginare i totali sono parziali.
     let tutti = [], da = 0
     while (true) {
       const { data } = await supabase.from('cassa_movimenti')
-        .select('destination, shift_num, tipo, importo, categoria')
+        .select('destination, shift_num, tipo, importo, categoria, descrizione, metodo, data, inserito_da')
         .range(da, da + 999)
       if (!data || !data.length) break
       tutti = tutti.concat(data)
@@ -52,33 +42,43 @@ export default function RecapTab() {
     (!meta || m.destination === meta) &&
     (!turno || String(m.shift_num) === String(turno)))
 
-  const perCategoria = {}
+  const perCat = {}
   visibili.forEach(m => {
     const c = m.categoria || '(senza categoria)'
-    if (!perCategoria[c]) perCategoria[c] = { entrate: 0, uscite: 0, n: 0 }
+    if (!perCat[c]) perCat[c] = { entrate: 0, uscite: 0, n: 0 }
     const v = Number(m.importo) || 0
-    if (m.tipo === 'entrata') perCategoria[c].entrate += v
-    else perCategoria[c].uscite += v
-    perCategoria[c].n++
+    if (m.tipo === 'entrata') perCat[c].entrate += v; else perCat[c].uscite += v
+    perCat[c].n++
   })
 
-  const totEntrate = visibili.reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : 0), 0)
-  const totUscite  = visibili.reduce((t, m) => t + (m.tipo === 'uscita'  ? Number(m.importo) : 0), 0)
+  // Incassi e spese, esclusi i giroconti
+  const reali = visibili.filter(m => !GIRO.includes(m.categoria))
+  const incassato = reali.reduce((t, m) => t + (m.tipo === 'entrata' ? Number(m.importo) : 0), 0)
+  const speso = reali.reduce((t, m) => t + (m.tipo === 'uscita' ? Number(m.importo) : 0), 0)
 
   const turniMeta = meta
     ? [...new Set(movimenti.filter(m => m.destination === meta).map(m => m.shift_num))].sort((a, b) => a - b)
     : []
 
+  // Una lista sola, ordinata per quanto pesa: prima le voci grosse.
+  const lista = Object.entries(perCat)
+    .filter(([c]) => !GIRO.includes(c))
+    .map(([c, v]) => ({ cat: c, ...v, peso: Math.max(v.entrate, v.uscite), saldo: v.entrate - v.uscite }))
+    .sort((a, b) => b.peso - a.peso)
+  const massimo = lista.length ? lista[0].peso : 1
+
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-tertiary)' }}>Caricamento…</div>
 
-  const card = { background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }
+  const righeDettaglio = dettaglio
+    ? visibili.filter(m => (m.categoria || '(senza categoria)') === dettaglio)
+        .sort((a, b) => Number(b.importo) - Number(a.importo))
+    : []
 
   return (
     <div style={{ padding: '14px 16px 36px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <span style={etichetta}>Meta:</span>
-        <button onClick={() => { setMeta(null); setTurno(null) }} style={chip(!meta)}>Tutte</button>
+        <button onClick={() => { setMeta(null); setTurno(null) }} style={chip(!meta)}>Tutte le mete</button>
         {DESTINATIONS.map(d => (
           <button key={d.id} onClick={() => { setMeta(d.id); setTurno(null) }} style={chip(meta === d.id)}>
             {d.flag} {d.name}
@@ -87,104 +87,132 @@ export default function RecapTab() {
       </div>
 
       {meta && turniMeta.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <span style={etichetta}>Turno:</span>
-          <button onClick={() => setTurno(null)} style={chip(!turno)}>Tutti</button>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button onClick={() => setTurno(null)} style={chipSmall(!turno)}>Tutti</button>
           {turniMeta.map(t => (
-            <button key={t} onClick={() => setTurno(t)} style={chip(String(turno) === String(t))}>
+            <button key={t} onClick={() => setTurno(t)} style={chipSmall(String(turno) === String(t))}>
               {PREFISSI[meta]}{t}
             </button>
           ))}
         </div>
       )}
 
-      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-        {[
-          { l: 'Entrate', v: totEntrate, c: '#16A34A', bg: '#F0FDF4' },
-          { l: 'Uscite',  v: totUscite,  c: '#DC2626', bg: '#FEF2F2' },
-          { l: 'Saldo',   v: totEntrate - totUscite, c: 'var(--iv-blue)', bg: '#EFF6FF' },
-        ].map(x => (
-          <div key={x.l} style={{ ...card, background: x.bg, padding: '13px 15px' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: x.c, textTransform: 'uppercase' }}>{x.l}</div>
-            <div style={{ fontSize: 23, fontWeight: 800, color: x.c, marginTop: 3 }}>{eur(x.v)}</div>
-          </div>
-        ))}
+      {/* due numeri, non tre: incassato e speso */}
+      <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
+        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-lg)', padding: '13px 15px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase' }}>Incassato</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#16A34A', marginTop: 2 }}>{eur(incassato)}</div>
+        </div>
+        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 'var(--radius-lg)', padding: '13px 15px' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>Speso</div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: '#DC2626', marginTop: 2 }}>{eur(speso)}</div>
+        </div>
       </div>
 
-      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-tertiary)' }}>
-        {visibili.length} movimenti · {Object.keys(perCategoria).length} categorie
+      <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
+        Tocca una voce per vedere i movimenti. I giroconti fra week sono esclusi.
       </div>
 
-      {FAMIGLIE.map(f => {
-        const cats = Object.entries(perCategoria)
-          .filter(([c]) => famigliaDi(c) === f.id)
-          .sort((a, b) => (b[1].entrate + b[1].uscite) - (a[1].entrate + a[1].uscite))
-        if (!cats.length) return null
-
-        const e = cats.reduce((t, [, v]) => t + v.entrate, 0)
-        const u = cats.reduce((t, [, v]) => t + v.uscite, 0)
-        const aperta = !chiuse[f.id]
-
-        return (
-          <div key={f.id} style={card}>
-            <button
-              onClick={() => setChiuse(x => ({ ...x, [f.id]: aperta }))}
+      {/* lista unica, ordinata per importo */}
+      <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+        {lista.map((r, i) => {
+          const uscita = r.uscite > r.entrate
+          const valore = uscita ? r.uscite : r.entrate
+          return (
+            <button key={r.cat} onClick={() => setDettaglio(r.cat)}
               style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 15px',
-                background: 'transparent', border: 0, borderLeft: '3px solid ' + f.tinta,
-                borderRadius: 'var(--radius-lg)', cursor: 'pointer', font: 'inherit', textAlign: 'left',
+                width: '100%', display: 'block', textAlign: 'left', cursor: 'pointer',
+                background: 'transparent', border: 0, padding: '11px 15px', font: 'inherit',
+                borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
               }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{f.nome}</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1 }}>
-                  {cats.length} categorie
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {r.cat}
+                </div>
+                <div style={{ fontSize: 14.5, fontWeight: 800, color: uscita ? '#DC2626' : '#16A34A' }}>
+                  {uscita ? '−' : '+'}{eur(valore)}
                 </div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                {e > 0 && <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16A34A' }}>+{eur(e)}</div>}
-                {u > 0 && <div style={{ fontSize: 13.5, fontWeight: 700, color: '#DC2626' }}>−{eur(u)}</div>}
+              {/* barra: quanto pesa questa voce rispetto alla piu' grande */}
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 3, marginTop: 6, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: Math.max(2, (valore / massimo) * 100) + '%',
+                              background: uscita ? '#FCA5A5' : '#86EFAC' }} />
               </div>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{aperta ? '▾' : '▸'}</span>
+              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                {r.n} movimenti
+                {r.entrate > 0 && r.uscite > 0 &&
+                  <> · in {eur(r.entrate)} · out {eur(r.uscite)} · saldo <b>{eur(r.saldo)}</b></>}
+              </div>
             </button>
+          )
+        })}
+        {!lista.length && (
+          <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
+            Nessun movimento con questi filtri.
+          </div>
+        )}
+      </div>
 
-            {aperta && (
-              <div style={{ borderTop: '0.5px solid var(--border)' }}>
-                {cats.map(([c, v], i) => (
-                  <div key={c} style={{
-                    display: 'flex', alignItems: 'center', gap: 8, padding: '10px 15px',
-                    borderTop: i > 0 ? '0.5px solid var(--border)' : 'none',
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{c}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{v.n} movimenti</div>
+      {/* dettaglio della categoria toccata */}
+      {dettaglio && (
+        <div onClick={() => setDettaglio(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000,
+                   display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg-primary)', width: '100%', maxWidth: 720, maxHeight: '85vh',
+                     borderRadius: '18px 18px 0 0', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--border)',
+                          display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15.5, fontWeight: 800 }}>{dettaglio}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                  {righeDettaglio.length} movimenti
+                  {meta && ' · ' + (DESTINATIONS.find(d => d.id === meta)?.name || '')}
+                  {turno && ' ' + PREFISSI[meta] + turno}
+                </div>
+              </div>
+              <button onClick={() => setDettaglio(null)}
+                style={{ background: 'transparent', border: 0, fontSize: 22, cursor: 'pointer',
+                         color: 'var(--text-tertiary)', lineHeight: 1 }}>×</button>
+            </div>
+
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {righeDettaglio.map((m, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 18px',
+                                      borderTop: i > 0 ? '0.5px solid var(--border)' : 'none' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                      {m.descrizione || <span style={{ fontStyle: 'italic', color: '#B45309' }}>senza descrizione</span>}
                     </div>
-                    <div style={{ width: 92, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#16A34A' }}>
-                      {v.entrate > 0 ? '+' + eur(v.entrate) : ''}
-                    </div>
-                    <div style={{ width: 92, textAlign: 'right', fontSize: 13, fontWeight: 600, color: '#DC2626' }}>
-                      {v.uscite > 0 ? '−' + eur(v.uscite) : ''}
-                    </div>
-                    <div style={{ width: 92, textAlign: 'right', fontSize: 13.5, fontWeight: 800, color: 'var(--text-primary)' }}>
-                      {eur(v.entrate - v.uscite)}
+                    <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)', marginTop: 1 }}>
+                      {PREFISSI[m.destination]}{m.shift_num}
+                      {m.data && ' · ' + m.data.slice(8, 10) + '/' + m.data.slice(5, 7)}
+                      {m.metodo && m.metodo !== 'Cash' && ' · ' + m.metodo}
+                      {m.inserito_da && ' · ' + m.inserito_da}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap',
+                                color: m.tipo === 'entrata' ? '#16A34A' : '#DC2626' }}>
+                    {m.tipo === 'entrata' ? '+' : '−'}{eur2(m.importo)}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
-        )
-      })}
+        </div>
+      )}
     </div>
   )
 }
 
-const etichetta = { fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }
-
 function chip(attivo) {
   return {
-    padding: '6px 13px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+    padding: '7px 14px', borderRadius: 20, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
     border: '1px solid ' + (attivo ? 'var(--iv-blue)' : 'var(--border)'),
     background: attivo ? 'var(--iv-blue)' : 'var(--bg-primary)',
     color: attivo ? '#fff' : 'var(--text-secondary)',
   }
+}
+function chipSmall(attivo) {
+  return { ...chip(attivo), padding: '4px 11px', fontSize: 11.5 }
 }
