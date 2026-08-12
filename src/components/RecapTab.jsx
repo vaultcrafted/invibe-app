@@ -14,6 +14,7 @@ const GESTIONE = ['Rimborso spesa', 'Spesa', 'Rimborsi', 'Bolt', 'Benzina', 'Rim
 
 export default function RecapTab() {
   const [movimenti, setMovimenti] = useState([])
+  const [gruppi, setGruppi] = useState({})   // id -> riga del gruppo, per leggere le quantita'
   const [loading, setLoading] = useState(true)
   const [meta, setMeta] = useState(null)
   const [turno, setTurno] = useState(null)
@@ -27,7 +28,7 @@ export default function RecapTab() {
     let tutti = [], da = 0
     while (true) {
       const { data } = await supabase.from('cassa_movimenti')
-        .select('destination, shift_num, tipo, importo, categoria, descrizione, metodo, data, inserito_da')
+        .select('destination, shift_num, tipo, importo, categoria, descrizione, metodo, data, inserito_da, group_id, servizio_id')
         .range(da, da + 999)
       if (!data || !data.length) break
       tutti = tutti.concat(data)
@@ -35,7 +36,31 @@ export default function RecapTab() {
       da += 1000
     }
     setMovimenti(tutti)
+
+    // I gruppi servono per il numero di pax: ogni movimento automatico porta il
+    // servizio, e la quantita' venduta sta nella colonna omonima del gruppo.
+    let gg = [], og = 0
+    while (true) {
+      const { data } = await supabase.from('groups').select('*').range(og, og + 999)
+      if (!data || !data.length) break
+      gg = gg.concat(data)
+      if (data.length < 1000) break
+      og += 1000
+    }
+    const mappa = {}
+    gg.forEach(g => { mappa[g.id] = g })
+    setGruppi(mappa)
     setLoading(false)
+  }
+
+  // Quantita' venduta dietro un movimento: null se non e' un servizio di gruppo
+  // (movimenti d'ufficio, pagamenti a fornitori, spese).
+  function qtaDi(m) {
+    if (!m.group_id || !m.servizio_id) return null
+    const g = gruppi[m.group_id]
+    if (!g) return null
+    const v = Number(g[m.servizio_id])
+    return isNaN(v) ? null : v
   }
 
   const visibili = movimenti.filter(m =>
@@ -45,10 +70,12 @@ export default function RecapTab() {
   const perCat = {}
   visibili.forEach(m => {
     const c = m.categoria || '(senza categoria)'
-    if (!perCat[c]) perCat[c] = { entrate: 0, uscite: 0, n: 0 }
+    if (!perCat[c]) perCat[c] = { entrate: 0, uscite: 0, n: 0, pax: 0 }
     const v = Number(m.importo) || 0
     if (m.tipo === 'entrata') perCat[c].entrate += v; else perCat[c].uscite += v
     perCat[c].n++
+    const q = qtaDi(m)
+    if (q != null) perCat[c].pax = (perCat[c].pax || 0) + q
   })
 
   // Incassi e spese, esclusi i giroconti
@@ -139,7 +166,7 @@ export default function RecapTab() {
                               background: uscita ? '#FCA5A5' : '#86EFAC' }} />
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                {r.n} movimenti
+                {r.n} movimenti{r.pax > 0 && ' · ' + r.pax + ' pax'}
                 {r.entrate > 0 && r.uscite > 0 &&
                   <> · in {eur(r.entrate)} · out {eur(r.uscite)} · saldo <b>{eur(r.saldo)}</b></>}
               </div>
@@ -167,6 +194,8 @@ export default function RecapTab() {
                 <div style={{ fontSize: 15.5, fontWeight: 800 }}>{dettaglio}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)', marginTop: 1 }}>
                   {righeDettaglio.length} movimenti
+                  {(() => { const p = righeDettaglio.reduce((t, m) => t + (qtaDi(m) || 0), 0)
+                            return p > 0 ? ' · ' + p + ' pax' : '' })()}
                   {meta && ' · ' + (DESTINATIONS.find(d => d.id === meta)?.name || '')}
                   {turno && ' ' + PREFISSI[meta] + turno}
                 </div>
@@ -191,6 +220,13 @@ export default function RecapTab() {
                       {m.inserito_da && ' · ' + m.inserito_da}
                     </div>
                   </div>
+                  {qtaDi(m) != null && (
+                    <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)',
+                                  background: 'var(--bg-secondary, #F1F5F9)', borderRadius: 20,
+                                  padding: '2px 9px', whiteSpace: 'nowrap' }}>
+                      {qtaDi(m)} pax
+                    </div>
+                  )}
                   <div style={{ fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap',
                                 color: m.tipo === 'entrata' ? '#16A34A' : '#DC2626' }}>
                     {m.tipo === 'entrata' ? '+' : '−'}{eur2(m.importo)}
