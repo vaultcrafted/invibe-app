@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import PaxContentTab from '../components/PaxContentTab'
 import FornitoriTab from '../components/FornitoriTab'
+import RecapTab from '../components/RecapTab'
 import PrenotazioniPaxTab from '../components/PrenotazioniPaxTab'
 import { Upload, Plus, X, ArrowDownCircle, ArrowUpCircle, ChevronLeft, Search, SlidersHorizontal } from 'lucide-react'
 import * as XLSX from 'xlsx'
@@ -370,6 +371,7 @@ export default function Admin() {
         <button className={'tab ' + (tab === 'premi' ? 'active' : '')} onClick={() => setTab('premi')}>🏆 Premi</button>
         <button className={'tab ' + (tab === 'incassi' ? 'active' : '')} onClick={() => setTab('incassi')}>💰 Incassi</button>
         <button className={'tab ' + (tab === 'cassa' ? 'active' : '')} onClick={() => setTab('cassa')}>👛 Cassa</button>
+        <button className={'tab ' + (tab === 'recap' ? 'active' : '')} onClick={() => setTab('recap')}>🧾 Recap</button>
         <button className={'tab ' + (tab === 'prenotazioni' ? 'active' : '')} onClick={() => setTab('prenotazioni')}>🎟️ Prenotazioni</button>
         <button className={'tab ' + (tab === 'pax' ? 'active' : '')} onClick={() => setTab('pax')}>📱 Contenuti pax</button>
         <button className={'tab ' + (tab === 'fornitori' ? 'active' : '')} onClick={() => setTab('fornitori')}>📊 Previsione Cassa</button>
@@ -384,6 +386,7 @@ export default function Admin() {
           { titolo: 'Soldi', voci: [
             { id: 'cassa',     icona: '👛', nome: 'Cassa',            desc: 'Entrate e uscite, turno per turno', tinta: '#059669' },
             { id: 'incassi',   icona: '💰', nome: 'Incassi',          desc: 'Venduto per gruppo e servizio',     tinta: '#059669' },
+            { id: 'recap',     icona: '🧾', nome: 'Recap',            desc: 'Entrate e uscite per categoria',    tinta: '#059669' },
             { id: 'fornitori', icona: '📊', nome: 'Previsione Cassa', desc: 'Cosa entra, cosa esce, cosa resta', tinta: '#059669' },
           ]},
           { titolo: 'Turni e gruppi', voci: [
@@ -530,6 +533,7 @@ export default function Admin() {
       {tab === 'premi' && <PremiTab scope={scopeShifts} />}
       {tab === 'incassi' && <IncassiTab data={incassiData} loading={!incassiData} onRefresh={fetchIncassi} />}
       {tab === 'cassa' && <CassaTab />}
+      {tab === 'recap' && <RecapTab />}
       {tab === 'prenotazioni' && <PrenotazioniPaxTab />}
       {tab === 'pax' && <PaxContentTab scope={scopeShifts} />}
       {tab === 'fornitori' && <FornitoriTab />}
