@@ -19,6 +19,7 @@ export default function RecapTab() {
   const [meta, setMeta] = useState(null)
   const [turno, setTurno] = useState(null)
   const [dettaglio, setDettaglio] = useState(null)   // categoria aperta
+  const [vista, setVista] = useState('tutto')        // tutto | entrate | uscite
 
   useEffect(() => { carica() }, [])
 
@@ -88,9 +89,16 @@ export default function RecapTab() {
     : []
 
   // Una lista sola, ordinata per quanto pesa: prima le voci grosse.
+  // Con la vista su entrate o uscite, il peso e' solo quel lato: cosi' una
+  // categoria che ha molto in entrata e poco in uscita non domina la lista
+  // delle uscite solo perche' e' grossa in generale.
   const lista = Object.entries(perCat)
     .filter(([c]) => !GIRO.includes(c))
-    .map(([c, v]) => ({ cat: c, ...v, peso: Math.max(v.entrate, v.uscite), saldo: v.entrate - v.uscite }))
+    .map(([c, v]) => ({
+      cat: c, ...v, saldo: v.entrate - v.uscite,
+      peso: vista === 'entrate' ? v.entrate : vista === 'uscite' ? v.uscite : Math.max(v.entrate, v.uscite),
+    }))
+    .filter(r => vista === 'tutto' ? true : r.peso > 0)
     .sort((a, b) => b.peso - a.peso)
   const massimo = lista.length ? lista[0].peso : 1
 
@@ -98,6 +106,7 @@ export default function RecapTab() {
 
   const righeDettaglio = dettaglio
     ? visibili.filter(m => (m.categoria || '(senza categoria)') === dettaglio)
+        .filter(m => vista === 'tutto' || (vista === 'entrate' ? m.tipo === 'entrata' : m.tipo === 'uscita'))
         .sort((a, b) => Number(b.importo) - Number(a.importo))
     : []
 
@@ -124,17 +133,46 @@ export default function RecapTab() {
         </div>
       )}
 
-      {/* due numeri, non tre: incassato e speso */}
+      {/* I due numeri sono anche il filtro: toccandoli la lista mostra solo
+          quel lato. Un dato e un comando nello stesso posto, invece di
+          ripetere le stesse cifre in due punti diversi. */}
       <div style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
-        <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-lg)', padding: '13px 15px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#16A34A', textTransform: 'uppercase' }}>Incassato</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#16A34A', marginTop: 2 }}>{eur(incassato)}</div>
-        </div>
-        <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 'var(--radius-lg)', padding: '13px 15px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#DC2626', textTransform: 'uppercase' }}>Speso</div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: '#DC2626', marginTop: 2 }}>{eur(speso)}</div>
-        </div>
+        {[
+          { id: 'entrate', l: 'Incassato', v: incassato, c: '#16A34A', bg: '#F0FDF4', bordo: '#BBF7D0' },
+          { id: 'uscite',  l: 'Speso',     v: speso,     c: '#DC2626', bg: '#FEF2F2', bordo: '#FECACA' },
+        ].map(x => {
+          const attivo = vista === x.id
+          return (
+            <button key={x.id}
+              onClick={() => setVista(attivo ? 'tutto' : x.id)}
+              style={{
+                background: attivo ? x.c : x.bg,
+                border: '1.5px solid ' + (attivo ? x.c : x.bordo),
+                borderRadius: 'var(--radius-lg)', padding: '13px 15px', cursor: 'pointer',
+                textAlign: 'left', font: 'inherit', transition: 'background .15s, border-color .15s',
+              }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                            color: attivo ? 'rgba(255,255,255,.85)' : x.c,
+                            display: 'flex', alignItems: 'center', gap: 5 }}>
+                {x.l}
+                {attivo && <span style={{ fontSize: 13 }}>✓</span>}
+              </div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 2,
+                            color: attivo ? '#fff' : x.c }}>{eur(x.v)}</div>
+            </button>
+          )
+        })}
       </div>
+
+      {vista !== 'tutto' && (
+        <button onClick={() => setVista('tutto')}
+          style={{
+            alignSelf: 'flex-start', background: 'transparent', border: 0, cursor: 'pointer',
+            fontSize: 12, fontWeight: 600, color: 'var(--iv-blue)', padding: 0, font: 'inherit',
+          }}>
+          ← Mostra tutto
+        </button>
+      )}
 
       <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>
         Tocca una voce per vedere i movimenti. I giroconti fra week sono esclusi.
@@ -143,8 +181,9 @@ export default function RecapTab() {
       {/* lista unica, ordinata per importo */}
       <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
         {lista.map((r, i) => {
-          const uscita = r.uscite > r.entrate
-          const valore = uscita ? r.uscite : r.entrate
+          const uscita = vista === 'uscite' || (vista === 'tutto' && r.uscite > r.entrate)
+          const valore = vista === 'entrate' ? r.entrate : vista === 'uscite' ? r.uscite
+                       : (uscita ? r.uscite : r.entrate)
           return (
             <button key={r.cat} onClick={() => setDettaglio(r.cat)}
               style={{
@@ -167,7 +206,7 @@ export default function RecapTab() {
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>
                 {r.n} movimenti{r.pax > 0 && ' · ' + r.pax + ' pax'}
-                {r.entrate > 0 && r.uscite > 0 &&
+                {vista === 'tutto' && r.entrate > 0 && r.uscite > 0 &&
                   <> · in {eur(r.entrate)} · out {eur(r.uscite)} · saldo <b>{eur(r.saldo)}</b></>}
               </div>
             </button>
@@ -175,7 +214,9 @@ export default function RecapTab() {
         })}
         {!lista.length && (
           <div style={{ padding: 24, textAlign: 'center', color: 'var(--text-tertiary)', fontSize: 13 }}>
-            Nessun movimento con questi filtri.
+            {vista === 'uscite' ? 'Nessuna uscita con questi filtri.'
+              : vista === 'entrate' ? 'Nessuna entrata con questi filtri.'
+              : 'Nessun movimento con questi filtri.'}
           </div>
         )}
       </div>
