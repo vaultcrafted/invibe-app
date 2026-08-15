@@ -82,7 +82,9 @@ export const SERVICES_GALLIPOLI = [
   { id: 'gal_tassa_soggiorno', label: 'Tassa di soggiorno', prezzo: 10 },
   { id: 'gal_vega', label: 'Vega', prezzo: 20 },        // G4/G5 = 25 (override per turno)
   { id: 'gal_dinner_elegant', label: 'Dinner Elegant', prezzo: 30 },
-  { id: 'gal_praja', label: 'Praja', prezzo: 25 },
+  // Da G5 la Praja non si fa piu': al suo posto c'e' Bresh extra.
+  { id: 'gal_praja', label: 'Praja', prezzo: 25, maxShift: 4 },
+  { id: 'gal_bresh', label: 'Bresh extra', prezzo: 15, minShift: 5 },
 ]
 
 export const SERVICES_SARDEGNA = [
@@ -171,6 +173,9 @@ export function getServices(destination, shiftNum) {
     // Alcuni servizi esistono solo da un certo turno in poi (es. il locale "54" a Corfù, da C3
     // in poi). Se non conosciamo il turno (shiftNum non passato), li lasciamo tutti visibili.
     .filter(s => !s.minShift || !shiftNum || shiftNum >= s.minShift)
+    // ...e altri smettono di esistere da un certo turno (es. la Praja, sostituita
+    // da Bresh extra su G5).
+    .filter(s => !s.maxShift || !shiftNum || shiftNum <= s.maxShift)
     .map(s => {
     // base effettiva: DB se presente, altrimenti codice
     const effBase = (dbBase && dbBase[s.id] != null) ? dbBase[s.id] : s.prezzo
@@ -254,6 +259,7 @@ export const SHEET_SERVIZIO_MAP = {
   gal_vega: 'Vega',
   gal_dinner_elegant: 'Dinner Elegant',
   gal_praja: 'Praja extra',
+  gal_bresh: 'Bresh extra',
   // Sardegna
   sar_escursioni: 'Escursioni in meta',
   sar_ssp: 'SSP',
