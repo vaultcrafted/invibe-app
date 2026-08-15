@@ -1695,6 +1695,7 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
   const [form, setForm] = useState({ tipo: 'entrata', categoria: categorie[0], importo: '', descrizione: '', data: new Date().toISOString().slice(0, 10), metodo: 'Cash' })
   const [saveError, setSaveError] = useState(null)
   const [triedSave, setTriedSave] = useState(false)
+  const [modifica, setModifica] = useState(null)   // movimento in modifica
   const [confronto, setConfronto] = useState(null)   // totale letto DAL FOGLIO
 
   const dest = DESTINATIONS.find(d => d.id === destination)
@@ -1755,6 +1756,34 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
       categoria: form.categoria || '', metodo: form.metodo || 'Cash', data: form.data,
     }])
     setShowForm(false); load()
+  }
+
+  // MODIFICA di descrizione e categoria di un movimento gia' registrato.
+  // Serve quando una voce e' stata classificata male: es. un pagamento messo
+  // in "Tassa di soggiorno" che in realta' era un rimborso spesa.
+  async function salvaModifica() {
+    const m = modifica
+    if (!m) return
+    const nuovaDesc = (m._descrizione || '').trim()
+    const nuovaCat = m._categoria || m.categoria
+
+    await supabase.from('cassa_movimenti')
+      .update({ descrizione: nuovaDesc || null, categoria: nuovaCat })
+      .eq('id', m.id)
+
+    // Il foglio va aggiornato con la descrizione VECCHIA per ritrovare la riga,
+    // e la nuova per riscriverla.
+    enqueueSheetOnly([{
+      __kind: 'cassa', destination, shift_num: shiftNum, azione: 'modifica',
+      tipoMov: m.tipo, importo: m.importo, metodo: m.metodo || 'Cash', data: m.data,
+      descrizione: m.descrizione || '',          // per trovare la riga
+      categoria: m.categoria || '',
+      descrizioneNuova: nuovaDesc,
+      categoriaNuova: nuovaCat,
+    }])
+
+    setModifica(null)
+    load()
   }
 
   async function handleDelete(id) {
@@ -2000,6 +2029,14 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
                 {isEntrata ? '+' : '-'}€{Number(m.importo).toFixed(2)}
               </div>
               {canEditCassa && (
+                <button
+                  onClick={() => setModifica({ ...m, _descrizione: m.descrizione || '', _categoria: m.categoria || '' })}
+                  title="Modifica descrizione e categoria"
+                  style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, flexShrink: 0, fontSize: 13 }}>
+                  ✏️
+                </button>
+              )}
+              {canEditCassa && (
                 <button onClick={() => handleDelete(m.id)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
                   <X size={14} />
                 </button>
@@ -2008,6 +2045,52 @@ function CassaTurnoDetail({ destination, shiftNum, onBack }) {
           )
         })}
       </div>
+
+      {modifica && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16 }} onClick={() => setModifica(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--bg-primary)', borderRadius: 16, padding: 22, width: '100%', maxWidth: 440 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>Modifica movimento</div>
+              <button onClick={() => setModifica(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)' }}><X size={20} /></button>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 16 }}>
+              {modifica.tipo === 'entrata' ? '+' : '−'}€{Number(modifica.importo).toFixed(2)} · {modifica.metodo || 'Cash'}
+              {modifica.data ? ' · ' + modifica.data.slice(8,10) + '/' + modifica.data.slice(5,7) : ''}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Categoria</label>
+                <select value={modifica._categoria}
+                  onChange={e => setModifica(x => ({ ...x, _categoria: e.target.value }))}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 5 }}>
+                  {[...new Set([modifica.categoria, ...categorie].filter(Boolean))].map(c =>
+                    <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Descrizione</label>
+                <input value={modifica._descrizione}
+                  onChange={e => setModifica(x => ({ ...x, _descrizione: e.target.value }))}
+                  placeholder="es. rimborso taxi staff"
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border)', fontSize: 14, marginTop: 5 }} />
+              </div>
+
+              {modifica.auto && (
+                <div style={{ background: '#FEF3C7', border: '1px solid #FCD34D', color: '#92400E', borderRadius: 9, padding: '9px 11px', fontSize: 11.5 }}>
+                  Questo movimento nasce da un servizio del gruppo. Cambiando la descrizione,
+                  le modifiche future a quel servizio non ritroveranno piu' questa riga sul foglio.
+                </div>
+              )}
+
+              <button onClick={salvaModifica}
+                style={{ width: '100%', padding: '12px', borderRadius: 11, border: 0, background: 'var(--iv-blue)', color: '#fff', fontSize: 14.5, fontWeight: 700, cursor: 'pointer' }}>
+                Salva
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 }} onClick={() => setShowForm(false)}>
