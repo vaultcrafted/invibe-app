@@ -22,7 +22,9 @@ function isPrebookedEsc(g) {
   return g.prebook && g.prebook.escursioni != null && Number(g.prebook.escursioni) > 0
 }
 function groupServices(g) {
-  return getServices(g.destination)
+  // Con il turno, i servizi validi solo per alcuni turni compaiono dove devono:
+  // la Praja fino a G4, Bresh extra da G5.
+  return getServices(g.destination, g.shift_num)
 }
 
 export default function GroupList() {
@@ -105,7 +107,7 @@ export default function GroupList() {
   if (solo === 'prebook_esc') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.escursioni) || 0), 0); countLabel = 'prenotate' }
   else if (solo === 'prebook_ssp') { filterCount = filtered.reduce((s, g) => s + (Number(g.prebook?.ssp) || 0), 0); countLabel = 'prenotate' }
   else if (solo && solo.startsWith('has:')) {
-    const sv = getServices(destId).find(s => s.id === solo.replace('has:', ''))
+    const sv = getServices(destId, shiftNum).find(s => s.id === solo.replace('has:', ''))
     if (sv) { filterCount = filtered.reduce((s, g) => s + svQty(g, sv), 0); countLabel = 'presi' }
   }
 
@@ -134,8 +136,8 @@ export default function GroupList() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 5h16M7 12h10M10 19h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
           <span style={{ flex: 1, textAlign: 'left' }}>{
             svcFilters.length === 0 ? 'Filtra per servizio'
-              : svcFilters.length === 1 ? filterLabel(svcFilters[0], destId)
-              : svcFilters.map(f => filterLabel(f, destId)).join(' + ')
+              : svcFilters.length === 1 ? filterLabel(svcFilters[0], destId, shiftNum)
+              : svcFilters.map(f => filterLabel(f, destId, shiftNum)).join(' + ')
           }</span>
           {svcFilters.length > 0 && <span onClick={e => { e.stopPropagation(); setSvcFilters([]) }} style={{ fontSize: 17, lineHeight: 1, color: 'var(--iv-blue)' }}>×</span>}
         </button>
@@ -163,6 +165,7 @@ export default function GroupList() {
       {filterOpen && (
         <FilterSheet
           destId={destId}
+          shiftNum={shiftNum}
           selected={svcFilters}
           count={filtered.length}
           onToggle={(v) => setSvcFilters(prev => {
@@ -186,23 +189,23 @@ function passaFiltro(g, f, destId) {
   if (f === 'prebook_ssp') return g.prebook && Number(g.prebook.ssp) > 0
   const negate = f.startsWith('no:')
   const svId = f.replace(/^(has:|no:)/, '')
-  const sv = getServices(destId).find(s => s.id === svId)
+  const sv = getServices(destId, g.shift_num).find(s => s.id === svId)
   if (!sv) return true
   return negate ? !isServiceOn(g, sv) : isPaid(g, sv)
 }
 
-function filterLabel(v, destId) {
+function filterLabel(v, destId, shiftNum) {
   if (!v) return 'Filtra per servizio'
   if (v === 'prebook_esc') return 'Escursioni prebooking'
   if (v === 'prebook_ssp') return 'SSP prebooking'
   const id = v.replace(/^(has:|no:)/, '')
-  const sv = getServices(destId).find(s => s.id === id)
+  const sv = getServices(destId, shiftNum).find(s => s.id === id)
   const name = sv ? sv.label : id
   return v.startsWith('no:') ? 'Senza ' + name : name
 }
 
-function FilterSheet({ destId, selected, count, onToggle, onClose }) {
-  const svcList = getServices(destId)
+function FilterSheet({ destId, shiftNum, selected, count, onToggle, onClose }) {
+  const svcList = getServices(destId, shiftNum)
   const Pill = ({ value, label, tone }) => {
     const active = selected.includes(value)
     const c = tone === 'green' ? '#15803D' : tone === 'red' ? '#B91C1C' : tone === 'grey' ? '#64748B' : 'var(--iv-blue)'
