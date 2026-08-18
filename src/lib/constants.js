@@ -134,7 +134,7 @@ export const PRICE_OVERRIDES = {
   P4: { pag_cantante_extra: 15, pag_cantante_extra_2: 20, pag_cantante_extra_3: 25 },
   // Da P5 in poi il terzo cantante costa 20 euro (deciso il 14 ago).
   P5: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 20 },
-  P6: { pag_cantante_extra: 25, pag_cantante_extra_2: 30, pag_cantante_extra_3: 20 },
+  P6: { pag_cantante_extra: 15, pag_cantante_extra_2: 30, pag_cantante_extra_3: 20 },
 }
 
 // Prezzi caricati dal database (tabella servizi_prezzi). Se null, si usano i prezzi del codice.
